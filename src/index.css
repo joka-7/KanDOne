@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.custom-scrollbar::-webkit-scrollbar { width: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+.custom-scrollbar:hover::-webkit-scrollbar-thumb { background-color: #94a3b8; }
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+@media (max-width: 639px) {
+  html {
+    font-size: 14px;
+  }
+}
+
+#root {
+  width: 100%;
+  min-height: 100dvh;
+  height: 100%;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.touch-manipulation {
+  touch-action: manipulation;
+}
+
+/* Keep calendar readable when OS uses dark mode / smart invert */
+.calendar-page,
+.calendar-force-light {
+  color-scheme: only light;
+  forced-color-adjust: none;
+  background-color: #ffffff !important;
+  color: #111827 !important;
+}
+
+.calendar-force-light .calendar-month-title,
+.calendar-force-light .calendar-nav-btn,
+.calendar-force-light .calendar-today-btn {
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827 !important;
+}
+
+.calendar-force-light .calendar-today-btn {
+  background-color: #ffffff !important;
+  border-color: #6b7280 !important;
+}
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 2px;
+}
