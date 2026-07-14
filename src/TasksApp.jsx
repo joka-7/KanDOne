@@ -527,7 +527,7 @@ Rules:
             <div className="mx-auto mb-4 w-14 h-14 flex items-center justify-center">
               <AppBrandMark size={56} />
             </div>
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-700 mb-2">{tt('board.emptyTitle', 'Welcome to Task Manager')}</h2>
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-700 mb-2">{tt('board.emptyTitle', 'Welcome to KanDOne')}</h2>
             <p className="text-sm text-gray-500 mb-6">{tt('board.emptyDesc', 'Add your first task to get started.')}</p>
             <button
               onClick={openNewForm}
@@ -1162,7 +1162,7 @@ Rules:
               </div>
               <div className="min-w-0">
                 <h1 className="text-sm sm:text-xl font-bold tracking-tight leading-tight">
-                  {tt('header.title', 'Task Manager')}
+                  {tt('header.title', 'KanDOne')}
                   {tasks.length > 0 && (
                     <span className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 transition-all ${isSaved ? 'bg-green-500/20 text-green-100' : 'bg-yellow-500/50 text-yellow-50'}`}>
                       {isSaved ? <CheckCircle size={12} /> : <Clock size={12} />}

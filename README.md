@@ -1,6 +1,6 @@
-# Task Manager
+# KanDOne
 
-A standalone task-management app — ported from the **Tasks mode** of JobFlowTracker into its own repo.
+A standalone Kanban task-management app — ported from the **Tasks mode** of JobFlowTracker into its own repo.
 
 Plan work as tasks with sub-steps, track progress across a Kanban board, list, timeline,
 calendar and stats views, with optional AI coaching and Firebase cloud sync. Offline-first

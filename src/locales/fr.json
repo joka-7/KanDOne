@@ -334,7 +334,7 @@
   },
   "tasks": {
     "modeSelection": {
-      "title": "Gestionnaire de tâches",
+      "title": "KanDOne",
       "short": "Tâches",
       "desc": "Gérez vos tâches avec plusieurs étapes et suivez la progression"
     },
@@ -342,7 +342,7 @@
       "dueDate": "Échéance"
     },
     "header": {
-      "title": "Gestionnaire de tâches",
+      "title": "KanDOne",
       "savedInBrowser": "Enregistré",
       "saving": "Enregistrement...",
       "addTask": "Ajouter une tâche"
@@ -360,14 +360,14 @@
       "blocked": "Bloqué"
     },
     "welcome": {
-      "title": "Bienvenue dans le gestionnaire de tâches",
+      "title": "Bienvenue dans KanDOne",
       "subtitle": "Planifiez le travail par étapes",
       "desc": "Créez des tâches avec listes, modèles IA et sauvegarde locale.",
       "skip": "Passer",
       "getStarted": "Commencer"
     },
     "board": {
-      "emptyTitle": "Bienvenue dans le gestionnaire de tâches",
+      "emptyTitle": "Bienvenue dans KanDOne",
       "emptyDesc": "Organisez vos tâches avec plusieurs étapes et suivez la progression.",
       "viewTutorial": "Voir l'accueil",
       "addFirstButton": "Ajouter votre première tâche",

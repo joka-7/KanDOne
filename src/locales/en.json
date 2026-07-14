@@ -334,7 +334,7 @@
   },
   "tasks": {
     "modeSelection": {
-      "title": "Task Manager",
+      "title": "KanDOne",
       "short": "Tasks",
       "desc": "Manage tasks with multiple steps and track progress"
     },
@@ -342,7 +342,7 @@
       "dueDate": "Due date"
     },
     "header": {
-      "title": "Task Manager",
+      "title": "KanDOne",
       "savedInBrowser": "Saved in browser",
       "saving": "Saving...",
       "addTask": "Add Task"
@@ -360,14 +360,14 @@
       "blocked": "Blocked"
     },
     "welcome": {
-      "title": "Welcome to Task Manager",
+      "title": "Welcome to KanDOne",
       "subtitle": "Plan work in steps and track progress",
       "desc": "Create tasks with checklists, use AI coaching templates, and keep everything saved in your browser.",
       "skip": "Skip",
       "getStarted": "Get started"
     },
     "board": {
-      "emptyTitle": "Welcome to Task Manager",
+      "emptyTitle": "Welcome to KanDOne",
       "emptyDesc": "Organize your tasks with multiple steps and track progress at a glance.",
       "viewTutorial": "View welcome",
       "addFirstButton": "Add your first task",

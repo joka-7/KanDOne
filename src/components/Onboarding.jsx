@@ -7,7 +7,7 @@ const TASKS_STEPS = [
   {
     icon: '👋',
     titleKey: 'tasksWelcome',
-    defaults: { title: 'Welcome to Task Manager!', subtitle: 'Plan work, track progress, get things done' },
+    defaults: { title: 'Welcome to KanDOne!', subtitle: 'Plan work, track progress, get things done' },
   },
   {
     icon: '📋',

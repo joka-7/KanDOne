@@ -13,9 +13,9 @@ export default defineConfig({
       ],
       manifest: {
         id: '/',
-        name: 'Task Manager',
-        short_name: 'Tasks',
-        description: 'Manage your tasks and track progress',
+        name: 'KanDOne',
+        short_name: 'KanDOne',
+        description: 'KanDOne — Kanban task board: plan work in steps and track progress',
         theme_color: '#059669',
         background_color: '#f8fafc',
         display: 'standalone',
