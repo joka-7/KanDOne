@@ -45,7 +45,8 @@
     "installApp": "Install App",
     "iosInstallHint": "On iPhone/iPad: tap Share (□↑) in Safari, then \"Add to Home Screen\".",
     "androidInstallHint": "Install works in Chrome on the live site (HTTPS). Open the ⋮ menu → \"Install app\" or \"Add to Home screen\".",
-    "chromeInstallHint": "In Chrome: tap ⋮ (top-right) → \"Install app\" or \"Add to Home screen\". Use the published https:// link (not localhost). If you don't see it, refresh once — the site must finish loading."
+    "chromeInstallHint": "In Chrome: tap ⋮ (top-right) → \"Install app\" or \"Add to Home screen\". Use the published https:// link (not localhost). If you don't see it, refresh once — the site must finish loading.",
+    "syncNow": "Sync Now"
   },
   "tabs": {
     "board": "Status Board",
@@ -222,7 +223,46 @@
     "back": "Back",
     "next": "Next",
     "skip": "Skip tutorial",
-    "getStarted": "Let's go!"
+    "getStarted": "Let's go!",
+    "cloudTitle": "Cloud sync (optional)",
+    "cloudDesc": "Sign in with Google to back up your data and sync it across all your devices — or keep everything local and use JSON backups.",
+    "tasksWelcomeTitle": "Welcome to KanDOne!",
+    "tasksWelcomeSubtitle": "Plan work, track progress, get things done",
+    "tasksWelcomeDesc": "Create tasks, break them into steps, track progress — all in one place. Your data stays private in your browser.",
+    "tasksFeatureBoard": "Kanban board with drag & drop",
+    "tasksFeatureSteps": "Steps with status tracking",
+    "tasksFeatureTimeline": "Timeline & due dates",
+    "tasksFeatureStats": "Progress statistics",
+    "tasksFeatureLabels": "Custom labels with your own colors",
+    "tasksFeatureDuration": "Track estimated duration",
+    "tasksBoardTitle": "Status Board",
+    "tasksBoardSubtitle": "Visualize tasks by status with drag & drop",
+    "tasksBoardDesc": "Each task appears as a card in its status column. Drag cards between columns to update status instantly.",
+    "tasksBoardEx1": "Design new homepage",
+    "tasksBoardEx2": "Write tests",
+    "tasksBoardEx3": "Deploy to production",
+    "tasksBoardTip": "Tip: Use the N key to quickly add a new task from anywhere.",
+    "tasksBoardColorTip": "Tip: Give a task its own card color from the edit form to make it stand out on the board.",
+    "tasksStepsTitle": "Steps & Due Dates",
+    "tasksStepsSubtitle": "Break tasks into steps and set deadlines",
+    "tasksStepsDesc": "Break every task into small steps. Each step has a status, description, and due date — and appears on the Timeline.",
+    "tasksStepDone": "Done",
+    "tasksStepInProgress": "In progress",
+    "tasksStepTodo": "To do",
+    "tasksStepsDuration": "Estimate duration: minutes, hours, days or months",
+    "tasksStepsLabels": "Add colored labels to tasks and steps",
+    "tasksStepsTip": "If a step's due date is later than the task due date, you'll get a warning on the Timeline.",
+    "tasksAITitle": "AI Coach",
+    "tasksAISubtitle": "Get help planning and breaking down tasks",
+    "tasksAIDesc": "The AI coach helps you plan tasks, break down complex work, and stay focused — powered by Claude.",
+    "tasksAIFeature1": "Break a vague goal into concrete steps",
+    "tasksAIFeature2": "Estimate time and prioritize work",
+    "tasksAIFeature3": "Get unstuck when you don't know where to start",
+    "tasksShortcutsTitle": "Keyboard Shortcuts",
+    "tasksShortcutsSubtitle": "Work faster with shortcuts",
+    "tasksShortcutN": "Add a new task",
+    "tasksShortcutEsc": "Close task detail / cancel edit",
+    "tasksFinalTip": "You're all set! Start by adding your first task and breaking it into steps."
   },
   "ai": {
     "title": "AI Assistant",
@@ -339,7 +379,9 @@
       "desc": "Manage tasks with multiple steps and track progress"
     },
     "timeline": {
-      "dueDate": "Due date"
+      "dueDate": "Due date",
+      "step": "Step",
+      "stepOverdue": "Step date is after task due date!"
     },
     "header": {
       "title": "KanDOne",
@@ -382,7 +424,8 @@
       "loadMore": "Load more",
       "remaining": "remaining",
       "selectTask": "Select a task from the list",
-      "noTasks": "No tasks yet."
+      "noTasks": "No tasks yet.",
+      "allLabels": "All Labels"
     },
     "form": {
       "editTitle": "Edit Task",
@@ -396,6 +439,14 @@
       "status": "Status",
       "priority": "Priority",
       "dueDate": "Due Date",
+      "duration": "Duration",
+      "durationValuePlaceholder": "Duration",
+      "labels": "Labels",
+      "noLabels": "No labels yet.",
+      "addLabelPlaceholder": "New label name...",
+      "manageLabels": "Manage",
+      "doneManaging": "Done",
+      "deleteLabel": "Delete label",
       "steps": "Steps",
       "addStep": "Add step",
       "addStepPlaceholder": "Describe the step...",
@@ -403,7 +454,18 @@
       "noSteps": "No steps added yet.",
       "notes": "Notes",
       "notesPlaceholder": "Any additional notes...",
-      "requiredName": "Task name is required"
+      "requiredName": "Task name is required",
+      "cardColor": "Card Color",
+      "cardColorNone": "None",
+      "changeLabelColor": "Change color",
+      "deleteStep": "Delete step",
+      "stepDateAfterTask": "Date is after the task due date"
+    },
+    "duration": {
+      "minute": "Minutes",
+      "hour": "Hours",
+      "day": "Days",
+      "month": "Months"
     },
     "detail": {
       "editDetails": "Edit Details",
@@ -421,7 +483,8 @@
       "completed": "Completed",
       "totalSteps": "Total Steps",
       "doneSteps": "Steps Done",
-      "byStatus": "By Status"
+      "byStatus": "By Status",
+      "byLabel": "By Label"
     },
     "toast": {
       "saved": "Task saved!",

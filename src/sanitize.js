@@ -25,6 +25,46 @@ export function safeStr(val) {
 const TASK_STATUS_IDS = new Set(STATUSES_TASKS.map(s => s.id));
 const TASK_PRIORITIES = new Set(['high', 'medium', 'low']);
 const STEP_STATUSES = new Set(['todo', 'in_progress', 'done', 'blocked']);
+const DURATION_UNITS = new Set(['minute', 'hour', 'day', 'month']);
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+
+function sanitizeDuration(duration) {
+  if (!duration || typeof duration !== 'object') return { value: '', unit: 'hour' };
+  const value = safeStr(duration.value).slice(0, 10);
+  const unit = DURATION_UNITS.has(duration.unit) ? duration.unit : 'hour';
+  return { value, unit };
+}
+
+function sanitizeLabelIds(labelIds) {
+  if (!Array.isArray(labelIds)) return [];
+  return labelIds.slice(0, 50).map(id => String(id).slice(0, 64)).filter(Boolean);
+}
+
+/** Card background tint: a valid hex color, or '' for the default (white) card. */
+function sanitizeCardColor(color) {
+  return HEX_COLOR_RE.test(color) ? color : '';
+}
+
+/** Whitelist fields for the shared task/step label library (localStorage). */
+export function sanitizeTaskLabels(rows) {
+  if (!Array.isArray(rows)) return [];
+  return rows.slice(0, 200).map((l) => ({
+    id: l.id ? String(l.id).slice(0, 64) : generateId(),
+    text: safeStr(l.text).slice(0, 60),
+    color: HEX_COLOR_RE.test(l.color) ? l.color : '#64748b',
+  })).filter(l => l.text);
+}
+
+export function parseTaskLabelsStoragePayload(raw) {
+  if (!raw) return [];
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (!Array.isArray(parsed)) return [];
+    return sanitizeTaskLabels(parsed);
+  } catch {
+    return [];
+  }
+}
 
 function sanitizeInterviews(interviews) {
   if (!Array.isArray(interviews)) return [];
@@ -92,6 +132,8 @@ function sanitizeTaskSteps(steps) {
     status: STEP_STATUSES.has(s.status) ? s.status : 'todo',
     notes: safeStr(s.notes),
     dueDate: safeStr(s.dueDate),
+    duration: sanitizeDuration(s.duration),
+    labelIds: sanitizeLabelIds(s.labelIds),
   }));
 }
 
@@ -105,6 +147,9 @@ export function sanitizeTaskRecords(rows) {
     status: TASK_STATUS_IDS.has(t.status) ? t.status : 'active',
     priority: TASK_PRIORITIES.has(t.priority) ? t.priority : 'medium',
     dueDate: safeStr(t.dueDate || ''),
+    duration: sanitizeDuration(t.duration),
+    labelIds: sanitizeLabelIds(t.labelIds),
+    cardColor: sanitizeCardColor(t.cardColor),
     steps: sanitizeTaskSteps(t.steps),
     notes: safeStr(t.notes || ''),
   }));
