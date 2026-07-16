@@ -111,6 +111,16 @@ const tasksStepContent = {
           </div>
         ))}
       </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="flex items-center gap-2 p-2.5 bg-cyan-50 rounded-lg border border-cyan-100">
+          <Timer size={16} className="text-cyan-500 shrink-0" />
+          <span className="text-xs text-gray-700">{t('onboarding.tasksStepsDuration', 'Estimate duration: minutes, hours, days or months')}</span>
+        </div>
+        <div className="flex items-center gap-2 p-2.5 bg-pink-50 rounded-lg border border-pink-100">
+          <Tag size={16} className="text-pink-500 shrink-0" />
+          <span className="text-xs text-gray-700">{t('onboarding.tasksStepsLabels', 'Add colored labels to tasks and steps')}</span>
+        </div>
+      </div>
       <div className="flex items-start gap-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
         <Lightbulb size={16} className="text-blue-500 shrink-0 mt-0.5" />
         <p className="text-sm text-blue-700">{t('onboarding.tasksStepsTip', 'If a step\'s due date is later than the task due date, you\'ll get a warning on the Timeline.')}</p>

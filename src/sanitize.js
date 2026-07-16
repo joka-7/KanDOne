@@ -1,4 +1,6 @@
 import { STATUSES_TASKS } from './statuses';
+import { sanitizeRoutine } from './utils/recurrence.js';
+import { sanitizeDueTime, sanitizeReminder } from './utils/reminders.js';
 
 /** Generate a cryptographically random ID (fallback to timestamp if crypto unavailable) */
 export function generateId() {
@@ -147,9 +149,13 @@ export function sanitizeTaskRecords(rows) {
     status: TASK_STATUS_IDS.has(t.status) ? t.status : 'active',
     priority: TASK_PRIORITIES.has(t.priority) ? t.priority : 'medium',
     dueDate: safeStr(t.dueDate || ''),
+    dueTime: sanitizeDueTime(t.dueTime),
     duration: sanitizeDuration(t.duration),
     labelIds: sanitizeLabelIds(t.labelIds),
     cardColor: sanitizeCardColor(t.cardColor),
+    routine: sanitizeRoutine(t.routine),
+    reminder: sanitizeReminder(t.reminder),
+    lastReminderKey: safeStr(t.lastReminderKey || '').slice(0, 64),
     steps: sanitizeTaskSteps(t.steps),
     notes: safeStr(t.notes || ''),
   }));
