@@ -45,7 +45,8 @@
     "installApp": "Installer l'app",
     "iosInstallHint": "Sur iPhone/iPad : touchez Partager (□↑) dans Safari, puis « Sur l'écran d'accueil ».",
     "androidInstallHint": "L'installation fonctionne dans Chrome sur le site en ligne (HTTPS). Menu ⋮ → « Installer l'application ».",
-    "chromeInstallHint": "Dans Chrome : ⋮ (en haut à droite) → « Installer l'application » ou « Ajouter à l'écran d'accueil ». Utilisez le lien https:// publié (pas localhost). Sinon, actualisez la page."
+    "chromeInstallHint": "Dans Chrome : ⋮ (en haut à droite) → « Installer l'application » ou « Ajouter à l'écran d'accueil ». Utilisez le lien https:// publié (pas localhost). Sinon, actualisez la page.",
+    "syncNow": "Synchroniser"
   },
   "tabs": {
     "board": "Tableau",
@@ -215,7 +216,46 @@
     "back": "Retour",
     "next": "Suivant",
     "skip": "Passer le tutoriel",
-    "getStarted": "C'est parti !"
+    "getStarted": "C'est parti !",
+    "cloudTitle": "Sync cloud (optionnel)",
+    "cloudDesc": "Connectez-vous avec Google pour sauvegarder et synchroniser vos données sur tous vos appareils — ou gardez tout en local avec des sauvegardes JSON.",
+    "tasksWelcomeTitle": "Bienvenue sur KanDOne !",
+    "tasksWelcomeSubtitle": "Planifiez le travail, suivez la progression, avancez",
+    "tasksWelcomeDesc": "Créez des tâches, décomposez-les en étapes, suivez la progression — tout au même endroit. Vos données restent privées dans votre navigateur.",
+    "tasksFeatureBoard": "Tableau kanban avec glisser-déposer",
+    "tasksFeatureSteps": "Étapes avec suivi de statut",
+    "tasksFeatureTimeline": "Chronologie et échéances",
+    "tasksFeatureStats": "Statistiques de progression",
+    "tasksFeatureLabels": "Étiquettes personnalisées avec vos propres couleurs",
+    "tasksFeatureDuration": "Suivi de la durée estimée",
+    "tasksBoardTitle": "Tableau de statuts",
+    "tasksBoardSubtitle": "Visualisez les tâches par statut avec glisser-déposer",
+    "tasksBoardDesc": "Chaque tâche apparaît comme une carte dans sa colonne de statut. Faites glisser les cartes entre les colonnes pour mettre à jour le statut instantanément.",
+    "tasksBoardEx1": "Concevoir la nouvelle page d'accueil",
+    "tasksBoardEx2": "Écrire les tests",
+    "tasksBoardEx3": "Déployer en production",
+    "tasksBoardTip": "Astuce : Utilisez la touche N pour ajouter rapidement une nouvelle tâche depuis n'importe où.",
+    "tasksBoardColorTip": "Astuce : Donnez à une tâche sa propre couleur de carte depuis le formulaire d'édition pour la faire ressortir sur le tableau.",
+    "tasksStepsTitle": "Étapes et échéances",
+    "tasksStepsSubtitle": "Décomposez les tâches en étapes et fixez des délais",
+    "tasksStepsDesc": "Décomposez chaque tâche en petites étapes. Chaque étape a un statut, une description et une échéance — et apparaît dans la Chronologie.",
+    "tasksStepDone": "Terminé",
+    "tasksStepInProgress": "En cours",
+    "tasksStepTodo": "À faire",
+    "tasksStepsDuration": "Estimez la durée : minutes, heures, jours ou mois",
+    "tasksStepsLabels": "Ajoutez des étiquettes colorées aux tâches et étapes",
+    "tasksStepsTip": "Si l'échéance d'une étape est postérieure à celle de la tâche, vous recevrez un avertissement dans la Chronologie.",
+    "tasksAITitle": "Coach IA",
+    "tasksAISubtitle": "Obtenez de l'aide pour planifier et décomposer les tâches",
+    "tasksAIDesc": "Le coach IA vous aide à planifier des tâches, décomposer un travail complexe et rester concentré — propulsé par Claude.",
+    "tasksAIFeature1": "Décomposer un objectif vague en étapes concrètes",
+    "tasksAIFeature2": "Estimer le temps et prioriser le travail",
+    "tasksAIFeature3": "Débloquez-vous quand vous ne savez pas par où commencer",
+    "tasksShortcutsTitle": "Raccourcis clavier",
+    "tasksShortcutsSubtitle": "Travaillez plus vite avec des raccourcis",
+    "tasksShortcutN": "Ajouter une nouvelle tâche",
+    "tasksShortcutEsc": "Fermer les détails de la tâche / annuler l'édition",
+    "tasksFinalTip": "Vous êtes prêt ! Commencez par ajouter votre première tâche et décomposez-la en étapes."
   },
   "ai": {
     "title": "Assistant IA",
@@ -367,7 +407,7 @@
       "getStarted": "Commencer"
     },
     "board": {
-      "emptyTitle": "Bienvenue dans KanDOne",
+      "emptyTitle": "Bienvenue sur KanDOne",
       "emptyDesc": "Organisez vos tâches avec plusieurs étapes et suivez la progression.",
       "viewTutorial": "Voir l'accueil",
       "addFirstButton": "Ajouter votre première tâche",
@@ -382,7 +422,8 @@
       "loadMore": "Charger plus",
       "remaining": "restants",
       "selectTask": "Sélectionnez une tâche dans la liste",
-      "noTasks": "Aucune tâche pour l'instant."
+      "noTasks": "Aucune tâche pour l'instant.",
+      "allLabels": "Toutes les étiquettes"
     },
     "form": {
       "editTitle": "Modifier la tâche",
@@ -403,7 +444,18 @@
       "noSteps": "Aucune étape ajoutée.",
       "notes": "Notes",
       "notesPlaceholder": "Notes supplémentaires...",
-      "requiredName": "Le nom de la tâche est obligatoire"
+      "requiredName": "Le nom de la tâche est obligatoire",
+      "duration": "Durée",
+      "durationValuePlaceholder": "Durée",
+      "labels": "Étiquettes",
+      "noLabels": "Aucune étiquette pour l'instant.",
+      "addLabelPlaceholder": "Nom de la nouvelle étiquette...",
+      "manageLabels": "Gérer",
+      "doneManaging": "Terminé",
+      "deleteLabel": "Supprimer l'étiquette",
+      "cardColor": "Couleur de la carte",
+      "cardColorNone": "Aucune",
+      "changeLabelColor": "Changer la couleur"
     },
     "detail": {
       "editDetails": "Modifier les détails",
@@ -421,7 +473,8 @@
       "completed": "Terminées",
       "totalSteps": "Étapes totales",
       "doneSteps": "Étapes terminées",
-      "byStatus": "Par statut"
+      "byStatus": "Par statut",
+      "byLabel": "Par étiquette"
     },
     "toast": {
       "saved": "Tâche enregistrée !",
@@ -433,6 +486,12 @@
       "deleteConfirm": "Êtes-vous sûr de vouloir supprimer cette tâche ?",
       "noData": "Aucune donnée de tâche trouvée dans le fichier.",
       "importError": "Erreur lors de l'importation. Assurez-vous que c'est un fichier JSON valide."
+    },
+    "duration": {
+      "minute": "Minutes",
+      "hour": "Heures",
+      "day": "Jours",
+      "month": "Mois"
     }
   },
   "recruiter": {

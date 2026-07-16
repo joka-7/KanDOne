@@ -45,7 +45,8 @@
     "installApp": "התקנת אפליקציה",
     "iosInstallHint": "ב-iPhone/iPad: הקש Share (□↑) ב-Safari, ואז «הוסף למסך הבית».",
     "androidInstallHint": "התקנה עובדת ב-Chrome באתר החי (HTTPS). תפריט ⋮ → «התקן אפליקציה» או «הוסף למסך הבית».",
-    "chromeInstallHint": "ב-Chrome: ⋮ (למעלה מימין) → «התקן אפליקציה» או «הוסף למסך הבית». השתמשו בקישור https:// המפורסם (לא localhost). אם לא מופיע — רעננו את הדף."
+    "chromeInstallHint": "ב-Chrome: ⋮ (למעלה מימין) → «התקן אפליקציה» או «הוסף למסך הבית». השתמשו בקישור https:// המפורסם (לא localhost). אם לא מופיע — רעננו את הדף.",
+    "syncNow": "סנכרן עכשיו"
   },
   "tabs": {
     "board": "לוח סטטוסים",
@@ -222,7 +223,46 @@
     "back": "חזור",
     "next": "הבא",
     "skip": "דלג על המדריך",
-    "getStarted": "בואו נתחיל!"
+    "getStarted": "בואו נתחיל!",
+    "cloudTitle": "סנכרון ענן (אופציונלי)",
+    "cloudDesc": "התחבר עם Google כדי לגבות ולסנכרן את הנתונים שלך בכל המכשירים — או השאר הכול מקומי והשתמש בגיבויי JSON.",
+    "tasksWelcomeTitle": "ברוכים הבאים ל-KanDOne!",
+    "tasksWelcomeSubtitle": "תכנן עבודה, עקוב אחר התקדמות, הוצא לפועל",
+    "tasksWelcomeDesc": "צור משימות, פרק אותן לשלבים, עקוב אחר התקדמות — הכול במקום אחד. הנתונים שלך נשמרים בפרטיות בדפדפן.",
+    "tasksFeatureBoard": "לוח קנבן עם גרירה ושחרור",
+    "tasksFeatureSteps": "שלבים עם מעקב סטטוס",
+    "tasksFeatureTimeline": "ציר זמן ותאריכי יעד",
+    "tasksFeatureStats": "סטטיסטיקות התקדמות",
+    "tasksFeatureLabels": "תוויות מותאמות אישית עם צבעים משלך",
+    "tasksFeatureDuration": "מעקב משך זמן משוער",
+    "tasksBoardTitle": "לוח סטטוסים",
+    "tasksBoardSubtitle": "הצג משימות לפי סטטוס עם גרירה ושחרור",
+    "tasksBoardDesc": "כל משימה מוצגת ככרטיס בעמודת הסטטוס שלה. גרור כרטיסים בין עמודות לעדכון סטטוס מיידי.",
+    "tasksBoardEx1": "עיצוב דף הבית החדש",
+    "tasksBoardEx2": "כתיבת בדיקות",
+    "tasksBoardEx3": "פריסה לייצור",
+    "tasksBoardTip": "טיפ: השתמש במקש N כדי להוסיף משימה חדשה במהירות מכל מקום.",
+    "tasksBoardColorTip": "טיפ: תן למשימה צבע כרטיס משלה בטופס העריכה כדי שתבלוט בלוח.",
+    "tasksStepsTitle": "שלבים ותאריכי יעד",
+    "tasksStepsSubtitle": "פרק משימות לשלבים וקבע מועדים",
+    "tasksStepsDesc": "פרק כל משימה לשלבים קטנים. לכל שלב יש סטטוס, תיאור ותאריך יעד — והוא מופיע בציר הזמן.",
+    "tasksStepDone": "הושלם",
+    "tasksStepInProgress": "בביצוע",
+    "tasksStepTodo": "לביצוע",
+    "tasksStepsDuration": "הערך משך זמן: דקות, שעות, ימים או חודשים",
+    "tasksStepsLabels": "הוסף תוויות צבעוניות למשימות ולשלבים",
+    "tasksStepsTip": "אם תאריך היעד של שלב מאוחר מתאריך היעד של המשימה, תקבל אזהרה בציר הזמן.",
+    "tasksAITitle": "מאמן AI",
+    "tasksAISubtitle": "קבל עזרה בתכנון ובפירוק משימות",
+    "tasksAIDesc": "מאמן ה-AI עוזר לך לתכנן משימות, לפרק עבודה מורכבת ולהישאר ממוקד — מבוסס Claude.",
+    "tasksAIFeature1": "פרק מטרה מעורפלת לשלבים קונקרטיים",
+    "tasksAIFeature2": "הערך זמן ותעדף עבודה",
+    "tasksAIFeature3": "קבל עזרה כשאתה לא יודע מאיפה להתחיל",
+    "tasksShortcutsTitle": "קיצורי מקלדת",
+    "tasksShortcutsSubtitle": "עבוד מהר יותר עם קיצורים",
+    "tasksShortcutN": "הוסף משימה חדשה",
+    "tasksShortcutEsc": "סגור פרטי משימה / בטל עריכה",
+    "tasksFinalTip": "אתה מוכן! התחל בהוספת המשימה הראשונה שלך ופרק אותה לשלבים."
   },
   "ai": {
     "title": "עוזר AI",
@@ -367,7 +407,7 @@
       "getStarted": "בואו נתחיל"
     },
     "board": {
-      "emptyTitle": "ברוך הבא ל-KanDOne",
+      "emptyTitle": "ברוכים הבאים ל-KanDOne",
       "emptyDesc": "ארגן את המשימות שלך עם שלבים מרובים ועקוב אחרי ההתקדמות.",
       "viewTutorial": "צפה בברכה",
       "addFirstButton": "הוסף את המשימה הראשונה שלך",
@@ -382,7 +422,8 @@
       "loadMore": "טען עוד",
       "remaining": "נותרו",
       "selectTask": "בחר משימה מהרשימה",
-      "noTasks": "אין משימות עדיין."
+      "noTasks": "אין משימות עדיין.",
+      "allLabels": "כל התוויות"
     },
     "form": {
       "editTitle": "עריכת משימה",
@@ -403,7 +444,18 @@
       "noSteps": "אין שלבים עדיין.",
       "notes": "הערות",
       "notesPlaceholder": "הערות נוספות...",
-      "requiredName": "שם המשימה נדרש"
+      "requiredName": "שם המשימה נדרש",
+      "duration": "משך זמן",
+      "durationValuePlaceholder": "משך זמן",
+      "labels": "תוויות",
+      "noLabels": "אין תוויות עדיין.",
+      "addLabelPlaceholder": "שם תווית חדשה...",
+      "manageLabels": "נהל",
+      "doneManaging": "סיום",
+      "deleteLabel": "מחק תווית",
+      "cardColor": "צבע כרטיס",
+      "cardColorNone": "ללא",
+      "changeLabelColor": "שנה צבע"
     },
     "detail": {
       "editDetails": "ערוך פרטים",
@@ -421,7 +473,8 @@
       "completed": "הושלמו",
       "totalSteps": "סה\"כ שלבים",
       "doneSteps": "שלבים שהושלמו",
-      "byStatus": "לפי סטטוס"
+      "byStatus": "לפי סטטוס",
+      "byLabel": "לפי תווית"
     },
     "toast": {
       "saved": "המשימה נשמרה!",
@@ -433,6 +486,12 @@
       "deleteConfirm": "האם אתה בטוח שברצונך למחוק משימה זו?",
       "noData": "לא נמצאו נתוני משימות בקובץ.",
       "importError": "שגיאה בייבוא הקובץ. ודא שזה קובץ JSON תקין."
+    },
+    "duration": {
+      "minute": "דקות",
+      "hour": "שעות",
+      "day": "ימים",
+      "month": "חודשים"
     }
   },
   "recruiter": {

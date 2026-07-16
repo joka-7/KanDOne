@@ -3,8 +3,9 @@ import { useTranslation } from 'react-i18next';
 import {
   Plus, Search, Download, Upload, Layout, List, BarChart2, Activity,
   Trash2, Edit2, ArrowLeft, ArrowRight, CheckCircle2, CheckCircle, Circle,
-  Clock, AlertCircle, ChevronDown, Calendar, Cloud, CloudOff,
+  Clock, AlertCircle, ChevronDown, Calendar, Cloud, CloudOff, RefreshCw,
   ClipboardList, X, GripVertical, Languages, MoreVertical, Settings, Smartphone, Sparkles,
+  Timer,
 } from 'lucide-react';
 import { initAI, getGoalsTasksSystemPrompt } from './services/aiAssistant';
 import { TASK_TEMPLATES } from './data/taskTemplates';
@@ -24,7 +25,17 @@ import { usePwaInstall } from './usePwaInstall';
 import AppBrandMark from './components/AppBrandMark';
 import Onboarding from './components/Onboarding';
 import { STORAGE_KEYS } from './storageKeys.js';
-import { sanitizeTaskRecords, parseTaskStoragePayload } from './sanitize';
+import {
+  sanitizeTaskRecords, parseTaskStoragePayload, generateId,
+  parseTaskLabelsStoragePayload,
+} from './sanitize';
+import { saveJsonFile } from './utils/saveFile';
+import LabelPicker, { LabelChipsReadOnly } from './components/LabelPicker';
+import CardColorPicker from './components/CardColorPicker';
+import { LABEL_COLOR_PALETTE, readableTextColor } from './utils/labelColors';
+
+const TASKS_LABELS_KEY = 'tasksLabelsV1';
+const DURATION_UNITS = ['minute', 'hour', 'day', 'month'];
 
 const MODE = 'tasks';
 
@@ -54,12 +65,17 @@ const cycleStepStatus = (current) => {
   return STEP_STATUS_CYCLE[(idx + 1) % STEP_STATUS_CYCLE.length];
 };
 
+const makeInitialDuration = () => ({ value: '', unit: 'hour' });
+
 const makeInitialTask = () => ({
   name: '',
   description: '',
   status: 'active',
   priority: 'medium',
   dueDate: '',
+  duration: makeInitialDuration(),
+  labelIds: [],
+  cardColor: '',
   steps: [],
   notes: '',
 });
@@ -87,6 +103,13 @@ const formatDate = (dateStr, lang) => {
   } catch { return dateStr; }
 };
 
+const formatDuration = (duration, tt) => {
+  const value = safeStr(duration?.value).trim();
+  if (!value) return null;
+  const unit = DURATION_UNITS.includes(duration?.unit) ? duration.unit : 'hour';
+  return `${value} ${tt(`duration.${unit}`, unit)}`;
+};
+
 const getAvatarColor = (name) => {
   const s = safeStr(name);
   if (!s) return 'bg-gray-500';
@@ -107,6 +130,9 @@ export default function TasksApp() {
     const sanitized = parseTaskStoragePayload(localStorage.getItem(getStorageKey(MODE)));
     return filterItemsForMode(sanitized, MODE);
   });
+  const [labels, setLabels] = useState(
+    () => parseTaskLabelsStoragePayload(localStorage.getItem(TASKS_LABELS_KEY)),
+  );
 
   const [selectedId, setSelectedId] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -114,6 +140,7 @@ export default function TasksApp() {
   const [activeTab, setActiveTab] = useState('board');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [labelFilter, setLabelFilter] = useState('all');
   const [toastMessage, setToastMessage] = useState('');
   const [isSaved, setIsSaved] = useState(true);
   const [user, setUser] = useState(null);
@@ -151,12 +178,19 @@ export default function TasksApp() {
   }, [tasks]);
 
   useEffect(() => {
+    try { localStorage.setItem(TASKS_LABELS_KEY, JSON.stringify(labels)); } catch { /* ignore */ }
+  }, [labels]);
+
+  useEffect(() => {
     const provider = localStorage.getItem('aiProvider') || 'gemini';
     const apiKey = localStorage.getItem('aiApiKey') || localStorage.getItem('anthropicApiKey') || '';
     const model = localStorage.getItem('aiModel') || '';
     const ollamaUrl = localStorage.getItem('ollamaUrl') || 'http://localhost:11434';
     initAI(provider, apiKey, model, ollamaUrl);
   }, []);
+
+  const userRef = useRef(null);
+  useEffect(() => { userRef.current = user; }, [user]);
 
   useEffect(() => {
     const unsub = onAuthChange(async (firebaseUser) => {
@@ -175,6 +209,22 @@ export default function TasksApp() {
       }
     });
     return unsub;
+  }, []);
+
+  useEffect(() => {
+    const handleVisibility = async () => {
+      const firebaseUser = userRef.current;
+      if (document.visibilityState === 'visible' && firebaseUser) {
+        setSyncing(true);
+        try {
+          const data = await loadAllItems(firebaseUser.uid, MODE);
+          if (data && data.length > 0) setTasks(filterItemsForMode(data, MODE));
+        } catch (e) { console.error(e); }
+        setSyncing(false);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
 
   const saveTasks = useCallback(async (newTasks) => {
@@ -202,6 +252,16 @@ export default function TasksApp() {
       try { await deleteItem(user.uid, MODE, id); } catch { /* ignore */ }
     }
   }, [user]);
+
+  const handleSyncNow = async () => {
+    if (!user || syncing) return;
+    setSyncing(true);
+    try {
+      const data = await loadAllItems(user.uid, MODE);
+      if (data && data.length > 0) setTasks(filterItemsForMode(data, MODE));
+    } catch (e) { console.error(e); }
+    setSyncing(false);
+  };
 
   const openNewForm = useCallback(() => {
     setFormData(makeInitialTask());
@@ -312,7 +372,10 @@ export default function TasksApp() {
   const handleAddStep = () => {
     const title = newStepTitle.trim();
     if (!title) return;
-    const newStep = { id: Date.now().toString() + Math.random(), title, status: 'todo', notes: '', dueDate: '' };
+    const newStep = {
+      id: Date.now().toString() + Math.random(), title, status: 'todo', notes: '', dueDate: '',
+      duration: makeInitialDuration(), labelIds: [],
+    };
     setFormData(prev => ({ ...prev, steps: [...(prev.steps || []), newStep] }));
     setNewStepTitle('');
   };
@@ -320,6 +383,58 @@ export default function TasksApp() {
   const handleDeleteStep = (stepId) => {
     setFormData(prev => ({ ...prev, steps: (prev.steps || []).filter(s => s.id !== stepId) }));
   };
+
+  const handleCreateLabel = useCallback((text) => {
+    const trimmed = text.trim();
+    if (!trimmed) return null;
+    const id = generateId();
+    const color = LABEL_COLOR_PALETTE[labels.length % LABEL_COLOR_PALETTE.length];
+    setLabels(prev => [...prev, { id, text: trimmed, color }]);
+    return id;
+  }, [labels]);
+
+  const handleLabelColorChange = useCallback((id, color) => {
+    setLabels(prev => prev.map(l => l.id === id ? { ...l, color } : l));
+  }, []);
+
+  const handleDeleteLabel = useCallback((id) => {
+    setLabels(prev => prev.filter(l => l.id !== id));
+    setFormData(prev => ({ ...prev, labelIds: (prev.labelIds || []).filter(x => x !== id) }));
+    setTasks(prev => prev.map(task => ({
+      ...task,
+      labelIds: Array.isArray(task.labelIds) ? task.labelIds.filter(x => x !== id) : task.labelIds,
+      steps: Array.isArray(task.steps)
+        ? task.steps.map(s => ({
+          ...s,
+          labelIds: Array.isArray(s.labelIds) ? s.labelIds.filter(x => x !== id) : s.labelIds,
+        }))
+        : task.steps,
+    })));
+  }, []);
+
+  const handleTaskLabelToggle = useCallback((id) => {
+    setFormData(prev => {
+      const current = prev.labelIds || [];
+      return {
+        ...prev,
+        labelIds: current.includes(id) ? current.filter(x => x !== id) : [...current, id],
+      };
+    });
+  }, []);
+
+  const handleStepLabelToggle = useCallback((stepId, id) => {
+    setFormData(prev => ({
+      ...prev,
+      steps: (prev.steps || []).map(s => {
+        if (s.id !== stepId) return s;
+        const current = s.labelIds || [];
+        return {
+          ...s,
+          labelIds: current.includes(id) ? current.filter(x => x !== id) : [...current, id],
+        };
+      }),
+    }));
+  }, []);
 
   const handleDragStart = (taskId) => { dragTaskId.current = taskId; };
   const handleDragOver = (e) => { e.preventDefault(); };
@@ -336,15 +451,9 @@ export default function TasksApp() {
     showToast(tt('toast.saved', 'Saved!'));
   };
 
-  const handleExport = () => {
-    const blob = new Blob([JSON.stringify(tasks, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `tasks-backup-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast(tt('toast.exported', 'Backup downloaded!'));
+  const handleExport = async () => {
+    const saved = await saveJsonFile(`tasks-backup-${Date.now()}.json`, tasks);
+    if (saved) showToast(tt('toast.exported', 'Backup downloaded!'));
   };
 
   const handleImport = (e) => {
@@ -407,6 +516,13 @@ Rules:
   const filteredTasks = useMemo(() => {
     let result = tasks;
     if (statusFilter !== 'all') result = result.filter(t => t.status === statusFilter);
+    if (labelFilter !== 'all') {
+      result = result.filter(t => {
+        const taskLabels = t.labelIds || [];
+        const stepLabels = (t.steps || []).flatMap(s => s.labelIds || []);
+        return taskLabels.includes(labelFilter) || stepLabels.includes(labelFilter);
+      });
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter(t =>
@@ -415,7 +531,7 @@ Rules:
       );
     }
     return result;
-  }, [tasks, statusFilter, searchQuery]);
+  }, [tasks, statusFilter, labelFilter, searchQuery]);
 
   const stats = useMemo(() => {
     const total = tasks.length;
@@ -426,8 +542,15 @@ Rules:
     const doneSteps = allSteps.filter(s => s.status === 'done').length;
     const byStatus = {};
     STATUSES_TASKS.forEach(s => { byStatus[s.id] = tasks.filter(t => t.status === s.id).length; });
-    return { total, active, completed, totalSteps, doneSteps, byStatus };
-  }, [tasks]);
+    const byLabel = {};
+    labels.forEach(l => {
+      byLabel[l.id] = tasks.filter(t => {
+        const ids = new Set([...(t.labelIds || []), ...(t.steps || []).flatMap(s => s.labelIds || [])]);
+        return ids.has(l.id);
+      }).length;
+    });
+    return { total, active, completed, totalSteps, doneSteps, byStatus, byLabel };
+  }, [tasks, labels]);
 
   const calendarEvents = useMemo(() => {
     const events = [];
@@ -574,7 +697,8 @@ Rules:
                         draggable
                         onDragStart={() => handleDragStart(task.id)}
                         onClick={() => navigateTo('list', task.id)}
-                        className="bg-white border border-gray-200 rounded-xl p-2.5 sm:p-3 cursor-pointer hover:shadow-md hover:border-emerald-300 active:bg-emerald-50/50 transition-all group"
+                        style={task.cardColor ? { backgroundColor: task.cardColor } : undefined}
+                        className={`${task.cardColor ? '' : 'bg-white'} border border-gray-200 rounded-xl p-2.5 sm:p-3 cursor-pointer hover:shadow-md hover:border-emerald-300 active:bg-emerald-50/50 transition-all group`}
                       >
                         <div className="flex items-start justify-between gap-2 mb-1">
                           <p className="font-semibold text-gray-800 text-xs sm:text-sm leading-snug flex-1">{safeStr(task.name)}</p>
@@ -589,6 +713,17 @@ Rules:
                           <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
                             <Calendar size={10} />
                             {formatDate(task.dueDate, lang)}
+                          </div>
+                        )}
+                        {formatDuration(task.duration, tt) && (
+                          <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
+                            <Timer size={10} />
+                            {formatDuration(task.duration, tt)}
+                          </div>
+                        )}
+                        {(task.labelIds || []).length > 0 && (
+                          <div className="mt-1.5">
+                            <LabelChipsReadOnly labels={labels} labelIds={task.labelIds} />
                           </div>
                         )}
                         {renderProgressBar(task)}
@@ -679,16 +814,76 @@ Rules:
               {tt('form.stepDateAfterTask', 'Date is after the task due date')}
             </div>
           )}
+          {editable && (
+            <div className="flex items-center gap-1 mt-1.5">
+              <Timer size={10} className="text-gray-400 shrink-0" />
+              <input
+                type="number"
+                min="0"
+                value={safeStr(step.duration?.value)}
+                onChange={e => setFormData(prev => ({
+                  ...prev,
+                  steps: prev.steps.map(s => s.id === step.id
+                    ? { ...s, duration: { value: e.target.value, unit: s.duration?.unit || 'hour' } }
+                    : s),
+                }))}
+                placeholder={tt('form.durationValuePlaceholder', 'Duration')}
+                className="w-16 text-xs bg-transparent border-0 outline-none text-gray-500"
+              />
+              <select
+                value={step.duration?.unit || 'hour'}
+                onChange={e => setFormData(prev => ({
+                  ...prev,
+                  steps: prev.steps.map(s => s.id === step.id
+                    ? { ...s, duration: { value: s.duration?.value || '', unit: e.target.value } }
+                    : s),
+                }))}
+                className="text-xs bg-transparent border-0 outline-none text-gray-500 cursor-pointer"
+              >
+                {DURATION_UNITS.map(u => (
+                  <option key={u} value={u}>{tt(`duration.${u}`, u)}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {!editable && formatDuration(step.duration, tt) && (
+            <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
+              <Timer size={10} />
+              {formatDuration(step.duration, tt)}
+            </div>
+          )}
+          {editable && (
+            <div className="mt-1.5">
+              <LabelPicker
+                labels={labels}
+                selectedIds={step.labelIds || []}
+                onToggle={(id) => handleStepLabelToggle(step.id, id)}
+                onCreate={(text) => {
+                  const id = handleCreateLabel(text);
+                  if (id) handleStepLabelToggle(step.id, id);
+                }}
+                onColorChange={handleLabelColorChange}
+                onDelete={handleDeleteLabel}
+                t={tt}
+                compact
+              />
+            </div>
+          )}
+          {!editable && (step.labelIds || []).length > 0 && (
+            <div className="mt-1.5">
+              <LabelChipsReadOnly labels={labels} labelIds={step.labelIds} />
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {!editable && renderStepStatusBadge(step.status)}
           {editable && (
             <button
               onClick={() => handleDeleteStep(step.id)}
-              className="text-gray-300 hover:text-red-400 transition-colors"
+              className="text-gray-400 hover:text-red-500 transition-colors"
               title={tt('form.deleteStep', 'Delete step')}
             >
-              <X size={14} />
+              <Trash2 size={14} />
             </button>
           )}
         </div>
@@ -701,6 +896,7 @@ Rules:
       const steps = formData.steps || [];
       return (
         <div className="flex-1 overflow-y-auto p-3 sm:p-5 pb-20 custom-scrollbar">
+          <div className="max-w-3xl mx-auto">
           <div className="flex items-center justify-between mb-4 sm:mb-5">
             <h2 className="text-base sm:text-lg font-bold text-gray-800">
               {formData.id ? tt('form.editTitle', 'Edit Task') : tt('form.addTitle', 'Add New Task')}
@@ -761,15 +957,74 @@ Rules:
               </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                  {tt('form.dueDate', 'Due Date')}
+                </label>
+                <input
+                  type="date"
+                  value={safeStr(formData.dueDate)}
+                  onChange={e => setFormData(prev => ({ ...prev, dueDate: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                  {tt('form.duration', 'Duration')}
+                </label>
+                <div className="flex gap-1.5">
+                  <input
+                    type="number"
+                    min="0"
+                    value={safeStr(formData.duration?.value)}
+                    onChange={e => setFormData(prev => ({
+                      ...prev, duration: { value: e.target.value, unit: prev.duration?.unit || 'hour' },
+                    }))}
+                    placeholder={tt('form.durationValuePlaceholder', 'Duration')}
+                    className="w-1/2 border border-gray-200 rounded-xl px-3 py-2.5 text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 text-sm"
+                  />
+                  <select
+                    value={formData.duration?.unit || 'hour'}
+                    onChange={e => setFormData(prev => ({
+                      ...prev, duration: { value: prev.duration?.value || '', unit: e.target.value },
+                    }))}
+                    className="w-1/2 border border-gray-200 rounded-xl px-2 py-2.5 text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 text-sm"
+                  >
+                    {DURATION_UNITS.map(u => (
+                      <option key={u} value={u}>{tt(`duration.${u}`, u)}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-                {tt('form.dueDate', 'Due Date')}
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                {tt('form.labels', 'Labels')}
               </label>
-              <input
-                type="date"
-                value={safeStr(formData.dueDate)}
-                onChange={e => setFormData(prev => ({ ...prev, dueDate: e.target.value }))}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 text-sm"
+              <LabelPicker
+                labels={labels}
+                selectedIds={formData.labelIds || []}
+                onToggle={handleTaskLabelToggle}
+                onCreate={(text) => {
+                  const id = handleCreateLabel(text);
+                  if (id) handleTaskLabelToggle(id);
+                }}
+                onColorChange={handleLabelColorChange}
+                onDelete={handleDeleteLabel}
+                t={tt}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                {tt('form.cardColor', 'Card Color')}
+              </label>
+              <CardColorPicker
+                value={formData.cardColor || ''}
+                onChange={(color) => setFormData(prev => ({ ...prev, cardColor: color }))}
+                noneLabel={tt('form.cardColorNone', 'None')}
               />
             </div>
 
@@ -841,6 +1096,7 @@ Rules:
               </button>
             </div>
           </div>
+          </div>
         </div>
       );
     }
@@ -883,7 +1139,18 @@ Rules:
                   {formatDate(task.dueDate, lang)}
                 </span>
               )}
+              {formatDuration(task.duration, tt) && (
+                <span className="flex items-center gap-1 text-xs text-gray-500">
+                  <Timer size={11} />
+                  {formatDuration(task.duration, tt)}
+                </span>
+              )}
             </div>
+            {(task.labelIds || []).length > 0 && (
+              <div className="mt-2">
+                <LabelChipsReadOnly labels={labels} labelIds={task.labelIds} size="sm" />
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
@@ -963,6 +1230,18 @@ Rules:
                 <option key={s.id} value={s.id}>{tt(`status.${s.id}`, s.id)}</option>
               ))}
             </select>
+            {labels.length > 0 && (
+              <select
+                value={labelFilter}
+                onChange={e => setLabelFilter(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              >
+                <option value="all">{tt('list.allLabels', 'All Labels')}</option>
+                {labels.map(l => (
+                  <option key={l.id} value={l.id}>{l.text}</option>
+                ))}
+              </select>
+            )}
           </div>
           <div className="flex-1 overflow-y-auto custom-scrollbar">
             {visible.length === 0 ? (
@@ -979,7 +1258,8 @@ Rules:
                     <button
                       key={task.id}
                       onClick={() => { setSelectedId(task.id); setIsEditing(false); }}
-                      className={`w-full text-left px-3 sm:px-4 py-3 min-h-[52px] border-b border-gray-50 hover:bg-emerald-50 active:bg-emerald-100 transition-colors ${isSelected ? 'bg-emerald-50 border-r-2 border-r-emerald-500' : ''}`}
+                      style={task.cardColor ? { backgroundColor: task.cardColor } : undefined}
+                      className={`w-full text-left px-3 sm:px-4 py-3 min-h-[52px] border-b border-gray-50 transition-colors ${task.cardColor ? '' : 'hover:bg-emerald-50 active:bg-emerald-100'} ${isSelected ? 'ring-2 ring-inset ring-emerald-500' : ''} ${isSelected && !task.cardColor ? 'bg-emerald-50' : ''}`}
                     >
                       <p className="font-semibold text-gray-800 text-xs sm:text-sm truncate">{safeStr(task.name)}</p>
                       <div className="flex items-center gap-2 mt-1">
@@ -992,6 +1272,17 @@ Rules:
                           <span className="text-xs text-gray-400">{prog.done}/{prog.total}</span>
                         )}
                       </div>
+                      {(() => {
+                        const taskLabelIds = [...new Set([
+                          ...(task.labelIds || []),
+                          ...(task.steps || []).flatMap(s => s.labelIds || []),
+                        ])];
+                        return taskLabelIds.length > 0 ? (
+                          <div className="mt-1.5">
+                            <LabelChipsReadOnly labels={labels} labelIds={taskLabelIds} />
+                          </div>
+                        ) : null;
+                      })()}
                     </button>
                   );
                 })}
@@ -1067,6 +1358,36 @@ Rules:
               );
             })}
           </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+          <h3 className="font-bold text-gray-800 mb-4">{tt('stats.byLabel', 'By Label')}</h3>
+          {labels.length === 0 ? (
+            <p className="text-sm text-gray-400 italic">{tt('form.noLabels', 'No labels yet.')}</p>
+          ) : (
+            <div className="space-y-3">
+              {labels.map(l => {
+                const count = stats.byLabel[l.id] || 0;
+                const pct = stats.total === 0 ? 0 : Math.round((count / stats.total) * 100);
+                return (
+                  <div key={l.id}>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span
+                        className="px-2 py-0.5 rounded-full text-xs font-semibold"
+                        style={{ backgroundColor: l.color, color: readableTextColor(l.color) }}
+                      >
+                        {l.text}
+                      </span>
+                      <span className="text-gray-600 font-semibold">{count}</span>
+                    </div>
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: l.color }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {stats.total > 0 && stats.totalSteps > 0 && (
@@ -1181,14 +1502,25 @@ Rules:
             </button>
 
             {user ? (
-              <button
-                onClick={() => signOut()}
-                title={user.email}
-                className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-bold transition-colors border min-h-[44px] touch-manipulation ${syncing ? 'bg-yellow-500/20 border-yellow-400/30 text-yellow-100' : 'bg-green-500/20 border-green-400/30 text-green-100 hover:bg-red-500/20 hover:border-red-400/30 hover:text-red-100'}`}
-              >
-                <Cloud size={16} className={syncing ? 'animate-pulse' : ''} />
-                <span className="hidden sm:inline shrink-0 max-w-[5rem] truncate sm:max-w-none">{syncing ? t('header.driveSyncing') : user.displayName?.split(' ')[0] || t('header.driveOn')}</span>
-              </button>
+              <>
+                <button
+                  onClick={() => signOut()}
+                  title={user.email}
+                  className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-bold transition-colors border min-h-[44px] touch-manipulation ${syncing ? 'bg-yellow-500/20 border-yellow-400/30 text-yellow-100' : 'bg-green-500/20 border-green-400/30 text-green-100 hover:bg-red-500/20 hover:border-red-400/30 hover:text-red-100'}`}
+                >
+                  <Cloud size={16} className={syncing ? 'animate-pulse' : ''} />
+                  <span className="hidden sm:inline shrink-0 max-w-[5rem] truncate sm:max-w-none">{syncing ? t('header.driveSyncing') : user.displayName?.split(' ')[0] || t('header.driveOn')}</span>
+                </button>
+                <button
+                  onClick={handleSyncNow}
+                  disabled={syncing}
+                  title={t('header.syncNow')}
+                  className="hidden md:flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-bold bg-white/10 hover:bg-white/20 border border-white/20 text-blue-100 transition-colors min-h-[44px] touch-manipulation disabled:opacity-50"
+                >
+                  <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
+                  <span className="shrink-0">{t('header.syncNow')}</span>
+                </button>
+              </>
             ) : (
               <button
                 onClick={() => signInWithGoogle()
@@ -1298,6 +1630,11 @@ Rules:
                         </select>
                       </div>
                     </div>
+                    {user && (
+                      <button onClick={() => { handleSyncNow(); setMobileMenuOpen(false); }} disabled={syncing} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100 disabled:opacity-50">
+                        <RefreshCw size={16} className={`text-blue-500 ${syncing ? 'animate-spin' : ''}`} /> {t('header.syncNow')}
+                      </button>
+                    )}
                     <button onClick={() => { handleExport(); setMobileMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100">
                       <Download size={16} className="text-green-600" /> {t('header.downloadTooltip')}
                     </button>
@@ -1331,7 +1668,7 @@ Rules:
               )}
             </div>
           </div>
-          </div>
+        </div>
         </div>
 
         {/* Tab bar */}

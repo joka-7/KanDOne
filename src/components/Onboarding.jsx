@@ -1,7 +1,17 @@
 import React, { useState } from 'react';
-import { X, Layout, List, Activity, BarChart2, Lightbulb, ChevronRight, ChevronLeft, Upload, Plus, CheckCircle2, Clock, Calendar } from 'lucide-react';
+import { X, Layout, List, Activity, BarChart2, Lightbulb, ChevronRight, ChevronLeft, Upload, Plus, CheckCircle2, Clock, Calendar, Cloud, Timer, Tag, Palette } from 'lucide-react';
 import AppBrandMark from './AppBrandMark';
 import { STORAGE_KEYS } from '../storageKeys.js';
+
+const CloudSyncNote = (t) => (
+  <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg border border-blue-100 mt-4 text-left">
+    <Cloud size={20} className="text-blue-500 shrink-0 mt-0.5" />
+    <div>
+      <p className="text-sm text-blue-800 font-medium">{t('onboarding.cloudTitle', 'Cloud sync (optional)')}</p>
+      <p className="text-xs text-blue-600">{t('onboarding.cloudDesc', 'Sign in with Google to back up your data and sync it across all your devices — or keep everything local and use JSON backups.')}</p>
+    </div>
+  </div>
+);
 
 const TASKS_STEPS = [
   {
@@ -43,6 +53,8 @@ const tasksStepContent = {
           { icon: <CheckCircle2 size={20} className="text-blue-500" />, text: t('onboarding.tasksFeatureSteps', 'Steps with status tracking') },
           { icon: <Calendar size={20} className="text-orange-500" />, text: t('onboarding.tasksFeatureTimeline', 'Timeline & due dates') },
           { icon: <BarChart2 size={20} className="text-purple-500" />, text: t('onboarding.tasksFeatureStats', 'Progress statistics') },
+          { icon: <Tag size={20} className="text-pink-500" />, text: t('onboarding.tasksFeatureLabels', 'Custom labels with your own colors') },
+          { icon: <Timer size={20} className="text-cyan-500" />, text: t('onboarding.tasksFeatureDuration', 'Track estimated duration') },
         ].map(({ icon, text }, i) => (
           <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
             {icon}
@@ -50,6 +62,7 @@ const tasksStepContent = {
           </div>
         ))}
       </div>
+      {CloudSyncNote(t)}
     </div>
   ),
   tasksBoard: (t) => (
@@ -59,9 +72,9 @@ const tasksStepContent = {
       </p>
       <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 space-y-2">
         {[
-          { color: 'bg-blue-500', label: 'Active', title: t('onboarding.tasksBoardEx1', 'Design new homepage'), priority: '🔴' },
-          { color: 'bg-yellow-500', label: 'Paused', title: t('onboarding.tasksBoardEx2', 'Write tests'), priority: '🟡' },
-          { color: 'bg-green-500', label: 'Done', title: t('onboarding.tasksBoardEx3', 'Deploy to production'), priority: '🟢' },
+          { color: 'bg-blue-500', label: t('tasks.status.active', 'Active'), title: t('onboarding.tasksBoardEx1', 'Design new homepage'), priority: '🔴' },
+          { color: 'bg-yellow-500', label: t('tasks.status.on_hold', 'Paused'), title: t('onboarding.tasksBoardEx2', 'Write tests'), priority: '🟡' },
+          { color: 'bg-green-500', label: t('tasks.status.completed', 'Done'), title: t('onboarding.tasksBoardEx3', 'Deploy to production'), priority: '🟢' },
         ].map(({ color, label, title, priority }, i) => (
           <div key={i} className="flex items-center gap-3 p-2 bg-white rounded-lg border border-gray-100">
             <div className={`w-2 h-6 rounded-full ${color}`} />
@@ -74,6 +87,10 @@ const tasksStepContent = {
       <div className="flex items-start gap-2 p-3 bg-amber-50 rounded-lg border border-amber-100">
         <Lightbulb size={16} className="text-amber-500 shrink-0 mt-0.5" />
         <p className="text-sm text-amber-700">{t('onboarding.tasksBoardTip', 'Tip: Use the N key to quickly add a new task from anywhere.')}</p>
+      </div>
+      <div className="flex items-start gap-2 p-3 bg-pink-50 rounded-lg border border-pink-100">
+        <Palette size={16} className="text-pink-500 shrink-0 mt-0.5" />
+        <p className="text-sm text-pink-700">{t('onboarding.tasksBoardColorTip', 'Tip: Give a task its own card color from the edit form to make it stand out on the board.')}</p>
       </div>
     </div>
   ),
