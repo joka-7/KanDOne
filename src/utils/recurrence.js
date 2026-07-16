@@ -6,6 +6,7 @@ export const DEFAULT_ROUTINE = {
   frequency: 'weekly',
   interval: 1,
   weekdays: [1, 2, 3, 4, 5],
+  endDate: '',
 };
 
 export function sanitizeRoutine(routine) {
@@ -17,7 +18,14 @@ export function sanitizeRoutine(routine) {
     ? routine.weekdays.map(d => Number(d)).filter(d => d >= 0 && d <= 6)
     : [...DEFAULT_ROUTINE.weekdays];
   if (weekdays.length === 0) weekdays = [...DEFAULT_ROUTINE.weekdays];
-  return { enabled, frequency, interval, weekdays: [...new Set(weekdays)].sort() };
+  const endDate = DATE_ONLY_RE.test(routine.endDate) ? routine.endDate : '';
+  return { enabled, frequency, interval, weekdays: [...new Set(weekdays)].sort(), endDate };
+}
+
+export function isPastRoutineEnd(routine, dateStr) {
+  const safe = sanitizeRoutine(routine);
+  if (!safe.endDate || !dateStr) return false;
+  return dateStr > safe.endDate;
 }
 
 export function parseDateOnly(dateStr) {
@@ -47,31 +55,47 @@ export function computeNextDueDate(routine, currentDueDate, fromDate = new Date(
   const interval = safeRoutine.interval;
 
   if (safeRoutine.frequency === 'daily') {
-    return formatDateOnly(addDays(base, interval));
+    const next = formatDateOnly(addDays(base, interval));
+    return isPastRoutineEnd(safeRoutine, next) ? '' : next;
   }
 
   if (safeRoutine.frequency === 'monthly') {
-    const next = new Date(base);
-    next.setMonth(next.getMonth() + interval);
-    return formatDateOnly(next);
+    const nextDate = new Date(base);
+    nextDate.setMonth(nextDate.getMonth() + interval);
+    const next = formatDateOnly(nextDate);
+    return isPastRoutineEnd(safeRoutine, next) ? '' : next;
   }
 
   const weekdays = new Set(safeRoutine.weekdays);
   let candidate = addDays(base, 1);
   for (let i = 0; i < 366; i += 1) {
-    if (weekdays.has(candidate.getDay())) return formatDateOnly(candidate);
+    if (weekdays.has(candidate.getDay())) {
+      const next = formatDateOnly(candidate);
+      return isPastRoutineEnd(safeRoutine, next) ? '' : next;
+    }
     candidate = addDays(candidate, 1);
   }
-  return formatDateOnly(addDays(base, 7 * interval));
+  return '';
 }
 
 export function advanceRoutineTask(task) {
   if (!task?.routine?.enabled) return task;
+  const nextDue = computeNextDueDate(task.routine, task.dueDate);
+  if (!nextDue) {
+    return {
+      ...task,
+      status: 'completed',
+      routine: { ...sanitizeRoutine(task.routine), enabled: false },
+      lastReminderKey: '',
+      reminder: task.reminder ? { ...task.reminder, snoozedUntil: '' } : task.reminder,
+    };
+  }
   return {
     ...task,
     status: 'active',
-    dueDate: computeNextDueDate(task.routine, task.dueDate),
+    dueDate: nextDue,
     lastReminderKey: '',
+    reminder: task.reminder ? { ...task.reminder, snoozedUntil: '' } : task.reminder,
     steps: (task.steps || []).map(step => ({ ...step, status: 'todo' })),
   };
 }

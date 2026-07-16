@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Layout, List, Activity, BarChart2, Lightbulb, ChevronRight, ChevronLeft, Upload, Plus, CheckCircle2, Clock, Calendar, Cloud, Timer, Tag, Palette } from 'lucide-react';
+import { X, Layout, List, Activity, BarChart2, Lightbulb, ChevronRight, ChevronLeft, Upload, Plus, CheckCircle2, Clock, Calendar, Cloud, Timer, Tag, Palette, Repeat, Bell } from 'lucide-react';
 import AppBrandMark from './AppBrandMark';
 import { STORAGE_KEYS } from '../storageKeys.js';
 
@@ -30,6 +30,11 @@ const TASKS_STEPS = [
     defaults: { title: 'Steps & Due Dates', subtitle: 'Break tasks into steps and set deadlines' },
   },
   {
+    icon: '🔁',
+    titleKey: 'tasksRoutines',
+    defaults: { title: 'Routines & Reminders', subtitle: 'Repeat tasks and get notified' },
+  },
+  {
     icon: '🤖',
     titleKey: 'tasksAI',
     defaults: { title: 'AI Coach', subtitle: 'Get help planning and breaking down tasks' },
@@ -55,6 +60,8 @@ const tasksStepContent = {
           { icon: <BarChart2 size={20} className="text-purple-500" />, text: t('onboarding.tasksFeatureStats', 'Progress statistics') },
           { icon: <Tag size={20} className="text-pink-500" />, text: t('onboarding.tasksFeatureLabels', 'Custom labels with your own colors') },
           { icon: <Timer size={20} className="text-cyan-500" />, text: t('onboarding.tasksFeatureDuration', 'Track estimated duration') },
+          { icon: <Repeat size={20} className="text-violet-500" />, text: t('onboarding.tasksFeatureRoutine', 'Recurring routine tasks') },
+          { icon: <Bell size={20} className="text-amber-500" />, text: t('onboarding.tasksFeatureReminder', 'Due-date reminders with snooze') },
         ].map(({ icon, text }, i) => (
           <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
             {icon}
@@ -124,6 +131,29 @@ const tasksStepContent = {
       <div className="flex items-start gap-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
         <Lightbulb size={16} className="text-blue-500 shrink-0 mt-0.5" />
         <p className="text-sm text-blue-700">{t('onboarding.tasksStepsTip', 'If a step\'s due date is later than the task due date, you\'ll get a warning on the Timeline.')}</p>
+      </div>
+    </div>
+  ),
+  tasksRoutines: (t) => (
+    <div className="space-y-4">
+      <p className="text-gray-600 leading-relaxed">
+        {t('onboarding.tasksRoutinesDesc', 'Set an optional due time, turn tasks into routines, and get browser reminders before they are due. Snooze a reminder if you need a few more minutes.')}
+      </p>
+      <div className="space-y-2">
+        {[
+          { icon: <Clock size={16} className="text-blue-500" />, text: t('onboarding.tasksRoutinesDueTime', 'Add a due time for finer scheduling'), bg: 'bg-blue-50 border-blue-100' },
+          { icon: <Repeat size={16} className="text-violet-500" />, text: t('onboarding.tasksRoutinesRepeat', 'Daily, weekly, or monthly routines with an optional end date'), bg: 'bg-violet-50 border-violet-100' },
+          { icon: <Bell size={16} className="text-amber-500" />, text: t('onboarding.tasksRoutinesNotify', 'Reminders from 15 minutes to 1 day before due'), bg: 'bg-amber-50 border-amber-100' },
+        ].map(({ icon, text, bg }, i) => (
+          <div key={i} className={`flex items-center gap-3 p-2.5 rounded-lg border ${bg}`}>
+            {icon}
+            <span className="text-sm text-gray-700">{text}</span>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-start gap-2 p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+        <Lightbulb size={16} className="text-emerald-500 shrink-0 mt-0.5" />
+        <p className="text-sm text-emerald-700">{t('onboarding.tasksRoutinesSnoozeTip', 'When a reminder appears, snooze it from the task detail or the prompt banner. Mark a routine done to schedule the next occurrence — or stop it with an end date.')}</p>
       </div>
     </div>
   ),

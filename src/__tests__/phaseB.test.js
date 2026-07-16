@@ -4,6 +4,7 @@ import {
 } from '../utils/recurrence.js';
 import {
   buildReminderKey, getTaskDueDateTime, shouldNotifyTask, sanitizeDueTime,
+  snoozeTaskReminder, isReminderSnoozed, sanitizeReminder,
 } from '../utils/reminders.js';
 
 describe('recurrence', () => {
@@ -54,6 +55,21 @@ describe('recurrence', () => {
     });
     expect(task.lastReminderKey).toBe('');
   });
+
+  it('stops routine when next due is past end date', () => {
+    const routine = sanitizeRoutine({
+      enabled: true, frequency: 'daily', interval: 1, weekdays: [1], endDate: '2026-07-16',
+    });
+    expect(computeNextDueDate(routine, '2026-07-16')).toBe('');
+    const task = advanceRoutineTask({
+      status: 'completed',
+      dueDate: '2026-07-16',
+      routine,
+      steps: [{ id: 's1', status: 'done' }],
+    });
+    expect(task.status).toBe('completed');
+    expect(task.routine.enabled).toBe(false);
+  });
 });
 
 describe('reminders', () => {
@@ -88,5 +104,33 @@ describe('reminders', () => {
   it('sanitizes due time', () => {
     expect(sanitizeDueTime('09:30')).toBe('09:30');
     expect(sanitizeDueTime('25:00')).toBe('');
+  });
+
+  it('skips notification while snoozed', () => {
+    const task = {
+      id: '1',
+      dueDate: '2026-07-16',
+      dueTime: '10:00',
+      reminder: sanitizeReminder({
+        enabled: true, minutesBefore: 60, snoozedUntil: '2099-01-01T00:00:00.000Z',
+      }),
+      lastReminderKey: '',
+    };
+    const now = new Date(2026, 6, 16, 9, 5, 0);
+    expect(isReminderSnoozed(task.reminder, now)).toBe(true);
+    expect(shouldNotifyTask(task, now)).toBe(false);
+  });
+
+  it('clears lastReminderKey when snoozing', () => {
+    const task = {
+      id: '1',
+      dueDate: '2026-07-16',
+      dueTime: '10:00',
+      lastReminderKey: '2026-07-16T10:00-60',
+      reminder: sanitizeReminder({ enabled: true, minutesBefore: 60 }),
+    };
+    const snoozed = snoozeTaskReminder(task, 15, new Date(2026, 6, 16, 9, 0, 0));
+    expect(snoozed.lastReminderKey).toBe('');
+    expect(snoozed.reminder.snoozedUntil).toBeTruthy();
   });
 });
