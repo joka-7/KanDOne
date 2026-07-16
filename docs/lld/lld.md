@@ -308,6 +308,7 @@ Initialises the Firebase app; exports `auth` and `db`.
 | `signOut()` / `onAuthChange(cb)` | Sign out / subscribe to auth state. |
 | `formatSignInError(err)` | Maps Firebase error codes/messages to friendly guidance (popup blocked, unauthorized domain, API-key referrer, …). |
 | `loadUserProfile/saveUserProfile(uid[,data])` | Read/merge the `users/{uid}` root doc. |
+| `loadTaskLabels/saveTaskLabels(uid, labels)` | Read/write `tasksLabels` on the user profile for cross-device label sync. |
 | `loadAllItems(uid, mode)` | `getDocs(users/{uid}/{collection})`; for jobseeker only, migrates a legacy root-doc `companies` array into the subcollection. |
 | `updateItem/deleteItem(uid, mode, ...)` | `setDoc`/`deleteDoc` a single item doc. |
 | `batchSaveItems(uid, mode, items)` | Chunked `writeBatch` commits (490 per batch — under Firestore's 500 op limit). |

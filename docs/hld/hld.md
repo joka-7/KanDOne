@@ -405,7 +405,7 @@ their own project config.
 | Shared JobFlowTracker Firebase project by default | Documented; users swap in their own config. |
 | Legacy multi-mode helpers add complexity | Isolated in `statuses.js`; `tasks` path is the only live one. |
 | No conflict resolution across devices | Last-write-wins; acceptable for single-user use. |
-| Labels not synced to Firestore | Local + JSON export v2; cloud label sync is future work. |
+| Labels not synced to Firestore | **Resolved:** labels sync via `users/{uid}.tasksLabels` on sign-in and on change. |
 | Reminders require active app/PWA | No service-worker background scheduling in v1. |
 
 ---

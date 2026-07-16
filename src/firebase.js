@@ -89,6 +89,18 @@ export async function saveUserProfile(uid, data) {
   await setDoc(doc(db, 'users', uid), data, { merge: true });
 }
 
+/** Load the task label library stored on the user profile (`tasksLabels` field). */
+export async function loadTaskLabels(uid) {
+  const profile = await loadUserProfile(uid);
+  if (!Array.isArray(profile.tasksLabels)) return null;
+  return profile.tasksLabels;
+}
+
+/** Persist the task label library to the user profile for cross-device sync. */
+export async function saveTaskLabels(uid, labels) {
+  await saveUserProfile(uid, { tasksLabels: labels, appMode: 'tasks' });
+}
+
 function collectionRef(uid, mode) {
   return collection(db, 'users', uid, getCollectionName(mode));
 }
