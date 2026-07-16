@@ -101,7 +101,7 @@ switcher/dropdown) was removed — `App.jsx` boots straight into the tasks view.
 
 - `src/firebase.js` points at the `kandone-a6c91` Firebase project (the config is a public
   web API key, not a secret). The app works fully offline without it.
-- Labels are stored in `localStorage` (`tasksLabelsV1`) and included in JSON export v2;
-  they are not synced to Firestore yet.
+- Labels are stored in `localStorage` (`tasksLabelsV1`) and synced to the user
+  profile in Firestore (`tasksLabels` field) when signed in; also included in JSON export v2.
 - Reminders require the app to be open (or running as an installed PWA); background
   service-worker scheduling is not implemented in v1.

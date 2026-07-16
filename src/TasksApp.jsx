@@ -16,6 +16,7 @@ import ChatModal from './components/ChatModal';
 import {
   signInWithGoogle, signOut, onAuthChange, loadAllItems, formatSignInError,
   updateItem, deleteItem, batchSaveItems, loadUserProfile, saveUserProfile,
+  loadTaskLabels, saveTaskLabels,
 } from './firebase';
 import { getStorageKey, STATUSES_TASKS, filterItemsForMode } from './statuses';
 import CalendarView from './components/CalendarView';
@@ -40,6 +41,7 @@ import {
   buildReminderKey, formatDueDateTime, requestReminderPermission, shouldNotifyTask,
   DEFAULT_REMINDER,
 } from './utils/reminders';
+import { resolveLabelsOnSignIn } from './utils/labelSync';
 
 const TASKS_LABELS_KEY = 'tasksLabelsV1';
 const DURATION_UNITS = ['minute', 'hour', 'day', 'month'];
@@ -190,7 +192,8 @@ export default function TasksApp() {
 
   useEffect(() => {
     try { localStorage.setItem(TASKS_LABELS_KEY, JSON.stringify(labels)); } catch { /* ignore */ }
-  }, [labels]);
+    if (user) saveTaskLabels(user.uid, labels).catch(() => {});
+  }, [labels, user]);
 
   useEffect(() => {
     const provider = localStorage.getItem('aiProvider') || 'gemini';
@@ -210,9 +213,20 @@ export default function TasksApp() {
         setSyncing(true);
         try {
           await saveUserProfile(firebaseUser.uid, { appMode: MODE });
-          const data = await loadAllItems(firebaseUser.uid, MODE);
+          const [data, cloudLabels] = await Promise.all([
+            loadAllItems(firebaseUser.uid, MODE),
+            loadTaskLabels(firebaseUser.uid),
+          ]);
           if (data && data.length > 0) {
             setTasks(filterItemsForMode(data, MODE));
+          }
+          const localLabels = parseTaskLabelsStoragePayload(localStorage.getItem(TASKS_LABELS_KEY));
+          const { labels: mergedLabels, pushToCloud } = resolveLabelsOnSignIn(localLabels, cloudLabels);
+          setLabels(mergedLabels);
+          if (pushToCloud && mergedLabels.length > 0) {
+            await saveTaskLabels(firebaseUser.uid, mergedLabels);
+          }
+          if ((data && data.length > 0) || mergedLabels.length > 0) {
             showToast(tt('toast.imported', 'Data loaded from cloud!'));
           }
         } catch (e) { console.error(e); }
@@ -268,8 +282,14 @@ export default function TasksApp() {
     if (!user || syncing) return;
     setSyncing(true);
     try {
-      const data = await loadAllItems(user.uid, MODE);
+      const [data, cloudLabels] = await Promise.all([
+        loadAllItems(user.uid, MODE),
+        loadTaskLabels(user.uid),
+      ]);
       if (data && data.length > 0) setTasks(filterItemsForMode(data, MODE));
+      if (Array.isArray(cloudLabels)) {
+        setLabels(sanitizeTaskLabels(cloudLabels));
+      }
     } catch (e) { console.error(e); }
     setSyncing(false);
   };
