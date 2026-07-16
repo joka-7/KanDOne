@@ -7,12 +7,12 @@ import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, writ
 import { getCollectionName } from './statuses';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBeEQR4lW_j0M53kAZMSagma1zo9mRonFw",
-  authDomain: "jobflowtracker-7733e.firebaseapp.com",
-  projectId: "jobflowtracker-7733e",
-  storageBucket: "jobflowtracker-7733e.firebasestorage.app",
-  messagingSenderId: "163411158407",
-  appId: "1:163411158407:web:042975ed70499f35a7de22"
+  apiKey: "AIzaSyAX1AeSD3InSEqZ_bGEyYDfqADssDr1TuQ",
+  authDomain: "kandone-a6c91.firebaseapp.com",
+  projectId: "kandone-a6c91",
+  storageBucket: "kandone-a6c91.firebasestorage.app",
+  messagingSenderId: "1072442648740",
+  appId: "1:1072442648740:web:dc65116f6cf04a9aca9e31"
 };
 
 const app = initializeApp(firebaseConfig);
