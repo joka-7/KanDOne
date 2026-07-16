@@ -481,7 +481,9 @@ by default.
 - `shouldNotifyTask` window and dedupe via `lastReminderKey`.
 
 Run with `npm test` (Vitest). E2E specs live under `e2e/` (excluded from Vitest)
-and rely on the `storageKeys.js` seed fixtures.
+and rely on the `storageKeys.js` seed fixtures. Init parity is checked by
+`src/__tests__/storageKeys.e2eParity.test.js`. CI runs unit tests, build, and
+Playwright on pull requests (see `.github/workflows/ci.yml`).
 
 Practical guidance: keep the canonical logic (`sanitizeTaskRecords`,
 `cycleStepStatus`, event builders) pure and mirrored in tests; when changing the

@@ -50,7 +50,7 @@ installed as a PWA.
 
 ## Stack
 
-React 19 · Vite · Tailwind CSS · i18next · Firebase (Auth + Firestore) · Vitest
+React 19 · Vite · Tailwind CSS · i18next · Firebase (Auth + Firestore) · Vitest · Playwright
 
 ## Getting started
 
@@ -59,6 +59,8 @@ npm install
 npm run dev      # start dev server (http://localhost:5173)
 npm run build    # production build
 npm test         # run unit tests
+npm run test:e2e # Playwright browser tests (port 5199)
+npm run test:all # unit + e2e
 npm run lint     # eslint
 ```
 
