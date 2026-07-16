@@ -103,6 +103,15 @@ export default function RoutineReminderFields({ formData, setFormData, tt, onRem
                 </div>
               </div>
             )}
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{tt('form.routineEndDate', 'End date (optional)')}</label>
+              <input
+                type="date"
+                value={routine.endDate || ''}
+                onChange={e => setRoutine({ endDate: e.target.value })}
+                className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm bg-white"
+              />
+            </div>
             <p className="text-xs text-violet-700">{tt('form.routineHint', 'When marked done, the task resets and schedules the next due date.')}</p>
           </div>
         )}

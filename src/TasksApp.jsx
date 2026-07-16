@@ -38,7 +38,7 @@ import { LABEL_COLOR_PALETTE, readableTextColor } from './utils/labelColors';
 import { applyTaskStatusChange, DEFAULT_ROUTINE } from './utils/recurrence';
 import {
   buildReminderKey, formatDueDateTime, requestReminderPermission, shouldNotifyTask,
-  DEFAULT_REMINDER,
+  snoozeTaskReminder, isReminderSnoozed, SNOOZE_MINUTES, DEFAULT_REMINDER,
 } from './utils/reminders';
 
 const TASKS_LABELS_KEY = 'tasksLabelsV1';
@@ -153,6 +153,7 @@ export default function TasksApp() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [labelFilter, setLabelFilter] = useState('all');
   const [toastMessage, setToastMessage] = useState('');
+  const [reminderPrompt, setReminderPrompt] = useState(null);
   const [isSaved, setIsSaved] = useState(true);
   const [user, setUser] = useState(null);
   const [syncing, setSyncing] = useState(false);
@@ -472,12 +473,30 @@ export default function TasksApp() {
     }
   }, [tt]);
 
+  const applyTaskUpdate = useCallback(async (updated) => {
+    setTasks(prev => prev.map(t => (t.id === updated.id ? updated : t)));
+    if (user) {
+      try { await updateItem(user.uid, MODE, updated); } catch { /* ignore */ }
+    }
+  }, [user]);
+
+  const handleSnoozeReminder = useCallback(async (taskId, minutes) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    const updated = snoozeTaskReminder(task, minutes);
+    await applyTaskUpdate(updated);
+    setReminderPrompt(null);
+    showToast(tt('reminder.snoozed', 'Reminder snoozed.'));
+  }, [tasks, applyTaskUpdate, showToast, tt]);
+
   useEffect(() => {
     if (!('Notification' in window) || Notification.permission !== 'granted') return undefined;
     const runReminders = () => {
       setTasks(prev => {
         const pending = prev.filter(shouldNotifyTask);
         if (pending.length === 0) return prev;
+        const first = pending[0];
+        setReminderPrompt({ taskId: first.id, name: first.name || tt('reminder.defaultTitle', 'Task reminder') });
         pending.forEach(task => {
           try {
             new Notification(task.name || tt('reminder.defaultTitle', 'Task reminder'), {
@@ -1231,7 +1250,15 @@ Rules:
               {task.reminder?.enabled && (
                 <span className="flex items-center gap-1 text-xs text-amber-600">
                   <Bell size={11} />
-                  {tt('reminder.badge', 'Reminder')}
+                  {isReminderSnoozed(task.reminder)
+                    ? tt('reminder.snoozedBadge', 'Snoozed')
+                    : tt('reminder.badge', 'Reminder')}
+                </span>
+              )}
+              {task.routine?.enabled && task.routine?.endDate && (
+                <span className="flex items-center gap-1 text-xs text-violet-500">
+                  <Repeat size={11} />
+                  {tt('routine.until', 'Until')} {formatDate(task.routine.endDate, lang)}
                 </span>
               )}
               {formatDuration(task.duration, tt) && (
@@ -1266,6 +1293,26 @@ Rules:
 
         {task.description && (
           <p className="text-sm text-gray-600 mb-4 whitespace-pre-wrap">{safeStr(task.description)}</p>
+        )}
+
+        {task.reminder?.enabled && (
+          <div className="mb-4 p-3 rounded-xl border border-amber-100 bg-amber-50/60">
+            <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-2">
+              {tt('reminder.snoozeTitle', 'Reminder')}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {SNOOZE_MINUTES.map(minutes => (
+                <button
+                  key={minutes}
+                  type="button"
+                  onClick={() => handleSnoozeReminder(task.id, minutes)}
+                  className="px-3 py-1.5 text-xs font-bold rounded-lg bg-white border border-amber-200 text-amber-800 hover:bg-amber-100 transition-colors"
+                >
+                  {tt(`reminder.snooze${minutes}`, `${minutes} min`)}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
 
         {prog && (
@@ -1804,6 +1851,32 @@ Rules:
       {toastMessage && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-5 py-2.5 rounded-xl shadow-xl text-sm font-medium z-50 animate-fade-in">
           {toastMessage}
+        </div>
+      )}
+
+      {reminderPrompt && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 w-[min(100%,24rem)] bg-amber-50 border border-amber-200 text-amber-950 px-4 py-3 rounded-xl shadow-xl z-50">
+          <p className="text-sm font-semibold mb-1">{reminderPrompt.name}</p>
+          <p className="text-xs text-amber-800 mb-3">{tt('reminder.prompt', 'Snooze this reminder?')}</p>
+          <div className="flex flex-wrap gap-2">
+            {SNOOZE_MINUTES.map(minutes => (
+              <button
+                key={minutes}
+                type="button"
+                onClick={() => handleSnoozeReminder(reminderPrompt.taskId, minutes)}
+                className="px-2.5 py-1 text-xs font-bold rounded-lg bg-white border border-amber-300 hover:bg-amber-100"
+              >
+                {tt(`reminder.snooze${minutes}`, `${minutes} min`)}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setReminderPrompt(null)}
+              className="px-2.5 py-1 text-xs font-bold rounded-lg text-amber-700 hover:bg-amber-100"
+            >
+              {tt('reminder.dismiss', 'Dismiss')}
+            </button>
+          </div>
         </div>
       )}
 
