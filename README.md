@@ -35,6 +35,5 @@ switcher/dropdown) was removed — `App.jsx` boots straight into the tasks view.
 
 ## Notes
 
-- `src/firebase.js` still points at the original JobFlowTracker Firebase project (the config
-  is a public web API key, not a secret). Swap in your own Firebase project config to run
-  cloud sync under your own account. The app works fully offline without it.
+- `src/firebase.js` points at the `kandone-a6c91` Firebase project (the config is a public
+  web API key, not a secret). The app works fully offline without it.
