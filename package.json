@@ -9,7 +9,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:all": "npm test && npm run test:e2e"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",
@@ -21,6 +23,7 @@
     "react-i18next": "^17.0.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@eslint/js": "^10.0.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
