@@ -1,0 +1,12 @@
+# undici is pulled in transitively by jsdom (test-only devDependency, not
+# shipped in the production bundle). jsdom pins undici@^7.25.0 and has not
+# yet released a version using a patched undici, so these advisories cannot
+# be fixed without breaking the test environment. Tracked upstream:
+# https://github.com/jsdom/jsdom
+GHSA-vmh5-mc38-953g
+GHSA-pr7r-676h-xcf6
+GHSA-p88m-4jfj-68fv
+GHSA-vxpw-j846-p89q
+GHSA-hm92-r4w5-c3mj
+GHSA-35p6-xmwp-9g52
+GHSA-g8m3-5g58-fq7m
