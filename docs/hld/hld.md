@@ -57,8 +57,10 @@ job-tracker heritage — this is called out where relevant.
 ## 3. Scope
 
 **In scope:** task CRUD, step CRUD, drag-and-drop status changes, five views,
-search/filter, JSON import/export, Google auth + Firestore sync, AI chat/coach,
-i18n (en/he/fr), PWA install.
+search/filter (status + label), JSON import/export (tasks + labels), Google auth +
+Firestore sync, AI chat/coach, custom labels & card colors, estimated duration,
+routine/recurring tasks, due-time scheduling, browser reminders, i18n (en/he/fr),
+PWA install.
 
 **Out of scope:** the removed multi-mode (jobseeker/recruiter) UX. The shared
 data-model helpers in `statuses.js`/`sanitize.js` still carry those modes for
@@ -78,6 +80,11 @@ backward-compatible data cleansing, but the app boots straight into `tasks` mode
 - FR7 — Provide Board / List / Timeline / Calendar / Statistics views.
 - FR8 — Optional AI chat: per-task coach, guided template sessions, goals finder.
 - FR9 — Localize the UI in en/he/fr, with RTL layout for Hebrew.
+- FR10 — Assign custom labels (with colors) to tasks and steps; filter and chart by label.
+- FR11 — Set an optional card background color and estimated duration on tasks/steps.
+- FR12 — Schedule optional due time (`HH:mm`) alongside due date.
+- FR13 — Mark tasks as routines; on completion, reset steps and advance the next due date.
+- FR14 — Optional browser reminders before due date/time (while app/PWA is active).
 
 ### 4.2 Non-Functional
 - NFR1 — **Offline-first:** all core features work without a network.
@@ -123,6 +130,8 @@ graph TD
         subgraph LOGIC["Domain / Utilities"]
             ST[statuses.js<br/>status defs + filtering]
             SAN[sanitize.js<br/>whitelist + validate]
+            REC[recurrence.js<br/>routine scheduling]
+            REM[reminders.js<br/>notification timing]
             SK[storageKeys.js]
             PS[promptSafety.js]
         end
@@ -178,11 +187,14 @@ graph TD
 
 A single entity — the **Task** — with an embedded list of **Steps**. There is no
 relational schema; tasks are stored as a JSON array locally and as one document
-per task in Firestore.
+per task in Firestore. A separate **label library** (`tasksLabelsV1` in
+`localStorage`) holds `{ id, text, color }` entries referenced by `labelIds` on
+tasks and steps.
 
 ```mermaid
 erDiagram
     TASK ||--o{ STEP : contains
+    TASK }o--o{ LABEL : "labelIds (local library)"
     TASK {
         string id
         string name
@@ -190,6 +202,13 @@ erDiagram
         string status "active|on_hold|completed|cancelled"
         string priority "high|medium|low"
         string dueDate "YYYY-MM-DD"
+        string dueTime "HH:mm (optional)"
+        string cardColor "hex or empty"
+        object duration "{ value, unit }"
+        string[] labelIds
+        object routine "{ enabled, frequency, interval, weekdays }"
+        object reminder "{ enabled, minutesBefore }"
+        string lastReminderKey
         string notes
     }
     STEP {
@@ -198,6 +217,13 @@ erDiagram
         string status "todo|in_progress|done|blocked"
         string notes
         string dueDate "YYYY-MM-DD"
+        object duration "{ value, unit }"
+        string[] labelIds
+    }
+    LABEL {
+        string id
+        string text
+        string color "hex"
     }
 ```
 
@@ -255,7 +281,9 @@ sequenceDiagram
 
 Drag-and-drop status changes and step-status cycling follow the same pattern:
 update React state → `localStorage` effect persists → best-effort Firestore write
-when signed in.
+when signed in. When a **routine** task lands on `completed`, `applyTaskStatusChange`
+(in `recurrence.js`) resets steps to `todo`, sets status back to `active`, and
+computes the next `dueDate` before persisting.
 
 ### 8.3 Google sign-in & cloud sync
 
@@ -307,10 +335,17 @@ sequenceDiagram
 
 ### 8.5 Import / export
 
-- **Export:** serialise `tasks` → `Blob` → download `tasks-backup-<ts>.json`.
-- **Import:** read file → `JSON.parse` → `sanitizeTaskRecords` → `filterItemsForMode`
-  → replace list (and cloud batch-save if signed in). Invalid files are rejected
-  with an alert; nothing is persisted.
+- **Export:** `{ version: 2, tasks, labels }` → download `tasks-backup-<ts>.json`.
+- **Import:** accepts legacy task-only arrays **or** v2 objects with optional
+  `labels`. Tasks pass through `sanitizeTaskRecords`; labels through
+  `sanitizeTaskLabels`. Invalid files are rejected with an alert.
+
+### 8.6 Reminders
+
+While the app is open (or installed as a PWA) and notification permission is
+granted, `TasksApp` polls every 30 s. For each task with `reminder.enabled`, it
+compares the current time to `(dueDate + dueTime) − minutesBefore`. Matching tasks
+fire a `Notification` once per occurrence (deduped via `lastReminderKey`).
 
 ---
 
@@ -370,6 +405,8 @@ their own project config.
 | Shared JobFlowTracker Firebase project by default | Documented; users swap in their own config. |
 | Legacy multi-mode helpers add complexity | Isolated in `statuses.js`; `tasks` path is the only live one. |
 | No conflict resolution across devices | Last-write-wins; acceptable for single-user use. |
+| Labels not synced to Firestore | Local + JSON export v2; cloud label sync is future work. |
+| Reminders require active app/PWA | No service-worker background scheduling in v1. |
 
 ---
 
@@ -385,5 +422,8 @@ their own project config.
 | FR7 views | Board/List/Timeline/Stats in `TasksApp.jsx`, `CalendarView.jsx` |
 | FR8 AI | `services/aiAssistant.js`, `ChatModal.jsx`, `promptSafety.js` |
 | FR9 i18n | `i18n.js`, `locales/*` |
+| FR10 labels | `LabelPicker.jsx`, `labelColors.js`, `sanitize.js` |
+| FR11 card color & duration | `CardColorPicker.jsx`, `TasksApp.jsx`, `sanitize.js` |
+| FR12–FR14 due time, routines, reminders | `RoutineReminderFields.jsx`, `recurrence.js`, `reminders.js` |
 
 See the [LLD](../lld/lld.md) for the function-by-function realisation of each item.

@@ -88,16 +88,17 @@ class ChatErrorBoundary extends React.Component {
 
   render() {
     if (this.state.error) {
+      const { t } = this.props;
       return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 text-center">
-            <p className="text-red-600 font-bold mb-2">Something went wrong</p>
+            <p className="text-red-600 font-bold mb-2">{safeTranslate(t, 'chat.errorTitle', 'Something went wrong')}</p>
             <p className="text-sm text-gray-600 mb-4">{this.state.error.message}</p>
             <button
               onClick={this.props.onClose}
               className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold"
             >
-              Close
+              {safeTranslate(t, 'chat.errorClose', 'Close')}
             </button>
           </div>
         </div>
@@ -387,7 +388,7 @@ export default function ChatModal(props) {
   const sessionKey = props.sessionKey
     || `${props.variant || 'job'}-${props.simulationTitle || ''}-${props.systemPromptOverride?.length || 0}`;
   return (
-    <ChatErrorBoundary onClose={props.onClose} resetKey={sessionKey}>
+    <ChatErrorBoundary onClose={props.onClose} resetKey={sessionKey} t={props.t}>
       <ChatModalInner {...props} sessionKey={sessionKey} />
     </ChatErrorBoundary>
   );

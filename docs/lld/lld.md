@@ -115,22 +115,23 @@ never breaks offline.
 ### 3.5 Drag-and-drop (Board)
 
 `handleDragStart(taskId)` stores the id in `dragTaskId`; `handleDragOver`
-`preventDefault`s; `handleDrop(statusId)` sets the dragged task's `status`,
-best-effort cloud-updates, clears the ref, toasts.
+`preventDefault`s; `handleDrop(statusId)` calls `applyTaskStatusChange` (routine
+tasks advance to the next due date when dropped on `completed`), best-effort
+cloud-updates, clears the ref, toasts.
 
 ### 3.6 Import / export
 
-- `handleExport()` — `Blob([...tasks], application/json)` → anchor download `tasks-backup-<ts>.json`.
-- `handleImport(e)` — `FileReader` → `JSON.parse` → must be array →
-  `sanitizeTaskRecords` → `filterItemsForMode` → `saveTasks`. Empty/invalid →
-  alert; input value reset so re-selecting the same file re-fires `change`.
+- `handleExport()` — `{ version: 2, tasks, labels }` via `saveJsonFile`.
+- `handleImport(e)` — accepts legacy task arrays **or** v2 objects with optional
+  `labels` → `sanitizeTaskRecords` / `sanitizeTaskLabels` → `saveTasks` /
+  `setLabels`. Empty/invalid → alert.
 
 ### 3.7 Derived data (memoised)
 
 | Memo | Contents |
 | --- | --- |
-| `filteredTasks` | `tasks` filtered by `statusFilter` and case-insensitive `searchQuery` over name/description. |
-| `stats` | totals, active/completed counts, step totals, `byStatus` map. |
+| `filteredTasks` | `tasks` filtered by `statusFilter`, optional `labelFilter`, and case-insensitive `searchQuery`. |
+| `stats` | totals, active/completed counts, step totals, `byStatus` and `byLabel` maps. |
 | `calendarEvents` | one event per task due date + per step due date (`type: 'task' \| 'step'`). |
 | `timelineEvents` | task + step events sorted by date; steps flagged `overdue` when after the task due date. |
 
@@ -141,8 +142,8 @@ export/import, template/goals/settings/welcome buttons + mobile overflow menu),
 a tab bar, and the active view. Render helpers:
 
 - `renderBoard()` — one column per non-empty status; draggable cards showing
-  priority, due date, `renderProgressBar`, and next pending step. Empty state
-  invites first task / welcome.
+  priority, due date/time, label chips, routine/reminder icons, card color,
+  `renderProgressBar`, and next pending step.
 - `renderList()` — master/detail: searchable/filterable list (paginated with
   "Load more") + `renderDetailPanel()`. Mobile shows list *or* detail with a
   back button.
@@ -152,7 +153,7 @@ a tab bar, and the active view. Render helpers:
 - `renderStepRow(step, editable, taskId, taskDueDate)` — shared step renderer;
   editable variant exposes title/notes/dueDate inputs and an over-due-date
   warning when a step date exceeds the task due date.
-- `renderStats()` — summary cards + per-status bars + overall step completion.
+- `renderStats()` — summary cards + per-status bars + per-label bars + overall step completion.
 - `renderTimeline()` — vertical timeline (RTL-aware borders/dots) of task/step
   events; overdue steps highlighted.
 - Calendar tab delegates to `<CalendarView/>` with `calendarEvents`.
@@ -180,9 +181,29 @@ button opens the general coach.
   status: 'active' | 'on_hold' | 'completed' | 'cancelled',   // default 'active'
   priority: 'high' | 'medium' | 'low',                        // default 'medium'
   dueDate: string,     // 'YYYY-MM-DD' or ''
+  dueTime: string,     // 'HH:mm' or '' (Phase B)
+  duration: { value: string, unit: 'minute'|'hour'|'day'|'month' },
+  labelIds: string[],  // references tasksLabelsV1 library
+  cardColor: string,   // '#RRGGBB' or ''
+  routine: {
+    enabled: boolean,
+    frequency: 'daily' | 'weekly' | 'monthly',
+    interval: number,  // 1–30
+    weekdays: number[], // 0=Sun … 6=Sat (weekly only)
+  },
+  reminder: {
+    enabled: boolean,
+    minutesBefore: 0 | 15 | 30 | 60 | 120 | 1440,
+  },
+  lastReminderKey: string, // dedupe key for notifications
   steps: Step[],       // capped at 200
   notes: string,
 }
+```
+
+### 4.1.1 Label library entry (`sanitizeTaskLabels`, key `tasksLabelsV1`)
+```js
+{ id: string, text: string, color: '#RRGGBB' }
 ```
 
 ### 4.2 Step
@@ -193,6 +214,8 @@ button opens the general coach.
   status: 'todo' | 'in_progress' | 'done' | 'blocked',        // default 'todo'
   notes: string,
   dueDate: string,     // 'YYYY-MM-DD' or ''
+  duration: { value: string, unit: 'minute'|'hour'|'day'|'month' },
+  labelIds: string[],
 }
 ```
 
@@ -223,6 +246,7 @@ Caps: ≤10,000 tasks per import, ≤200 steps per task, string coercion via
   to `timestamp-random` when crypto is unavailable.
 - `safeStr(val)` — null-safe string coercion (objects → JSON).
 - `sanitizeTaskSteps(steps)` — whitelist step fields, validate status, cap 200.
+- `sanitizeTaskLabels(rows)` / `parseTaskLabelsStoragePayload(raw)` — label library.
 - `sanitizeTaskRecords(rows)` — whitelist task fields, validate status/priority,
   cap 10,000; the single source of truth for a well-formed task.
 - `parseTaskStoragePayload(raw)` — parse localStorage JSON → sanitized tasks (`[]`
@@ -251,6 +275,23 @@ Caps: ≤10,000 tasks per import, ≤200 steps per task, string coercion via
 `TASK_TEMPLATES` — six coaching categories (planning, breakdown, execution,
 review, collaboration, retrospective), each with `label`, `icon`, `color`, and a
 set of reflective `questions` used to seed a guided AI session.
+
+### 5.7 `utils/recurrence.js`
+- `sanitizeRoutine(routine)` — defaults and caps for routine config.
+- `computeNextDueDate(routine, currentDueDate)` — next `YYYY-MM-DD`.
+- `advanceRoutineTask(task)` — reset steps, clear `lastReminderKey`, set next due.
+- `applyTaskStatusChange(task, newStatus)` — applies routine advance when completing.
+
+### 5.8 `utils/reminders.js`
+- `sanitizeDueTime` / `sanitizeReminder` — validate time and reminder offsets.
+- `getTaskDueDateTime(task)` — combine `dueDate` + `dueTime` (default 09:00).
+- `shouldNotifyTask(task, now)` — window check + dedupe via `lastReminderKey`.
+- `requestReminderPermission()` — wraps `Notification.requestPermission()`.
+
+### 5.9 UI components (Phase A/B)
+- `LabelPicker.jsx` — create/toggle/delete labels; `LabelChipsReadOnly` for cards.
+- `CardColorPicker.jsx` — 18 swatch card background picker.
+- `RoutineReminderFields.jsx` — due time, routine schedule, reminder form block.
 
 ---
 
@@ -422,7 +463,7 @@ by default.
 ---
 
 ## 12. Test Strategy
-`src/__tests__/TasksApp.logic.test.js` unit-tests the pure logic mirrored from
+`src/__tests__/TasksApp.logic.test.js` unit-tests core task logic mirrored from
 `TasksApp` (rather than mounting the whole tree):
 
 - Step status cycling (including unknown → `todo`).
@@ -431,6 +472,12 @@ by default.
 - Step add/delete/update immutability.
 - Calendar event building (task + step dates; omit dateless steps).
 - Timeline overdue detection (step date vs task due date; sorting).
+
+`src/__tests__/phaseB.test.js` covers routine scheduling and reminder timing:
+
+- `computeNextDueDate` for daily/weekly/monthly patterns.
+- `applyTaskStatusChange` / `advanceRoutineTask` step reset and due advance.
+- `shouldNotifyTask` window and dedupe via `lastReminderKey`.
 
 Run with `npm test` (Vitest). E2E specs live under `e2e/` (excluded from Vitest)
 and rely on the `storageKeys.js` seed fixtures.

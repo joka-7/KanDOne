@@ -309,7 +309,9 @@
     "titleTasks": "מאמן משימות",
     "coachingTitle": "אימון AI",
     "coachingEmpty": "מתחיל את מפגש האימון...",
-    "taskGeneral": "אימון כללי"
+    "taskGeneral": "אימון כללי",
+    "errorTitle": "משהו השתבש",
+    "errorClose": "סגור"
   },
   "settings": {
     "title": "הגדרות",
@@ -455,7 +457,17 @@
       "deleteLabel": "מחק תווית",
       "cardColor": "צבע כרטיס",
       "cardColorNone": "ללא",
-      "changeLabelColor": "שנה צבע"
+      "changeLabelColor": "שנה צבע",
+      "dueTime": "שעת יעד",
+      "dueTimeHint": "שעה אופציונלית לתאריכי יעד ותזכורות",
+      "routine": "משימת שגרה",
+      "routineFrequency": "חוזר",
+      "routineInterval": "כל",
+      "routineWeekdays": "בימים",
+      "routineHint": "כשמסומן כבוצע, המשימה מתאפסת ומתוזמנת ליעד הבא.",
+      "reminder": "תזכורת",
+      "reminderWhen": "הודע",
+      "reminderHint": "התראות דפדפן כש-KanDOne פתוח (או מותקן כ-PWA)."
     },
     "detail": {
       "editDetails": "ערוך פרטים",
@@ -492,6 +504,33 @@
       "hour": "שעות",
       "day": "ימים",
       "month": "חודשים"
+    },
+    "routine": {
+      "daily": "יומי",
+      "weekly": "שבועי",
+      "monthly": "חודשי",
+      "badge": "שגרה",
+      "weekday": {
+        "sun": "א'",
+        "mon": "ב'",
+        "tue": "ג'",
+        "wed": "ד'",
+        "thu": "ה'",
+        "fri": "ו'",
+        "sat": "ש'"
+      }
+    },
+    "reminder": {
+      "0": "במועד",
+      "15": "15 דקות לפני",
+      "30": "30 דקות לפני",
+      "60": "שעה לפני",
+      "120": "שעתיים לפני",
+      "1440": "יום לפני",
+      "badge": "תזכורת",
+      "body": "המשימה שלך מתקרבת.",
+      "defaultTitle": "תזכורת משימה",
+      "permissionDenied": "הפעל התראות בהגדרות הדפדפן כדי להשתמש בתזכורות."
     }
   },
   "recruiter": {

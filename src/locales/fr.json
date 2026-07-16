@@ -302,7 +302,9 @@
     "titleTasks": "Coach tâches",
     "coachingTitle": "Coaching IA",
     "coachingEmpty": "Démarrage de la session de coaching...",
-    "taskGeneral": "Coaching général"
+    "taskGeneral": "Coaching général",
+    "errorTitle": "Une erreur est survenue",
+    "errorClose": "Fermer"
   },
   "settings": {
     "title": "Paramètres",
@@ -455,7 +457,17 @@
       "deleteLabel": "Supprimer l'étiquette",
       "cardColor": "Couleur de la carte",
       "cardColorNone": "Aucune",
-      "changeLabelColor": "Changer la couleur"
+      "changeLabelColor": "Changer la couleur",
+      "dueTime": "Heure d'échéance",
+      "dueTimeHint": "Heure optionnelle pour les échéances et rappels",
+      "routine": "Tâche récurrente",
+      "routineFrequency": "Répétition",
+      "routineInterval": "Tous les",
+      "routineWeekdays": "Les jours",
+      "routineHint": "Une fois terminée, la tâche se réinitialise et planifie la prochaine échéance.",
+      "reminder": "Rappel",
+      "reminderWhen": "Notifier",
+      "reminderHint": "Notifications navigateur lorsque KanDOne est ouvert (ou installé en PWA)."
     },
     "detail": {
       "editDetails": "Modifier les détails",
@@ -492,6 +504,33 @@
       "hour": "Heures",
       "day": "Jours",
       "month": "Mois"
+    },
+    "routine": {
+      "daily": "Quotidien",
+      "weekly": "Hebdomadaire",
+      "monthly": "Mensuel",
+      "badge": "Routine",
+      "weekday": {
+        "sun": "Dim",
+        "mon": "Lun",
+        "tue": "Mar",
+        "wed": "Mer",
+        "thu": "Jeu",
+        "fri": "Ven",
+        "sat": "Sam"
+      }
+    },
+    "reminder": {
+      "0": "À l'heure prévue",
+      "15": "15 minutes avant",
+      "30": "30 minutes avant",
+      "60": "1 heure avant",
+      "120": "2 heures avant",
+      "1440": "1 jour avant",
+      "badge": "Rappel",
+      "body": "Votre tâche approche.",
+      "defaultTitle": "Rappel de tâche",
+      "permissionDenied": "Activez les notifications dans votre navigateur pour utiliser les rappels."
     }
   },
   "recruiter": {

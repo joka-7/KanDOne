@@ -309,7 +309,9 @@
     "titleTasks": "Task Coach",
     "coachingTitle": "AI Coaching",
     "coachingEmpty": "Starting your coaching session...",
-    "taskGeneral": "General coaching"
+    "taskGeneral": "General coaching",
+    "errorTitle": "Something went wrong",
+    "errorClose": "Close"
   },
   "settings": {
     "title": "Settings",
@@ -459,7 +461,44 @@
       "cardColorNone": "None",
       "changeLabelColor": "Change color",
       "deleteStep": "Delete step",
-      "stepDateAfterTask": "Date is after the task due date"
+      "stepDateAfterTask": "Date is after the task due date",
+      "dueTime": "Due Time",
+      "dueTimeHint": "Optional time for due dates and reminders",
+      "routine": "Routine task",
+      "routineFrequency": "Repeats",
+      "routineInterval": "Every",
+      "routineWeekdays": "On days",
+      "routineHint": "When marked done, the task resets and schedules the next due date.",
+      "reminder": "Reminder",
+      "reminderWhen": "Notify",
+      "reminderHint": "Browser notifications while KanDOne is open (or installed as a PWA)."
+    },
+    "routine": {
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "monthly": "Monthly",
+      "badge": "Routine",
+      "weekday": {
+        "sun": "Sun",
+        "mon": "Mon",
+        "tue": "Tue",
+        "wed": "Wed",
+        "thu": "Thu",
+        "fri": "Fri",
+        "sat": "Sat"
+      }
+    },
+    "reminder": {
+      "0": "At due time",
+      "15": "15 minutes before",
+      "30": "30 minutes before",
+      "60": "1 hour before",
+      "120": "2 hours before",
+      "1440": "1 day before",
+      "badge": "Reminder",
+      "body": "Your task is coming up.",
+      "defaultTitle": "Task reminder",
+      "permissionDenied": "Enable notifications in your browser settings to use reminders."
     },
     "duration": {
       "minute": "Minutes",

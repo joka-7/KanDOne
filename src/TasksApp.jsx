@@ -5,7 +5,7 @@ import {
   Trash2, Edit2, ArrowLeft, ArrowRight, CheckCircle2, CheckCircle, Circle,
   Clock, AlertCircle, ChevronDown, Calendar, Cloud, CloudOff, RefreshCw,
   ClipboardList, X, GripVertical, Languages, MoreVertical, Settings, Smartphone, Sparkles,
-  Timer,
+  Timer, Repeat, Bell,
 } from 'lucide-react';
 import { initAI, getGoalsTasksSystemPrompt } from './services/aiAssistant';
 import { TASK_TEMPLATES } from './data/taskTemplates';
@@ -28,11 +28,18 @@ import { STORAGE_KEYS } from './storageKeys.js';
 import {
   sanitizeTaskRecords, parseTaskStoragePayload, generateId,
   parseTaskLabelsStoragePayload,
+  sanitizeTaskLabels,
 } from './sanitize';
 import { saveJsonFile } from './utils/saveFile';
 import LabelPicker, { LabelChipsReadOnly } from './components/LabelPicker';
 import CardColorPicker from './components/CardColorPicker';
+import RoutineReminderFields from './components/RoutineReminderFields';
 import { LABEL_COLOR_PALETTE, readableTextColor } from './utils/labelColors';
+import { applyTaskStatusChange, DEFAULT_ROUTINE } from './utils/recurrence';
+import {
+  buildReminderKey, formatDueDateTime, requestReminderPermission, shouldNotifyTask,
+  DEFAULT_REMINDER,
+} from './utils/reminders';
 
 const TASKS_LABELS_KEY = 'tasksLabelsV1';
 const DURATION_UNITS = ['minute', 'hour', 'day', 'month'];
@@ -73,9 +80,13 @@ const makeInitialTask = () => ({
   status: 'active',
   priority: 'medium',
   dueDate: '',
+  dueTime: '',
   duration: makeInitialDuration(),
   labelIds: [],
   cardColor: '',
+  routine: { ...DEFAULT_ROUTINE },
+  reminder: { ...DEFAULT_REMINDER },
+  lastReminderKey: '',
   steps: [],
   notes: '',
 });
@@ -321,11 +332,14 @@ export default function TasksApp() {
     }
     isSavingRef.current = true;
     try {
-      const task = {
+      const rawTask = {
         ...formData,
         id: formData.id || Date.now().toString(),
         name: safeStr(formData.name).trim(),
       };
+      const task = rawTask.status === 'completed'
+        ? applyTaskStatusChange(rawTask, 'completed')
+        : rawTask;
       await saveTask(task);
       setSelectedId(task.id);
       setIsEditing(false);
@@ -442,7 +456,7 @@ export default function TasksApp() {
     const id = dragTaskId.current;
     if (!id) return;
     setTasks(prev => {
-      const updated = prev.map(t => t.id === id ? { ...t, status: statusId } : t);
+      const updated = prev.map(t => (t.id === id ? applyTaskStatusChange(t, statusId) : t));
       const task = updated.find(t => t.id === id);
       if (task && user) updateItem(user.uid, MODE, task).catch(() => {});
       return updated;
@@ -451,8 +465,50 @@ export default function TasksApp() {
     showToast(tt('toast.saved', 'Saved!'));
   };
 
+  const handleReminderEnable = useCallback(async () => {
+    const result = await requestReminderPermission();
+    if (result === 'denied') {
+      alert(tt('reminder.permissionDenied', 'Enable notifications in your browser settings to use reminders.'));
+    }
+  }, [tt]);
+
+  useEffect(() => {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return undefined;
+    const runReminders = () => {
+      setTasks(prev => {
+        const pending = prev.filter(shouldNotifyTask);
+        if (pending.length === 0) return prev;
+        pending.forEach(task => {
+          try {
+            new Notification(task.name || tt('reminder.defaultTitle', 'Task reminder'), {
+              body: formatDueDateTime(task.dueDate, task.dueTime, lang, formatDate)
+                || tt('reminder.body', 'Your task is coming up.'),
+              tag: `kandone-reminder-${task.id}-${buildReminderKey(task)}`,
+            });
+          } catch { /* ignore */ }
+        });
+        const next = prev.map(task => (
+          pending.some(p => p.id === task.id)
+            ? { ...task, lastReminderKey: buildReminderKey(task) }
+            : task
+        ));
+        if (user) {
+          pending.forEach(task => {
+            const updated = next.find(t => t.id === task.id);
+            if (updated) updateItem(user.uid, MODE, updated).catch(() => {});
+          });
+        }
+        return next;
+      });
+    };
+    runReminders();
+    const timer = setInterval(runReminders, 30_000);
+    return () => clearInterval(timer);
+  }, [user, lang, tt]);
+
   const handleExport = async () => {
-    const saved = await saveJsonFile(`tasks-backup-${Date.now()}.json`, tasks);
+    const payload = { version: 2, tasks, labels };
+    const saved = await saveJsonFile(`tasks-backup-${Date.now()}.json`, payload);
     if (saved) showToast(tt('toast.exported', 'Backup downloaded!'));
   };
 
@@ -463,10 +519,20 @@ export default function TasksApp() {
     reader.onload = (ev) => {
       try {
         const data = JSON.parse(ev.target.result);
-        if (!Array.isArray(data)) throw new Error('not array');
-        const sanitized = sanitizeTaskRecords(data);
+        let rawTasks;
+        let rawLabels = null;
+        if (Array.isArray(data)) {
+          rawTasks = data;
+        } else if (data && Array.isArray(data.tasks)) {
+          rawTasks = data.tasks;
+          if (Array.isArray(data.labels)) rawLabels = data.labels;
+        } else {
+          throw new Error('invalid format');
+        }
+        const sanitized = sanitizeTaskRecords(rawTasks);
         if (sanitized.length === 0) throw new Error('empty');
         saveTasks(filterItemsForMode(sanitized, MODE));
+        if (rawLabels !== null) setLabels(sanitizeTaskLabels(rawLabels));
         showToast(tt('toast.imported', 'File loaded!'));
       } catch {
         alert(tt('alert.importError', 'Error importing file.'));
@@ -712,7 +778,17 @@ Rules:
                         {task.dueDate && (
                           <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
                             <Calendar size={10} />
-                            {formatDate(task.dueDate, lang)}
+                            {formatDueDateTime(task.dueDate, task.dueTime, lang, formatDate)}
+                          </div>
+                        )}
+                        {(task.routine?.enabled || task.reminder?.enabled) && (
+                          <div className="flex items-center gap-2 mt-1">
+                            {task.routine?.enabled && (
+                              <Repeat size={10} className="text-violet-500" aria-label={tt('routine.badge', 'Routine')} />
+                            )}
+                            {task.reminder?.enabled && (
+                              <Bell size={10} className="text-amber-500" aria-label={tt('reminder.badge', 'Reminder')} />
+                            )}
                           </div>
                         )}
                         {formatDuration(task.duration, tt) && (
@@ -999,6 +1075,13 @@ Rules:
               </div>
             </div>
 
+            <RoutineReminderFields
+              formData={formData}
+              setFormData={setFormData}
+              tt={tt}
+              onReminderEnable={handleReminderEnable}
+            />
+
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
                 {tt('form.labels', 'Labels')}
@@ -1136,7 +1219,19 @@ Rules:
               {task.dueDate && (
                 <span className="flex items-center gap-1 text-xs text-gray-500">
                   <Calendar size={11} />
-                  {formatDate(task.dueDate, lang)}
+                  {formatDueDateTime(task.dueDate, task.dueTime, lang, formatDate)}
+                </span>
+              )}
+              {task.routine?.enabled && (
+                <span className="flex items-center gap-1 text-xs text-violet-600">
+                  <Repeat size={11} />
+                  {tt('routine.badge', 'Routine')}
+                </span>
+              )}
+              {task.reminder?.enabled && (
+                <span className="flex items-center gap-1 text-xs text-amber-600">
+                  <Bell size={11} />
+                  {tt('reminder.badge', 'Reminder')}
                 </span>
               )}
               {formatDuration(task.duration, tt) && (
