@@ -8,7 +8,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: [
-        'favicon.svg', 'favicon.ico', 'apple-touch-icon-180x180.png',
+        'favicon.ico', 'apple-touch-icon-180x180.png',
         'pwa-64x64.png', 'pwa-192x192.png', 'pwa-512x512.png', 'maskable-icon-512x512.png',
       ],
       manifest: {
@@ -30,6 +30,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        globIgnores: ['**/icon-master.png'],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/.*\.firebaseio\.com\/.*/i,
