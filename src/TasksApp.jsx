@@ -41,7 +41,7 @@ import {
   buildReminderKey, formatDueDateTime, requestReminderPermission, shouldNotifyTask,
   snoozeTaskReminder, isReminderSnoozed, SNOOZE_MINUTES, DEFAULT_REMINDER,
 } from './utils/reminders';
-import { resolveLabelsOnSignIn } from './utils/labelSync';
+import { resolveLabelsOnSignIn, resolveTasksOnSignIn } from './utils/labelSync';
 
 const TASKS_LABELS_KEY = 'tasksLabelsV1';
 const DURATION_UNITS = ['minute', 'hour', 'day', 'month'];
@@ -157,8 +157,13 @@ export default function TasksApp() {
   const [toastMessage, setToastMessage] = useState('');
   const [reminderPrompt, setReminderPrompt] = useState(null);
   const [isSaved, setIsSaved] = useState(true);
+  const [localStorageError, setLocalStorageError] = useState(false);
   const [user, setUser] = useState(null);
   const [syncing, setSyncing] = useState(false);
+  // True once a cloud write/read has failed and not yet succeeded since —
+  // drives the header's error state and blocks the focus-triggered pull
+  // below from clobbering local changes that haven't made it to Firestore.
+  const [syncError, setSyncError] = useState(false);
   const [newStepTitle, setNewStepTitle] = useState('');
   const [visibleCount, setVisibleCount] = useState(25);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -185,15 +190,32 @@ export default function TasksApp() {
       if (tasks.length > 0 || localStorage.getItem(getStorageKey(MODE))) {
         setIsSaved(false);
         localStorage.setItem(getStorageKey(MODE), JSON.stringify(tasks));
+        setLocalStorageError(false);
         const timer = setTimeout(() => setIsSaved(true), 800);
         return () => clearTimeout(timer);
       }
-    } catch { /* ignore */ }
+    } catch (e) {
+      // localStorage IS the source of truth for signed-out users — a quota or
+      // private-mode failure here means silent, total data loss if unnoticed.
+      console.error('Failed to save tasks to localStorage', e);
+      setLocalStorageError(true);
+      setIsSaved(false);
+    }
   }, [tasks]);
 
   useEffect(() => {
-    try { localStorage.setItem(TASKS_LABELS_KEY, JSON.stringify(labels)); } catch { /* ignore */ }
-    if (user) saveTaskLabels(user.uid, labels).catch(() => {});
+    try {
+      localStorage.setItem(TASKS_LABELS_KEY, JSON.stringify(labels));
+      setLocalStorageError(false);
+    } catch (e) {
+      console.error('Failed to save labels to localStorage', e);
+      setLocalStorageError(true);
+    }
+    if (user) {
+      saveTaskLabels(user.uid, labels)
+        .then(() => setSyncError(false))
+        .catch((e) => { console.error(e); setSyncError(true); });
+    }
   }, [labels, user]);
 
   useEffect(() => {
@@ -207,6 +229,15 @@ export default function TasksApp() {
   const userRef = useRef(null);
   useEffect(() => { userRef.current = user; }, [user]);
 
+  const tasksRef = useRef(tasks);
+  useEffect(() => { tasksRef.current = tasks; }, [tasks]);
+
+  const markSyncError = useCallback((e) => {
+    console.error(e);
+    setSyncError(true);
+  }, []);
+  const clearSyncError = useCallback(() => setSyncError(false), []);
+
   useEffect(() => {
     const unsub = onAuthChange(async (firebaseUser) => {
       setUser(firebaseUser);
@@ -218,8 +249,14 @@ export default function TasksApp() {
             loadAllItems(firebaseUser.uid, MODE),
             loadTaskLabels(firebaseUser.uid),
           ]);
-          if (data && data.length > 0) {
-            setTasks(filterItemsForMode(data, MODE));
+          // Prefer cloud tasks when they exist; otherwise this is the user's
+          // first sign-in with local-only data, so push it up instead of
+          // silently leaving them with zero cloud backup.
+          const { tasks: mergedTasks, pushToCloud: pushTasksToCloud } =
+            resolveTasksOnSignIn(tasksRef.current, data);
+          setTasks(mergedTasks);
+          if (pushTasksToCloud && mergedTasks.length > 0) {
+            await batchSaveItems(firebaseUser.uid, MODE, mergedTasks);
           }
           const localLabels = parseTaskLabelsStoragePayload(localStorage.getItem(TASKS_LABELS_KEY));
           const { labels: mergedLabels, pushToCloud } = resolveLabelsOnSignIn(localLabels, cloudLabels);
@@ -227,40 +264,52 @@ export default function TasksApp() {
           if (pushToCloud && mergedLabels.length > 0) {
             await saveTaskLabels(firebaseUser.uid, mergedLabels);
           }
+          clearSyncError();
           if ((data && data.length > 0) || mergedLabels.length > 0) {
             showToast(tt('toast.imported', 'Data loaded from cloud!'));
           }
-        } catch (e) { console.error(e); }
+        } catch (e) { markSyncError(e); }
         setSyncing(false);
       }
     });
     return unsub;
-  }, []);
+    // Intentionally mount-only (like before this change) — `tt` is
+    // recreated every render pre-memoization (see the reminder-effect fix in
+    // the correctness-bugs PR), so depending on it here would tear down and
+    // resubscribe onAuthChange on every render instead of once per mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clearSyncError, markSyncError]);
 
   useEffect(() => {
     const handleVisibility = async () => {
       const firebaseUser = userRef.current;
-      if (document.visibilityState === 'visible' && firebaseUser) {
+      // Skip the auto-pull while a previous write is known to have failed —
+      // that write may still only exist locally, and overwriting local state
+      // with a stale cloud snapshot would silently discard it. The header's
+      // sync-error indicator lets the user retry manually instead.
+      if (document.visibilityState === 'visible' && firebaseUser && !syncError) {
         setSyncing(true);
         try {
           const data = await loadAllItems(firebaseUser.uid, MODE);
           if (data && data.length > 0) setTasks(filterItemsForMode(data, MODE));
-        } catch (e) { console.error(e); }
+          clearSyncError();
+        } catch (e) { markSyncError(e); }
         setSyncing(false);
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, []);
+  }, [syncError, clearSyncError, markSyncError]);
 
   const saveTasks = useCallback(async (newTasks) => {
     setTasks(newTasks);
     if (user) {
       try {
         await batchSaveItems(user.uid, MODE, newTasks);
-      } catch { /* ignore */ }
+        clearSyncError();
+      } catch (e) { markSyncError(e); }
     }
-  }, [user]);
+  }, [user, clearSyncError, markSyncError]);
 
   const saveTask = useCallback(async (task) => {
     setTasks(prev => {
@@ -268,16 +317,22 @@ export default function TasksApp() {
       return exists ? prev.map(t => t.id === task.id ? task : t) : [task, ...prev];
     });
     if (user) {
-      try { await updateItem(user.uid, MODE, task); } catch { /* ignore */ }
+      try {
+        await updateItem(user.uid, MODE, task);
+        clearSyncError();
+      } catch (e) { markSyncError(e); }
     }
-  }, [user]);
+  }, [user, clearSyncError, markSyncError]);
 
   const deleteTask = useCallback(async (id) => {
     setTasks(prev => prev.filter(t => t.id !== id));
     if (user) {
-      try { await deleteItem(user.uid, MODE, id); } catch { /* ignore */ }
+      try {
+        await deleteItem(user.uid, MODE, id);
+        clearSyncError();
+      } catch (e) { markSyncError(e); }
     }
-  }, [user]);
+  }, [user, clearSyncError, markSyncError]);
 
   const handleSyncNow = async () => {
     if (!user || syncing) return;
@@ -291,7 +346,8 @@ export default function TasksApp() {
       if (Array.isArray(cloudLabels)) {
         setLabels(sanitizeTaskLabels(cloudLabels));
       }
-    } catch (e) { console.error(e); }
+      clearSyncError();
+    } catch (e) { markSyncError(e); }
     setSyncing(false);
   };
 
@@ -389,11 +445,11 @@ export default function TasksApp() {
       });
       const task = updated.find(t => t.id === taskId);
       if (task && user) {
-        updateItem(user.uid, MODE, task).catch(() => {});
+        updateItem(user.uid, MODE, task).then(clearSyncError).catch(markSyncError);
       }
       return updated;
     });
-  }, [user]);
+  }, [user, clearSyncError, markSyncError]);
 
   const handleFormStepToggle = (stepId) => {
     setFormData(prev => ({
@@ -435,17 +491,33 @@ export default function TasksApp() {
   const handleDeleteLabel = useCallback((id) => {
     setLabels(prev => prev.filter(l => l.id !== id));
     setFormData(prev => ({ ...prev, labelIds: (prev.labelIds || []).filter(x => x !== id) }));
-    setTasks(prev => prev.map(task => ({
-      ...task,
-      labelIds: Array.isArray(task.labelIds) ? task.labelIds.filter(x => x !== id) : task.labelIds,
-      steps: Array.isArray(task.steps)
-        ? task.steps.map(s => ({
-          ...s,
-          labelIds: Array.isArray(s.labelIds) ? s.labelIds.filter(x => x !== id) : s.labelIds,
-        }))
-        : task.steps,
-    })));
-  }, []);
+    setTasks(prev => {
+      const changed = [];
+      const updated = prev.map(task => {
+        const hasTaskLabel = Array.isArray(task.labelIds) && task.labelIds.includes(id);
+        const hasStepLabel = Array.isArray(task.steps)
+          && task.steps.some(s => Array.isArray(s.labelIds) && s.labelIds.includes(id));
+        if (!hasTaskLabel && !hasStepLabel) return task;
+        const next = {
+          ...task,
+          labelIds: hasTaskLabel ? task.labelIds.filter(x => x !== id) : task.labelIds,
+          steps: hasStepLabel
+            ? task.steps.map(s => (Array.isArray(s.labelIds) && s.labelIds.includes(id)
+              ? { ...s, labelIds: s.labelIds.filter(x => x !== id) }
+              : s))
+            : task.steps,
+        };
+        changed.push(next);
+        return next;
+      });
+      // Keep Firestore in sync — otherwise tasks referencing the deleted label
+      // only lose it locally, and a synced device sees the orphaned id again.
+      if (userRef.current && changed.length > 0) {
+        batchSaveItems(userRef.current.uid, MODE, changed).then(clearSyncError).catch(markSyncError);
+      }
+      return updated;
+    });
+  }, [clearSyncError, markSyncError]);
 
   const handleTaskLabelToggle = useCallback((id) => {
     setFormData(prev => {
@@ -479,7 +551,7 @@ export default function TasksApp() {
     setTasks(prev => {
       const updated = prev.map(t => (t.id === id ? applyTaskStatusChange(t, statusId) : t));
       const task = updated.find(t => t.id === id);
-      if (task && user) updateItem(user.uid, MODE, task).catch(() => {});
+      if (task && user) updateItem(user.uid, MODE, task).then(clearSyncError).catch(markSyncError);
       return updated;
     });
     dragTaskId.current = null;
@@ -496,9 +568,12 @@ export default function TasksApp() {
   const applyTaskUpdate = useCallback(async (updated) => {
     setTasks(prev => prev.map(t => (t.id === updated.id ? updated : t)));
     if (user) {
-      try { await updateItem(user.uid, MODE, updated); } catch { /* ignore */ }
+      try {
+        await updateItem(user.uid, MODE, updated);
+        clearSyncError();
+      } catch (e) { markSyncError(e); }
     }
-  }, [user]);
+  }, [user, clearSyncError, markSyncError]);
 
   const handleSnoozeReminder = useCallback(async (taskId, minutes) => {
     const task = tasks.find(t => t.id === taskId);
@@ -534,7 +609,7 @@ export default function TasksApp() {
         if (user) {
           pending.forEach(task => {
             const updated = next.find(t => t.id === task.id);
-            if (updated) updateItem(user.uid, MODE, updated).catch(() => {});
+            if (updated) updateItem(user.uid, MODE, updated).then(clearSyncError).catch(markSyncError);
           });
         }
         return next;
@@ -543,7 +618,7 @@ export default function TasksApp() {
     runReminders();
     const timer = setInterval(runReminders, 30_000);
     return () => clearInterval(timer);
-  }, [user, lang, tt]);
+  }, [user, lang, tt, clearSyncError, markSyncError]);
 
   const handleExport = async () => {
     const payload = { version: 2, tasks, labels };
@@ -570,7 +645,19 @@ export default function TasksApp() {
         }
         const sanitized = sanitizeTaskRecords(rawTasks);
         if (sanitized.length === 0) throw new Error('empty');
-        saveTasks(filterItemsForMode(sanitized, MODE));
+        const nextTasks = filterItemsForMode(sanitized, MODE);
+        // Import already fully replaces the local task list (no merge option
+        // is offered) — bring the cloud copy to the same state, or restoring
+        // an older backup would leave tasks it doesn't mention resurrected on
+        // the next sync.
+        const nextIds = new Set(nextTasks.map(t => t.id));
+        const staleIds = tasksRef.current.map(t => t.id).filter(id => !nextIds.has(id));
+        saveTasks(nextTasks);
+        if (userRef.current && staleIds.length > 0) {
+          Promise.all(staleIds.map(id => deleteItem(userRef.current.uid, MODE, id)))
+            .then(clearSyncError)
+            .catch(markSyncError);
+        }
         if (rawLabels !== null) setLabels(sanitizeTaskLabels(rawLabels));
         showToast(tt('toast.imported', 'File loaded!'));
       } catch {
@@ -1647,9 +1734,22 @@ Rules:
                 <h1 className="text-sm sm:text-xl font-bold tracking-tight leading-tight">
                   {tt('header.title', 'KanDOne')}
                   {tasks.length > 0 && (
-                    <span className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 transition-all ${isSaved ? 'bg-green-500/20 text-green-100' : 'bg-yellow-500/50 text-yellow-50'}`}>
-                      {isSaved ? <CheckCircle size={12} /> : <Clock size={12} />}
-                      {isSaved ? tt('header.savedInBrowser', 'Saved') : tt('header.saving', 'Saving...')}
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 transition-all ${
+                        localStorageError
+                          ? 'bg-red-500/60 text-red-50'
+                          : isSaved ? 'bg-green-500/20 text-green-100' : 'bg-yellow-500/50 text-yellow-50'
+                      }`}
+                      title={localStorageError
+                        ? tt('header.notSavedTooltip', 'Your browser storage is full or unavailable — changes are not being saved. Export a backup now.')
+                        : undefined}
+                    >
+                      {localStorageError
+                        ? <AlertCircle size={12} />
+                        : isSaved ? <CheckCircle size={12} /> : <Clock size={12} />}
+                      {localStorageError
+                        ? tt('header.notSaved', 'Not saved!')
+                        : isSaved ? tt('header.savedInBrowser', 'Saved') : tt('header.saving', 'Saving...')}
                     </span>
                   )}
                 </h1>
@@ -1667,20 +1767,38 @@ Rules:
               <>
                 <button
                   onClick={() => signOut()}
-                  title={user.email}
-                  className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-bold transition-colors border min-h-[44px] touch-manipulation ${syncing ? 'bg-yellow-500/20 border-yellow-400/30 text-yellow-100' : 'bg-green-500/20 border-green-400/30 text-green-100 hover:bg-red-500/20 hover:border-red-400/30 hover:text-red-100'}`}
+                  title={syncError ? t('header.syncErrorTooltip', 'Last cloud sync failed — click "Sync Now" to retry. (This signs out.)') : user.email}
+                  className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-bold transition-colors border min-h-[44px] touch-manipulation ${
+                    syncing
+                      ? 'bg-yellow-500/20 border-yellow-400/30 text-yellow-100'
+                      : syncError
+                        ? 'bg-red-500/20 border-red-400/40 text-red-100'
+                        : 'bg-green-500/20 border-green-400/30 text-green-100 hover:bg-red-500/20 hover:border-red-400/30 hover:text-red-100'
+                  }`}
                 >
-                  <Cloud size={16} className={syncing ? 'animate-pulse' : ''} />
-                  <span className="hidden sm:inline shrink-0 max-w-[5rem] truncate sm:max-w-none">{syncing ? t('header.driveSyncing') : user.displayName?.split(' ')[0] || t('header.driveOn')}</span>
+                  {syncError && !syncing
+                    ? <AlertCircle size={16} />
+                    : <Cloud size={16} className={syncing ? 'animate-pulse' : ''} />}
+                  <span className="hidden sm:inline shrink-0 max-w-[5rem] truncate sm:max-w-none">
+                    {syncing
+                      ? t('header.driveSyncing')
+                      : syncError
+                        ? t('header.syncErrorBadge', 'Sync issue')
+                        : user.displayName?.split(' ')[0] || t('header.driveOn')}
+                  </span>
                 </button>
                 <button
                   onClick={handleSyncNow}
                   disabled={syncing}
-                  title={t('header.syncNow')}
-                  className="hidden md:flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-bold bg-white/10 hover:bg-white/20 border border-white/20 text-blue-100 transition-colors min-h-[44px] touch-manipulation disabled:opacity-50"
+                  title={syncError ? t('header.syncNowRetry', 'Retry sync') : t('header.syncNow')}
+                  className={`hidden md:flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-bold border transition-colors min-h-[44px] touch-manipulation disabled:opacity-50 ${
+                    syncError
+                      ? 'bg-red-500/20 hover:bg-red-500/30 border-red-400/40 text-red-100'
+                      : 'bg-white/10 hover:bg-white/20 border-white/20 text-blue-100'
+                  }`}
                 >
                   <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
-                  <span className="shrink-0">{t('header.syncNow')}</span>
+                  <span className="shrink-0">{syncError ? t('header.syncNowRetry', 'Retry sync') : t('header.syncNow')}</span>
                 </button>
               </>
             ) : (
@@ -1793,8 +1911,11 @@ Rules:
                       </div>
                     </div>
                     {user && (
-                      <button onClick={() => { handleSyncNow(); setMobileMenuOpen(false); }} disabled={syncing} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100 disabled:opacity-50">
-                        <RefreshCw size={16} className={`text-blue-500 ${syncing ? 'animate-spin' : ''}`} /> {t('header.syncNow')}
+                      <button onClick={() => { handleSyncNow(); setMobileMenuOpen(false); }} disabled={syncing} className={`w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-gray-50 active:bg-gray-100 disabled:opacity-50 ${syncError ? 'text-red-600 font-semibold' : 'text-gray-700'}`}>
+                        {syncError
+                          ? <AlertCircle size={16} className="text-red-500" />
+                          : <RefreshCw size={16} className={`text-blue-500 ${syncing ? 'animate-spin' : ''}`} />}
+                        {syncError ? t('header.syncNowRetry', 'Retry sync') : t('header.syncNow')}
                       </button>
                     )}
                     <button onClick={() => { handleExport(); setMobileMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100">

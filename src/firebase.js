@@ -3,7 +3,10 @@ import {
   getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   browserPopupRedirectResolver, signOut as firebaseSignOut, onAuthStateChanged,
 } from 'firebase/auth';
-import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch } from 'firebase/firestore';
+import {
+  initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+  doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch,
+} from 'firebase/firestore';
 import { getCollectionName } from './statuses';
 
 const firebaseConfig = {
@@ -17,7 +20,13 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+// Persistent IndexedDB cache: queues writes made while offline and replays
+// them on reconnect, and serves reads from cache instead of failing outright.
+// Multi-tab manager keeps the cache consistent if the app is open in more
+// than one tab (the app itself doesn't restrict that).
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+});
 const provider = new GoogleAuthProvider();
 
 /** User-facing message for Firebase Google sign-in failures (header "Connect Drive"). */
