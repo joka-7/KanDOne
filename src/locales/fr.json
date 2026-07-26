@@ -422,6 +422,8 @@
       "emptyDesc": "Organisez vos tâches avec plusieurs étapes et suivez la progression.",
       "viewTutorial": "Voir l'accueil",
       "addFirstButton": "Ajouter votre première tâche",
+      "noResults": "Aucune tâche ne correspond à vos filtres.",
+      "emptyColumn": "Déposez une tâche ici",
       "signInButton": "Se connecter avec Google — synchroniser partout",
       "loadButton": "Restaurer depuis une sauvegarde JSON"
     },
