@@ -429,6 +429,8 @@
       "emptyDesc": "Organize your tasks with multiple steps and track progress at a glance.",
       "viewTutorial": "View welcome",
       "addFirstButton": "Add your first task",
+      "noResults": "No tasks match your filters.",
+      "emptyColumn": "Drop a task here",
       "signInButton": "Sign in with Google — sync everywhere",
       "loadButton": "Restore from JSON backup"
     },

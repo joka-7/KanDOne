@@ -36,7 +36,7 @@ import LabelPicker, { LabelChipsReadOnly } from './components/LabelPicker';
 import CardColorPicker from './components/CardColorPicker';
 import RoutineReminderFields from './components/RoutineReminderFields';
 import { LABEL_COLOR_PALETTE, readableTextColor } from './utils/labelColors';
-import { applyTaskStatusChange, DEFAULT_ROUTINE } from './utils/recurrence';
+import { applyTaskStatusChange, DEFAULT_ROUTINE, parseDateOnly } from './utils/recurrence';
 import {
   buildReminderKey, formatDueDateTime, requestReminderPermission, shouldNotifyTask,
   snoozeTaskReminder, isReminderSnoozed, SNOOZE_MINUTES, DEFAULT_REMINDER,
@@ -105,10 +105,14 @@ const getNextPendingStep = (task) => {
   return steps.find(s => s.status !== 'done' && s.status !== 'blocked') || null;
 };
 
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 const formatDate = (dateStr, lang) => {
   if (!dateStr) return '';
   try {
-    const d = new Date(dateStr);
+    // Date-only strings must parse as local time, not UTC — new Date('2026-07-16')
+    // parses as UTC midnight, which renders as the previous day west of UTC.
+    const d = DATE_ONLY_RE.test(dateStr) ? parseDateOnly(dateStr) : new Date(dateStr);
     if (isNaN(d.getTime())) return dateStr;
     return new Intl.DateTimeFormat(lang === 'he' ? 'he-IL' : lang === 'fr' ? 'fr-FR' : 'en-US', {
       day: '2-digit', month: '2-digit', year: 'numeric',
@@ -136,7 +140,10 @@ export default function TasksApp() {
   const isRTL = i18n.language === 'he';
   const lang = i18n.language;
 
-  const tt = (key, fb) => t(`tasks.${key}`, fb);
+  // Stable across renders (only changes when `t` itself changes, e.g. language
+  // switch) — several effects below key their deps on `tt` and would otherwise
+  // tear down and rebuild on every render.
+  const tt = useCallback((key, fb) => t(`tasks.${key}`, fb), [t]);
   const BackArrow = isRTL ? ArrowRight : ArrowLeft;
 
   const [tasks, setTasks] = useState(() => {
@@ -273,12 +280,7 @@ export default function TasksApp() {
       }
     });
     return unsub;
-    // Intentionally mount-only (like before this change) — `tt` is
-    // recreated every render pre-memoization (see the reminder-effect fix in
-    // the correctness-bugs PR), so depending on it here would tear down and
-    // resubscribe onAuthChange on every render instead of once per mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clearSyncError, markSyncError]);
+  }, [clearSyncError, markSyncError, showToast, tt]);
 
   useEffect(() => {
     const handleVisibility = async () => {
@@ -411,7 +413,7 @@ export default function TasksApp() {
     try {
       const rawTask = {
         ...formData,
-        id: formData.id || Date.now().toString(),
+        id: formData.id || generateId(),
         name: safeStr(formData.name).trim(),
       };
       const task = rawTask.status === 'completed'
@@ -464,7 +466,7 @@ export default function TasksApp() {
     const title = newStepTitle.trim();
     if (!title) return;
     const newStep = {
-      id: Date.now().toString() + Math.random(), title, status: 'todo', notes: '', dueDate: '',
+      id: generateId(), title, status: 'todo', notes: '', dueDate: '',
       duration: makeInitialDuration(), labelIds: [],
     };
     setFormData(prev => ({ ...prev, steps: [...(prev.steps || []), newStep] }));
@@ -586,39 +588,44 @@ export default function TasksApp() {
 
   useEffect(() => {
     if (!('Notification' in window) || Notification.permission !== 'granted') return undefined;
+    // Side effects (notifications, prompt, Firestore writes) run here, outside
+    // any setState updater — updaters must stay pure since React may invoke
+    // them more than once per commit.
     const runReminders = () => {
-      setTasks(prev => {
-        const pending = prev.filter(shouldNotifyTask);
-        if (pending.length === 0) return prev;
-        const first = pending[0];
-        setReminderPrompt({ taskId: first.id, name: first.name || tt('reminder.defaultTitle', 'Task reminder') });
-        pending.forEach(task => {
-          try {
-            new Notification(task.name || tt('reminder.defaultTitle', 'Task reminder'), {
-              body: formatDueDateTime(task.dueDate, task.dueTime, lang, formatDate)
-                || tt('reminder.body', 'Your task is coming up.'),
-              tag: `kandone-reminder-${task.id}-${buildReminderKey(task)}`,
-            });
-          } catch { /* ignore */ }
-        });
-        const next = prev.map(task => (
-          pending.some(p => p.id === task.id)
-            ? { ...task, lastReminderKey: buildReminderKey(task) }
-            : task
-        ));
-        if (user) {
-          pending.forEach(task => {
-            const updated = next.find(t => t.id === task.id);
-            if (updated) updateItem(user.uid, MODE, updated).then(clearSyncError).catch(markSyncError);
+      const pending = tasksRef.current.filter(shouldNotifyTask);
+      if (pending.length === 0) return;
+      const pendingIds = new Set(pending.map(p => p.id));
+
+      const first = pending[0];
+      setReminderPrompt({ taskId: first.id, name: first.name || tt('reminder.defaultTitle', 'Task reminder') });
+      pending.forEach(task => {
+        try {
+          new Notification(task.name || tt('reminder.defaultTitle', 'Task reminder'), {
+            body: formatDueDateTime(task.dueDate, task.dueTime, lang, formatDate)
+              || tt('reminder.body', 'Your task is coming up.'),
+            tag: `kandone-reminder-${task.id}-${buildReminderKey(task)}`,
           });
-        }
-        return next;
+        } catch { /* ignore */ }
       });
+
+      setTasks(prev => prev.map(task => (
+        pendingIds.has(task.id)
+          ? { ...task, lastReminderKey: buildReminderKey(task) }
+          : task
+      )));
+
+      const currentUser = userRef.current;
+      if (currentUser) {
+        pending.forEach(task => {
+          updateItem(currentUser.uid, MODE, { ...task, lastReminderKey: buildReminderKey(task) })
+            .then(clearSyncError).catch(markSyncError);
+        });
+      }
     };
     runReminders();
     const timer = setInterval(runReminders, 30_000);
     return () => clearInterval(timer);
-  }, [user, lang, tt, clearSyncError, markSyncError]);
+  }, [lang, tt, clearSyncError, markSyncError]);
 
   const handleExport = async () => {
     const payload = { version: 2, tasks, labels };
@@ -859,11 +866,16 @@ Rules:
             </button>
           </div>
         </div>
+      ) : filteredTasks.length === 0 ? (
+        <div className="flex items-center justify-center flex-1 min-h-[200px]">
+          <div className="text-center max-w-sm px-4">
+            <p className="text-sm text-gray-500">{tt('board.noResults', 'No tasks match your filters.')}</p>
+          </div>
+        </div>
       ) : (
         <>
           {STATUSES_TASKS.map(status => {
-            const columnTasks = tasks.filter(t => t.status === status.id);
-            if (columnTasks.length === 0) return null;
+            const columnTasks = filteredTasks.filter(t => t.status === status.id);
             return (
               <div
                 key={status.id}
@@ -879,7 +891,12 @@ Rules:
                     <span className="text-gray-400 text-xs sm:text-sm font-medium">{columnTasks.length}</span>
                   </div>
                 </div>
-                <div className="p-2 sm:p-3 space-y-2 sm:space-y-3 sm:flex-1 sm:overflow-y-auto sm:custom-scrollbar">
+                <div className="p-2 sm:p-3 space-y-2 sm:space-y-3 sm:flex-1 sm:overflow-y-auto sm:custom-scrollbar sm:min-h-[80px]">
+                  {columnTasks.length === 0 && (
+                    <div className="text-center text-xs text-gray-300 italic py-4">
+                      {tt('board.emptyColumn', 'Drop a task here')}
+                    </div>
+                  )}
                   {columnTasks.map(task => {
                     const prog = getProgress(task);
                     const next = getNextPendingStep(task);
