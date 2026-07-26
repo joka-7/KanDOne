@@ -46,7 +46,10 @@
     "iosInstallHint": "On iPhone/iPad: tap Share (□↑) in Safari, then \"Add to Home Screen\".",
     "androidInstallHint": "Install works in Chrome on the live site (HTTPS). Open the ⋮ menu → \"Install app\" or \"Add to Home screen\".",
     "chromeInstallHint": "In Chrome: tap ⋮ (top-right) → \"Install app\" or \"Add to Home screen\". Use the published https:// link (not localhost). If you don't see it, refresh once — the site must finish loading.",
-    "syncNow": "Sync Now"
+    "syncNow": "Sync Now",
+    "syncNowRetry": "Retry sync",
+    "syncErrorBadge": "Sync issue",
+    "syncErrorTooltip": "Last cloud sync failed — click \"Sync Now\" to retry. (This signs out.)"
   },
   "tabs": {
     "board": "Status Board",
@@ -398,6 +401,8 @@
       "title": "KanDOne",
       "savedInBrowser": "Saved in browser",
       "saving": "Saving...",
+      "notSaved": "Not saved!",
+      "notSavedTooltip": "Your browser storage is full or unavailable — changes are not being saved. Export a backup now.",
       "addTask": "Add Task"
     },
     "status": {
