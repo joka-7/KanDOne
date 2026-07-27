@@ -385,7 +385,9 @@
       "saving": "Saving...",
       "notSaved": "Not saved!",
       "notSavedTooltip": "Your browser storage is full or unavailable — changes are not being saved. Export a backup now.",
-      "addTask": "Add Task"
+      "addTask": "Add Task",
+      "moreMenu": "More options",
+      "language": "Language"
     },
     "status": {
       "active": "Active",

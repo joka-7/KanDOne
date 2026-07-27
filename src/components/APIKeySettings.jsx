@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { X, Key, Eye, EyeOff, ExternalLink, CheckCircle, Trash2, Settings } from 'lucide-react';
 import { loadAIConfigFromStorage, isAIReady, PROVIDERS } from '../services/aiAssistant';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 const PROVIDER_ORDER = ['gemini', 'groq', 'ollama', 'anthropic', 'openai'];
 
@@ -49,15 +50,25 @@ export default function APIKeySettings({ t, onClose }) {
   };
 
   const alreadySet = isAIReady();
+  const dialogRef = useRef(null);
+  const handleClose = useCallback(() => onClose(), [onClose]);
+  useModalA11y(dialogRef, handleClose);
 
   return (
     <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="api-key-settings-title"
+        tabIndex={-1}
+        className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden outline-none"
+      >
         <div className="bg-gradient-to-r from-purple-600 to-indigo-700 p-5 text-white flex items-center justify-between">
-          <div className="flex items-center gap-2 font-bold text-lg">
+          <div id="api-key-settings-title" className="flex items-center gap-2 font-bold text-lg">
             <Settings size={20} /> {t('settings.title', 'Settings')}
           </div>
-          <button onClick={onClose} className="text-white/70 hover:text-white"><X size={20} /></button>
+          <button type="button" onClick={handleClose} aria-label={t('chat.close', 'Close')} className="text-white/70 hover:text-white"><X size={20} /></button>
         </div>
 
         <div className="p-6 space-y-5 overflow-y-auto flex-1 min-h-0">
@@ -135,7 +146,7 @@ export default function APIKeySettings({ t, onClose }) {
                   className="w-full p-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 font-mono text-sm"
                   onKeyDown={e => e.key === 'Enter' && handleSave()}
                 />
-                <button onClick={() => setVisible(v => !v)} className="absolute right-3 top-3 text-gray-400 hover:text-gray-600">
+                <button type="button" onClick={() => setVisible(v => !v)} aria-label={visible ? t('settings.hideKey', 'Hide API key') : t('settings.showKey', 'Show API key')} className="absolute right-3 top-3 text-gray-400 hover:text-gray-600">
                   {visible ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
@@ -175,7 +186,7 @@ export default function APIKeySettings({ t, onClose }) {
               {done ? `✓ ${t('settings.saved', 'Saved!')}` : aiReady ? t('settings.save', 'Save & Enable AI') : t('settings.saveSettings', 'Save Settings')}
             </button>
             {alreadySet && (
-              <button onClick={handleClear} className="px-4 py-2.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors" title={t('settings.clearKey', 'Remove')}>
+              <button type="button" onClick={handleClear} aria-label={t('settings.clearKey', 'Remove')} className="px-4 py-2.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors" title={t('settings.clearKey', 'Remove')}>
                 <Trash2 size={16} />
               </button>
             )}
