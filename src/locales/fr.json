@@ -375,7 +375,9 @@
       "desc": "Gérez vos tâches avec plusieurs étapes et suivez la progression"
     },
     "timeline": {
-      "dueDate": "Échéance"
+      "dueDate": "Échéance",
+      "step": "Étape",
+      "stepOverdue": "La date de l'étape est après l'échéance de la tâche !"
     },
     "header": {
       "title": "KanDOne",
@@ -383,7 +385,9 @@
       "saving": "Enregistrement...",
       "notSaved": "Non enregistré !",
       "notSavedTooltip": "Le stockage du navigateur est plein ou indisponible — les modifications ne sont pas enregistrées. Exportez une sauvegarde maintenant.",
-      "addTask": "Ajouter une tâche"
+      "addTask": "Ajouter une tâche",
+      "moreMenu": "Plus d'options",
+      "language": "Langue"
     },
     "status": {
       "active": "Actif",
@@ -456,6 +460,8 @@
       "cardColor": "Couleur de la carte",
       "cardColorNone": "Aucune",
       "changeLabelColor": "Changer la couleur",
+      "deleteStep": "Supprimer l'étape",
+      "stepDateAfterTask": "La date est après l'échéance de la tâche",
       "dueTime": "Heure d'échéance",
       "dueTimeHint": "Heure optionnelle pour les échéances et rappels",
       "routine": "Tâche récurrente",

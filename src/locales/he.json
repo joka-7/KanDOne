@@ -375,7 +375,9 @@
       "desc": "נהל משימות עם שלבים מרובים ועקוב אחרי ההתקדמות"
     },
     "timeline": {
-      "dueDate": "תאריך יעד"
+      "dueDate": "תאריך יעד",
+      "step": "שלב",
+      "stepOverdue": "תאריך השלב אחרי תאריך היעד של המשימה!"
     },
     "header": {
       "title": "KanDOne",
@@ -383,7 +385,9 @@
       "saving": "שומר...",
       "notSaved": "לא נשמר!",
       "notSavedTooltip": "אחסון הדפדפן מלא או לא זמין — השינויים אינם נשמרים. ייצא גיבוי עכשיו.",
-      "addTask": "הוסף משימה"
+      "addTask": "הוסף משימה",
+      "moreMenu": "אפשרויות נוספות",
+      "language": "שפה"
     },
     "status": {
       "active": "פעיל",
@@ -456,6 +460,8 @@
       "cardColor": "צבע כרטיס",
       "cardColorNone": "ללא",
       "changeLabelColor": "שנה צבע",
+      "deleteStep": "מחק שלב",
+      "stepDateAfterTask": "התאריך אחרי תאריך היעד של המשימה",
       "dueTime": "שעת יעד",
       "dueTimeHint": "שעה אופציונלית לתאריכי יעד ותזכורות",
       "routine": "משימת שגרה",

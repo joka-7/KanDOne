@@ -31,4 +31,13 @@ i18n
     interpolation: { escapeValue: false },
   });
 
+// Apply lang/dir to <html> as early as possible (before React paints), so
+// assistive tech and browser defaults see the right language/direction even
+// on the first frame. TasksApp keeps this in sync on later language changes.
+{
+  const lng = i18n.language || 'en';
+  document.documentElement.lang = lng === 'he' ? 'he' : lng === 'fr' ? 'fr' : 'en';
+  document.documentElement.dir = lng === 'he' ? 'rtl' : 'ltr';
+}
+
 export default i18n;
