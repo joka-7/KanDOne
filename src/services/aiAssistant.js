@@ -312,8 +312,18 @@ const LANG = { en: 'Respond in English.', he: 'ענה בעברית.', fr: 'Répo
 
 export function getGoalsTasksSystemPrompt(tasks = [], language = 'en') {
   const langInstruction = LANG[language] || LANG.en;
-  const activeTasks = tasks.filter(t => t.status === 'active').map(t => t.name).filter(Boolean).slice(0, 8);
-  const completedTasks = tasks.filter(t => t.status === 'completed').map(t => t.name).filter(Boolean).slice(0, 5);
+  const activeTasks = tasks
+    .filter(t => t.status === 'active')
+    .map(t => t.name)
+    .filter(Boolean)
+    .slice(0, 8)
+    .map((name) => delimUserField(name));
+  const completedTasks = tasks
+    .filter(t => t.status === 'completed')
+    .map(t => t.name)
+    .filter(Boolean)
+    .slice(0, 5)
+    .map((name) => delimUserField(name));
 
   return `You are a personal productivity coach, goal-setting expert, and opportunity finder.
 
