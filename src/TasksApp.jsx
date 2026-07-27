@@ -1945,7 +1945,6 @@ Rules:
           t={t}
           i18n={i18n}
           isRTL={isRTL}
-          isTasks={true}
           onClose={() => setShowTasksWelcome(false)}
           openNewForm={() => { setShowTasksWelcome(false); openNewForm(); }}
           openAISettings={() => { setShowTasksWelcome(false); setShowAISettings(true); }}
