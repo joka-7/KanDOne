@@ -46,7 +46,10 @@
     "iosInstallHint": "ב-iPhone/iPad: הקש Share (□↑) ב-Safari, ואז «הוסף למסך הבית».",
     "androidInstallHint": "התקנה עובדת ב-Chrome באתר החי (HTTPS). תפריט ⋮ → «התקן אפליקציה» או «הוסף למסך הבית».",
     "chromeInstallHint": "ב-Chrome: ⋮ (למעלה מימין) → «התקן אפליקציה» או «הוסף למסך הבית». השתמשו בקישור https:// המפורסם (לא localhost). אם לא מופיע — רעננו את הדף.",
-    "syncNow": "סנכרן עכשיו"
+    "syncNow": "סנכרן עכשיו",
+    "syncNowRetry": "נסה סנכרון שוב",
+    "syncErrorBadge": "בעיית סנכרון",
+    "syncErrorTooltip": "הסנכרון האחרון לענן נכשל — לחץ «סנכרן עכשיו» כדי לנסות שוב. (פעולה זו תנתק אותך.)"
   },
   "tabs": {
     "board": "לוח סטטוסים",
@@ -378,6 +381,8 @@
       "title": "KanDOne",
       "savedInBrowser": "שמור בדפדפן",
       "saving": "שומר...",
+      "notSaved": "לא נשמר!",
+      "notSavedTooltip": "אחסון הדפדפן מלא או לא זמין — השינויים אינם נשמרים. ייצא גיבוי עכשיו.",
       "addTask": "הוסף משימה"
     },
     "status": {

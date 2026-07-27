@@ -46,7 +46,10 @@
     "iosInstallHint": "Sur iPhone/iPad : touchez Partager (□↑) dans Safari, puis « Sur l'écran d'accueil ».",
     "androidInstallHint": "L'installation fonctionne dans Chrome sur le site en ligne (HTTPS). Menu ⋮ → « Installer l'application ».",
     "chromeInstallHint": "Dans Chrome : ⋮ (en haut à droite) → « Installer l'application » ou « Ajouter à l'écran d'accueil ». Utilisez le lien https:// publié (pas localhost). Sinon, actualisez la page.",
-    "syncNow": "Synchroniser"
+    "syncNow": "Synchroniser",
+    "syncNowRetry": "Réessayer la synchronisation",
+    "syncErrorBadge": "Problème de sync",
+    "syncErrorTooltip": "La dernière synchronisation a échoué — cliquez sur « Synchroniser » pour réessayer. (Cela vous déconnecte.)"
   },
   "tabs": {
     "board": "Tableau",
@@ -378,6 +381,8 @@
       "title": "KanDOne",
       "savedInBrowser": "Enregistré",
       "saving": "Enregistrement...",
+      "notSaved": "Non enregistré !",
+      "notSavedTooltip": "Le stockage du navigateur est plein ou indisponible — les modifications ne sont pas enregistrées. Exportez une sauvegarde maintenant.",
       "addTask": "Ajouter une tâche"
     },
     "status": {
