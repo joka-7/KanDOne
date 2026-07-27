@@ -6,6 +6,9 @@ export const STORAGE_KEYS = {
   tasksWelcome: 'hasCompletedOnboarding_tasks',
 };
 
+/** Shared task/step label library (localStorage; synced to Firestore when signed in). */
+export const TASKS_LABELS_KEY = 'tasksLabelsV1';
+
 /** Mock AI config for chat e2e (single init script — avoids addInitScript ordering issues). */
 export const E2E_AI_STORAGE = {
   aiProvider: 'gemini',
