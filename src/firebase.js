@@ -44,10 +44,10 @@ export function formatSignInError(err) {
       : 'This site is not in Firebase Authentication → Authorized domains.';
   }
   if (/referrer|API key|API_KEY/i.test(msg)) {
-    return 'Google API key blocked this site. In Cloud Console set Browser key → Application restrictions to None (see SECURITY.md).';
+    return 'Google API key blocked this site. In Cloud Console set Browser key → Application restrictions to None.';
   }
   if (/requested action is invalid/i.test(msg)) {
-    return 'Google sign-in config error. Check Firebase Authorized domains and API key restrictions (SECURITY.md).';
+    return 'Google sign-in config error. Check Firebase Authorized domains and API key restrictions.';
   }
   return msg || 'Sign-in failed.';
 }
@@ -114,26 +114,10 @@ function collectionRef(uid, mode) {
   return collection(db, 'users', uid, getCollectionName(mode));
 }
 
-export async function loadAllItems(uid, mode = 'jobseeker') {
+export async function loadAllItems(uid, mode) {
   const colRef = collectionRef(uid, mode);
   const snap = await getDocs(colRef);
-
-  if (!snap.empty) {
-    return snap.docs.map(d => d.data());
-  }
-
-  if (mode !== 'jobseeker') return null;
-
-  const rootRef = doc(db, 'users', uid);
-  const rootSnap = await getDoc(rootRef);
-  if (rootSnap.exists()) {
-    const companies = rootSnap.data().companies || [];
-    if (companies.length > 0) {
-      await batchSaveItems(uid, mode, companies);
-      return companies;
-    }
-  }
-  return null;
+  return snap.empty ? null : snap.docs.map(d => d.data());
 }
 
 export async function updateItem(uid, mode, item) {
@@ -158,28 +142,3 @@ export async function batchSaveItems(uid, mode, items) {
     await batch.commit();
   }
 }
-
-export async function loadAllCompanies(uid) {
-  return loadAllItems(uid, 'jobseeker');
-}
-
-export async function updateCompany(uid, company) {
-  return updateItem(uid, 'jobseeker', company);
-}
-
-export async function deleteFirestoreCompany(uid, id) {
-  return deleteItem(uid, 'jobseeker', id);
-}
-
-export async function batchSaveCompanies(uid, companies) {
-  return batchSaveItems(uid, 'jobseeker', companies);
-}
-
-export async function loadUserData(uid) {
-  return loadAllCompanies(uid);
-}
-
-export async function saveUserData(uid, companies) {
-  return batchSaveCompanies(uid, companies);
-}
-

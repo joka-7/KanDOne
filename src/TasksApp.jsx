@@ -614,8 +614,8 @@ export default function TasksApp() {
   const handleStartSimulation = useCallback((categoryKey) => {
     const cat = TASK_TEMPLATES[categoryKey];
     if (!cat) return;
-    const label = getLocalizedCategoryLabel(t, true, categoryKey, cat.label);
-    const questions = getLocalizedQuestions(t, true, categoryKey, cat.questions);
+    const label = getLocalizedCategoryLabel(t, categoryKey, cat.label);
+    const questions = getLocalizedQuestions(t, categoryKey, cat.questions);
     const questionList = formatQuestionList(questions);
     const taskCtx = selectedTask
       ? `The user is working on task "${selectedTask.name}" (status: ${selectedTask.status}${selectedTask.dueDate ? `, due ${selectedTask.dueDate}` : ''}).`
@@ -1916,7 +1916,6 @@ Rules:
           t={t}
           i18n={i18n}
           isRTL={isRTL}
-          isTasks={true}
           onClose={() => setShowTasksWelcome(false)}
           openNewForm={() => { setShowTasksWelcome(false); openNewForm(); }}
           openAISettings={() => { setShowTasksWelcome(false); setShowAISettings(true); }}
@@ -1933,7 +1932,6 @@ Rules:
       {showTemplates && (
         <TemplateLibrary
           t={t}
-          libraryMode="tasks"
           onClose={() => setShowTemplates(false)}
           onStartSimulation={handleStartSimulation}
         />
@@ -1943,7 +1941,6 @@ Rules:
         <ChatModal
           key={`task-chat-${selectedTask?.id || 'general'}`}
           t={t}
-          variant="tasks"
           task={selectedTask}
           language={lang}
           sessionKey={`task-chat-${selectedTask?.id || 'general'}`}
@@ -1957,7 +1954,6 @@ Rules:
         <ChatModal
           key={`task-sim-${simulationData.title}`}
           t={t}
-          variant="tasks"
           task={selectedTask}
           language={lang}
           sessionKey={simulationData.title}
@@ -1974,7 +1970,6 @@ Rules:
         <ChatModal
           key="goals-tasks-finder"
           t={t}
-          variant="tasks"
           language={lang}
           sessionKey="goals-tasks-finder"
           systemPromptOverride={getGoalsTasksSystemPrompt(tasks, lang)}

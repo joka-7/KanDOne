@@ -63,8 +63,6 @@
     "noEvents": "No events on this day.",
     "selectDay": "Click a day to see events",
     "type": {
-      "interview": "Interview",
-      "assignment": "Assignment",
       "task": "Task",
       "step": "Step"
     }
@@ -309,15 +307,12 @@
     "analyzing": "Analyzing..."
   },
   "chat": {
-    "title": "AI Chat",
     "empty": "Start the conversation...",
     "context": "Context",
     "privacy": "Avoid writing personal names",
     "placeholder": "Type a message... (Enter to send)",
     "saveToNotes": "Save to notes",
     "saved": "Saved ✓",
-    "simulationTitle": "Mock Interview",
-    "simulationEmpty": "Starting your mock interview...",
     "titleTasks": "Task Coach",
     "coachingTitle": "AI Coaching",
     "coachingEmpty": "Starting your coaching session...",
@@ -358,25 +353,12 @@
     "priority": "High = active process or dream company. Use to filter and focus your energy."
   },
   "templates": {
-    "title": "Interview Template Library",
-    "titleRecruiter": "Candidate Interview Guide",
     "titleTasks": "Task Planning Prompts",
     "search": "Search questions...",
     "copy": "Copy",
     "copied": "Copied!",
-    "footer": "Use these to practice. Behavioral answers should follow the STAR format.",
     "footerTasks": "Use these prompts when planning, breaking down, or reviewing tasks.",
-    "practiceButton": "Mock interview",
-    "practiceButtonRecruiter": "Practice conducting",
     "practiceButtonTasks": "Practice with AI coach",
-    "categories": {
-      "hr": "HR / Screening",
-      "technical": "Technical",
-      "behavioral": "Behavioral",
-      "manager": "Manager",
-      "culture": "Culture Fit",
-      "questions_to_ask": "Questions to Ask"
-    },
     "taskCategories": {
       "planning": "Planning & Scoping",
       "breakdown": "Step Breakdown",
