@@ -1,6 +1,3 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { delimUserField } from '../utils/promptSafety';
-
 export const PROVIDERS = {
   gemini: {
     id: 'gemini',
@@ -255,6 +252,9 @@ export async function streamChat(messages, systemPrompt, onChunk) {
   }
 
   if (provider === 'anthropic') {
+    // Lazy-load the SDK only when Anthropic is the active provider — the other
+    // four providers use plain fetch and should not pay for this chunk.
+    const { default: Anthropic } = await import('@anthropic-ai/sdk');
     const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
     const stream = await client.messages.stream({
       model, max_tokens: 1024,
