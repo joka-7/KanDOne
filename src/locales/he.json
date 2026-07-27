@@ -63,8 +63,6 @@
     "noEvents": "אין אירועים ביום זה.",
     "selectDay": "לחץ על יום כדי לראות אירועים",
     "type": {
-      "interview": "ראיון",
-      "assignment": "מטלה",
       "task": "משימה",
       "step": "שלב"
     }
@@ -309,15 +307,12 @@
     "analyzing": "מנתח..."
   },
   "chat": {
-    "title": "צ'אט AI",
     "empty": "התחל את השיחה...",
     "context": "הקשר",
     "privacy": "הימנע מכתיבת שמות אישיים",
     "placeholder": "כתוב הודעה... (Enter לשליחה)",
     "saveToNotes": "שמור להערות",
     "saved": "נשמר ✓",
-    "simulationTitle": "ראיון מדומה",
-    "simulationEmpty": "מתחיל את הראיון המדומה...",
     "titleTasks": "מאמן משימות",
     "coachingTitle": "אימון AI",
     "coachingEmpty": "מתחיל את מפגש האימון...",
@@ -358,25 +353,12 @@
     "priority": "גבוהה = תהליך פעיל או חברת חלומות. השתמש לסינון ומיקוד האנרגיה שלך."
   },
   "templates": {
-    "title": "ספריית תבניות ראיון",
-    "titleRecruiter": "מדריך ראיון מועמדים",
     "titleTasks": "שאלות לתכנון משימות",
     "search": "חיפוש שאלות...",
     "copy": "העתק",
     "copied": "הועתק!",
-    "footer": "השתמש בשאלות אלה לתרגול. תשובות התנהגותיות צריכות לעקוב אחר פורמט STAR.",
     "footerTasks": "השתמש בשאלות אלה בעת תכנון, פירוק או סקירת משימות.",
-    "practiceButton": "ראיון מדומה",
-    "practiceButtonRecruiter": "תרגול ניהול ראיון",
     "practiceButtonTasks": "תרגול עם מאמן AI",
-    "categories": {
-      "hr": "משאבי אנוש / סינון",
-      "technical": "טכני",
-      "behavioral": "התנהגותי",
-      "manager": "מנהל",
-      "culture": "התאמה תרבותית",
-      "questions_to_ask": "שאלות לשאול"
-    },
     "taskCategories": {
       "planning": "תכנון והגדרת היקף",
       "breakdown": "פירוק לשלבים",

@@ -68,64 +68,6 @@ export function parseTaskLabelsStoragePayload(raw) {
   }
 }
 
-function sanitizeInterviews(interviews) {
-  if (!Array.isArray(interviews)) return [];
-  return interviews.slice(0, 100).map(inv => ({
-    type: safeStr(inv.type || inv.round || ''),
-    date: safeStr(inv.date || ''),
-    interviewer: safeStr(inv.interviewer || ''),
-    summary: safeStr(inv.summary || ''),
-  }));
-}
-
-function sanitizeRejection(rejection) {
-  if (!rejection || typeof rejection !== 'object') {
-    return { date: '', method: '', notes: '' };
-  }
-  return {
-    date: safeStr(rejection.date || ''),
-    method: safeStr(rejection.method || ''),
-    notes: safeStr(rejection.notes || ''),
-  };
-}
-
-/** Whitelist fields for job seeker / recruiter tracker records (import + localStorage). */
-export function sanitizeTrackerRecords(importedArray, { unnamedLabel = 'Unnamed' } = {}) {
-  if (!Array.isArray(importedArray)) return [];
-  return importedArray.slice(0, 10000).map((c) => ({
-    id: c.id ? String(c.id).slice(0, 64) : generateId(),
-    name: safeStr(c.name || c.company || unnamedLabel),
-    role: safeStr(c.role || c.position || ''),
-    status: safeStr(c.status || ''),
-    location: safeStr(c.location || ''),
-    website: safeStr(c.website || ''),
-    linkedinCompany: safeStr(c.linkedinCompany || ''),
-    linkedinCandidate: safeStr(c.linkedinCandidate || ''),
-    description: safeStr(c.description || ''),
-    products: safeStr(c.products || ''),
-    currentRole: safeStr(c.currentRole || ''),
-    expectedSalary: safeStr(c.expectedSalary || ''),
-    source: safeStr(c.source || ''),
-    generalNotes: safeStr(c.generalNotes || ''),
-    priority: safeStr(c.priority || 'medium'),
-    interviews: sanitizeInterviews(c.interviews),
-    rejection: sanitizeRejection(c.rejection),
-  }));
-}
-
-/** Parse JSON backup/export into sanitized tracker records, or null if invalid. */
-export function parseTrackerImportPayload(raw, { unnamedLabel = 'Unnamed' } = {}) {
-  let importedArray = [];
-  if (Array.isArray(raw)) {
-    importedArray = raw;
-  } else if (raw && typeof raw === 'object') {
-    const potentialArray = Object.values(raw).find(val => Array.isArray(val));
-    importedArray = potentialArray || [raw];
-  }
-  if (importedArray.length === 0 || importedArray.length > 10000) return null;
-  return sanitizeTrackerRecords(importedArray, { unnamedLabel });
-}
-
 function sanitizeTaskSteps(steps) {
   if (!Array.isArray(steps)) return [];
   return steps.slice(0, 200).map((s) => ({

@@ -12,7 +12,6 @@ function withTemplateQuestions(base, tq) {
     ...base,
     templates: {
       ...base.templates,
-      interviewQuestions: tq.interviewQuestions,
       taskQuestions: tq.taskQuestions,
       noSearchResults: tq.noSearchResults,
     },
