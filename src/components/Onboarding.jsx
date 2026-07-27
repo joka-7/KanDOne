@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { X, Layout, List, BarChart2, Lightbulb, ChevronRight, ChevronLeft, CheckCircle2, Clock, Calendar, Cloud, Timer, Tag, Palette, Repeat, Bell } from 'lucide-react';
 import AppBrandMark from './AppBrandMark';
 import { STORAGE_KEYS } from '../storageKeys.js';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 const CloudSyncNote = (t) => (
   <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg border border-blue-100 mt-4 text-left">
@@ -221,10 +222,10 @@ export default function Onboarding({ t, i18n, isRTL, onClose, openNewForm, openA
   const Back = isRTL ? ChevronRight : ChevronLeft;
   const Next = isRTL ? ChevronLeft : ChevronRight;
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     localStorage.setItem(STORAGE_KEYS.tasksWelcome, '1');
     onClose();
-  };
+  }, [onClose]);
 
   const handleLangChange = (lang) => {
     i18n.changeLanguage(lang);
@@ -234,27 +235,41 @@ export default function Onboarding({ t, i18n, isRTL, onClose, openNewForm, openA
   const current = steps[step];
   const contentFn = tasksStepContent[current.titleKey];
   const content = contentFn ? contentFn(t, openNewForm, openAISettings) : null;
+  const dialogRef = useRef(null);
+  useModalA11y(dialogRef, handleClose);
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="onboarding-title"
+        tabIndex={-1}
+        className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden outline-none"
+      >
         <div className="bg-gradient-to-r from-green-600 to-emerald-700 p-6 text-white">
           <div className="flex justify-between items-start mb-4">
             <div className="flex gap-1.5">
               {steps.map((_, i) => (
                 <button
                   key={i}
+                  type="button"
                   onClick={() => setStep(i)}
+                  aria-label={`${t('onboarding.step', 'Step')} ${i + 1}`}
+                  aria-current={i === step ? 'step' : undefined}
                   className={`h-1.5 rounded-full transition-all ${i === step ? 'w-6 bg-white' : 'w-1.5 bg-white/40 hover:bg-white/60'}`}
                 />
               ))}
             </div>
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 bg-white/20 rounded-lg p-0.5">
+              <div className="flex items-center gap-1 bg-white/20 rounded-lg p-0.5" role="group" aria-label={t('header.language', 'Language')}>
                 {[['en','EN'],['he','עב'],['fr','FR']].map(([code, label]) => (
                   <button
                     key={code}
+                    type="button"
                     onClick={() => handleLangChange(code)}
+                    aria-pressed={i18n.language === code}
                     className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all ${
                       i18n.language === code
                         ? 'bg-white text-blue-700 shadow-sm'
@@ -265,7 +280,7 @@ export default function Onboarding({ t, i18n, isRTL, onClose, openNewForm, openA
                   </button>
                 ))}
               </div>
-              <button onClick={handleClose} className="text-white/70 hover:text-white transition-colors">
+              <button type="button" onClick={handleClose} aria-label={t('chat.close', 'Close')} className="text-white/70 hover:text-white transition-colors">
                 <X size={20} />
               </button>
             </div>
@@ -273,9 +288,9 @@ export default function Onboarding({ t, i18n, isRTL, onClose, openNewForm, openA
           {current.titleKey === 'tasksWelcome' ? (
             <div className="mb-3"><AppBrandMark size={48} /></div>
           ) : (
-            <div className="text-4xl mb-3">{current.icon}</div>
+            <div className="text-4xl mb-3" aria-hidden="true">{current.icon}</div>
           )}
-          <h2 className="text-2xl font-bold">{t(`onboarding.${current.titleKey}Title`, current.defaults.title)}</h2>
+          <h2 id="onboarding-title" className="text-2xl font-bold">{t(`onboarding.${current.titleKey}Title`, current.defaults.title)}</h2>
           <p className="text-blue-200 text-sm mt-1">{t(`onboarding.${current.titleKey}Subtitle`, current.defaults.subtitle)}</p>
         </div>
 
@@ -305,14 +320,14 @@ export default function Onboarding({ t, i18n, isRTL, onClose, openNewForm, openA
           {isLast ? (
             <button
               onClick={handleClose}
-              className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition-colors justify-self-end"
+              className="flex items-center gap-2 px-6 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg transition-colors justify-self-end"
             >
               {t('onboarding.getStarted', "Let's go!")} 🚀
             </button>
           ) : (
             <button
               onClick={() => setStep(s => s + 1)}
-              className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition-colors justify-self-end"
+              className="flex items-center gap-2 px-6 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg transition-colors justify-self-end"
             >
               {t('onboarding.next', 'Next')} <Next size={16} />
             </button>

@@ -70,6 +70,14 @@ export default function TasksApp() {
   const isRTL = i18n.language === 'he';
   const lang = i18n.language;
 
+  // Keep <html lang/dir> in sync with the UI language (WCAG 3.1.1). The
+  // root div's dir= alone is not enough for assistive tech / browser defaults.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.lang = lang === 'he' ? 'he' : lang === 'fr' ? 'fr' : 'en';
+    root.dir = isRTL ? 'rtl' : 'ltr';
+  }, [lang, isRTL]);
+
   // Stable across renders (only changes when `t` itself changes, e.g. language
   // switch) — several effects below key their deps on `tt` and would otherwise
   // tear down and rebuild on every render.
@@ -826,7 +834,7 @@ Rules:
             <p className="text-sm text-gray-500 mb-6">{tt('board.emptyDesc', 'Add your first task to get started.')}</p>
             <button
               onClick={openNewForm}
-              className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-emerald-700 transition-colors mb-3"
+              className="bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-emerald-800 transition-colors mb-3"
             >
               {tt('board.addFirstButton', 'Add your first task')}
             </button>
@@ -852,6 +860,8 @@ Rules:
             return (
               <div
                 key={status.id}
+                role="region"
+                aria-label={tt(`status.${status.id}`, status.id)}
                 className="board-column w-full sm:w-72 sm:flex-shrink-0 flex flex-col sm:h-full bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden"
                 onDragOver={handleDragOver}
                 onDrop={() => handleDrop(status.id)}
@@ -1285,7 +1295,7 @@ Rules:
             <div className={`flex gap-3 pt-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
               <button
                 onClick={handleSave}
-                className="flex-1 bg-emerald-600 text-white py-2.5 rounded-xl font-semibold hover:bg-emerald-700 transition-colors text-sm"
+                className="flex-1 bg-emerald-700 text-white py-2.5 rounded-xl font-semibold hover:bg-emerald-800 transition-colors text-sm"
               >
                 {tt('form.save', 'Save Changes')}
               </button>
@@ -1831,10 +1841,11 @@ Rules:
 
             {/* Desktop controls */}
             <div className="hidden md:flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white/10 border border-white/20">
-              <Languages size={16} className="text-green-100 flex-shrink-0" />
+              <Languages size={16} className="text-green-100 flex-shrink-0" aria-hidden="true" />
               <select
                 value={i18n.language}
                 onChange={e => { i18n.changeLanguage(e.target.value); localStorage.setItem('appLanguage', e.target.value); }}
+                aria-label={t('header.language', 'Language')}
                 className="bg-transparent text-green-100 text-sm font-bold border-none outline-none cursor-pointer"
               >
                 <option value="en" className="text-gray-800">English</option>
@@ -1844,10 +1855,10 @@ Rules:
             </div>
 
             <div className="hidden md:flex bg-white/10 rounded-lg p-1">
-              <button onClick={handleExport} title={t('header.downloadTooltip')} className="p-2 bg-green-500/20 hover:bg-green-500/40 rounded text-white transition-colors border border-green-400/30">
+              <button onClick={handleExport} title={t('header.downloadTooltip')} aria-label={t('header.downloadTooltip')} className="p-2 bg-green-500/20 hover:bg-green-500/40 rounded text-white transition-colors border border-green-400/30">
                 <Download size={18} />
               </button>
-              <label className="p-2 hover:bg-white/20 rounded text-white transition-colors cursor-pointer" title={t('header.uploadTooltip')}>
+              <label className="p-2 hover:bg-white/20 rounded text-white transition-colors cursor-pointer" title={t('header.uploadTooltip')} aria-label={t('header.uploadTooltip')}>
                 <Upload size={18} />
                 <input ref={fileInputRef} type="file" accept=".json" onChange={handleImport} className="hidden" />
               </label>
@@ -1864,6 +1875,7 @@ Rules:
               <button
                 onClick={() => setShowGoalsFinder(true)}
                 title={t('ai.goalsAndTasks', 'Goals & Tasks')}
+                aria-label={t('ai.goalsAndTasks', 'Goals & Tasks')}
                 className="p-2 hover:bg-white/20 rounded text-white transition-colors"
               >
                 🎯
@@ -1871,6 +1883,7 @@ Rules:
               <button
                 onClick={() => setShowAISettings(true)}
                 title={t('header.aiSettings', 'AI Settings')}
+                aria-label={t('header.aiSettings', 'AI Settings')}
                 className="p-2 hover:bg-white/20 rounded text-white transition-colors"
               >
                 <Settings size={18} />
@@ -1879,6 +1892,7 @@ Rules:
                 type="button"
                 onClick={() => setShowTasksWelcome(true)}
                 title={tt('board.viewTutorial', 'View welcome')}
+                aria-label={tt('board.viewTutorial', 'View welcome')}
                 className="p-2 hover:bg-white/20 rounded text-white transition-colors"
               >
                 💡
@@ -1889,6 +1903,8 @@ Rules:
             <div className="md:hidden relative">
               <button
                 onClick={() => setMobileMenuOpen(o => !o)}
+                aria-label={t('header.moreMenu', 'More options')}
+                aria-expanded={mobileMenuOpen}
                 className="p-2 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-lg text-white transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
               >
                 <MoreVertical size={20} />
@@ -1903,6 +1919,7 @@ Rules:
                         <select
                           value={i18n.language}
                           onChange={e => { i18n.changeLanguage(e.target.value); localStorage.setItem('appLanguage', e.target.value); setMobileMenuOpen(false); }}
+                          aria-label={t('header.language', 'Language')}
                           className="text-gray-700 text-sm font-bold border-none outline-none cursor-pointer bg-transparent flex-1"
                         >
                           <option value="en">English</option>
@@ -1993,7 +2010,11 @@ Rules:
 
       {/* Toast */}
       {toast && (
-        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 bg-gray-900 text-white pl-5 pr-2.5 py-2.5 rounded-xl shadow-xl text-sm font-medium z-50 animate-fade-in flex items-center gap-3">
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-5 left-1/2 -translate-x-1/2 bg-gray-900 text-white pl-5 pr-2.5 py-2.5 rounded-xl shadow-xl text-sm font-medium z-50 animate-fade-in flex items-center gap-3"
+        >
           <span>{toast.message}</span>
           {toast.undo && (
             <button
