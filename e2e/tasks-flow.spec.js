@@ -114,4 +114,29 @@ test.describe('KanDOne task flows', () => {
     await goToBoardTab(page);
     await expect(page.getByText('Delete Me')).toHaveCount(0);
   });
+
+  test('past due date is flagged as overdue on the board', async ({ page }) => {
+    await page.getByRole('button', { name: /Add Task/i }).click();
+    await fillLabeledInput(page, /Task Name/i, 'Late report');
+    await page.locator('input[type="date"]').first().fill('2020-01-15');
+    await saveForm(page);
+
+    await goToBoardTab(page);
+    const card = page.locator('[draggable="true"]').filter({ hasText: 'Late report' });
+    await expect(card.getByText('· Overdue')).toBeVisible();
+  });
+
+  test('undo restores a deleted task', async ({ page }) => {
+    await page.getByRole('button', { name: /Add Task/i }).click();
+    await fillLabeledInput(page, /Task Name/i, 'Undo Me');
+    await saveForm(page);
+
+    await goToListTab(page);
+    await selectListTask(page, 'Undo Me');
+    acceptNextDialog(page);
+    await page.getByRole('button', { name: /Edit Details/i }).locator('xpath=..').getByRole('button').last().click();
+    await expect(page.getByText('Task deleted.')).toBeVisible();
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect(page.getByText('Undo Me')).toBeVisible();
+  });
 });

@@ -5,13 +5,13 @@ import { useTranslation } from 'react-i18next';
 const TYPE_STYLES = {
   task: {
     bg: 'bg-green-500',
-    light: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+    light: 'bg-green-100 text-green-800',
     border: 'border-green-300',
     icon: CheckSquare,
   },
   step: {
     bg: 'bg-blue-500',
-    light: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+    light: 'bg-blue-100 text-blue-800',
     border: 'border-blue-300',
     icon: ListChecks,
   },
@@ -138,7 +138,7 @@ export default function CalendarView({ events = [], onEventClick, isRTL = false,
         {/* Day names */}
         <div className="grid grid-cols-7 mb-1">
           {dayNames.map(name => (
-            <div key={name} className="text-center text-xs font-medium text-gray-500 dark:text-gray-400 py-1">
+            <div key={name} className="text-center text-xs font-medium text-gray-500 py-1">
               {name}
             </div>
           ))}
@@ -212,20 +212,20 @@ export default function CalendarView({ events = [], onEventClick, isRTL = false,
         <div className="bg-white rounded-lg border border-gray-300 text-gray-900 h-full [color-scheme:light]">
           {selectedDay ? (
             <>
-              <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between p-3 border-b border-gray-200">
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-gray-500" />
-                  <span className="font-medium text-sm text-gray-900 dark:text-white">
+                  <span className="font-medium text-sm text-gray-900">
                     {new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(selectedDay + 'T00:00:00'))}
                   </span>
                 </div>
-                <button onClick={() => setSelectedDay(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                <button onClick={() => setSelectedDay(null)} className="text-gray-400 hover:text-gray-600">
                   <X className="w-4 h-4" />
                 </button>
               </div>
               <div className="p-3 space-y-2 overflow-y-auto max-h-[500px]">
                 {selectedEvents.length === 0 ? (
-                  <p className="text-sm text-gray-500 dark:text-gray-400">{t('calendar.noEvents')}</p>
+                  <p className="text-sm text-gray-500">{t('calendar.noEvents')}</p>
                 ) : (
                   selectedEvents.map((ev, i) => {
                     const style = TYPE_STYLES[ev.type] || TYPE_STYLES.task;
@@ -248,7 +248,7 @@ export default function CalendarView({ events = [], onEventClick, isRTL = false,
               </div>
             </>
           ) : (
-            <div className="flex flex-col items-center justify-center h-40 text-gray-400 dark:text-gray-500 p-4 text-center">
+            <div className="flex flex-col items-center justify-center h-40 text-gray-400 p-4 text-center">
               <Calendar className="w-8 h-8 mb-2" />
               <p className="text-sm">{t('calendar.selectDay')}</p>
             </div>

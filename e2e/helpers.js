@@ -42,6 +42,10 @@ export async function goToListTab(page) {
   await page.getByRole('button', { name: /List & Edit/i }).click();
 }
 
+export async function goToCalendarTab(page) {
+  await page.getByRole('button', { name: /^Calendar$/i }).click();
+}
+
 export async function selectListTask(page, name) {
   await page.locator('button').filter({ has: page.locator('p', { hasText: name }) }).first().click();
 }

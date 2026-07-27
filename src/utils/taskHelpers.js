@@ -1,5 +1,6 @@
 import { DEFAULT_ROUTINE, parseDateOnly } from './recurrence';
-import { DEFAULT_REMINDER } from './reminders';
+import { DEFAULT_REMINDER, getTaskDueDateTime } from './reminders';
+import { TASKS_TERMINAL_STATUSES } from '../statuses';
 
 export const DURATION_UNITS = ['minute', 'hour', 'day', 'month'];
 
@@ -45,6 +46,18 @@ export const getProgress = (task) => {
 export const getNextPendingStep = (task) => {
   const steps = Array.isArray(task.steps) ? task.steps : [];
   return steps.find(s => s.status !== 'done' && s.status !== 'blocked') || null;
+};
+
+/**
+ * A task is overdue when it has a due date/time in the past and hasn't
+ * reached a terminal status (completed/cancelled) — nothing in the app
+ * currently flags this on the board, list, or detail views.
+ */
+export const isTaskOverdue = (task, now = new Date()) => {
+  if (!task?.dueDate) return false;
+  if (TASKS_TERMINAL_STATUSES.includes(task.status)) return false;
+  const dueAt = getTaskDueDateTime(task);
+  return Boolean(dueAt) && dueAt.getTime() < now.getTime();
 };
 
 /** Update a task in place by id, or prepend it as new if its id isn't present. */
