@@ -491,7 +491,10 @@
       "saved": "Tâche enregistrée !",
       "deleted": "Tâche supprimée.",
       "exported": "Fichier de sauvegarde téléchargé !",
-      "imported": "Fichier chargé avec succès !"
+      "imported": "Fichier chargé avec succès !",
+      "undo": "Annuler",
+      "labelDeleted": "Étiquette supprimée.",
+      "stepDeleted": "Étape supprimée."
     },
     "alert": {
       "deleteConfirm": "Êtes-vous sûr de vouloir supprimer cette tâche ?",
@@ -504,6 +507,7 @@
       "day": "Jours",
       "month": "Mois"
     },
+    "overdue": "En retard",
     "routine": {
       "daily": "Quotidien",
       "weekly": "Hebdomadaire",

@@ -514,6 +514,7 @@
       "day": "Days",
       "month": "Months"
     },
+    "overdue": "Overdue",
     "detail": {
       "editDetails": "Edit Details",
       "deleteTask": "Delete Task",
@@ -537,7 +538,10 @@
       "saved": "Task saved!",
       "deleted": "Task deleted.",
       "exported": "Backup file downloaded!",
-      "imported": "File loaded successfully!"
+      "imported": "File loaded successfully!",
+      "undo": "Undo",
+      "labelDeleted": "Label deleted.",
+      "stepDeleted": "Step deleted."
     },
     "alert": {
       "deleteConfirm": "Are you sure you want to delete this task?",

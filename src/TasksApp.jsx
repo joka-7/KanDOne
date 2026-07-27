@@ -44,7 +44,7 @@ import {
 import { resolveLabelsOnSignIn, resolveTasksOnSignIn } from './utils/labelSync';
 import {
   safeStr, cycleStepStatus, makeInitialDuration, makeInitialTask,
-  getProgress, getNextPendingStep, formatDate, formatDuration,
+  getProgress, getNextPendingStep, formatDate, formatDuration, isTaskOverdue,
   buildCalendarEvents, buildTimelineEvents, mergeTaskIntoList, DURATION_UNITS,
 } from './utils/taskHelpers';
 
@@ -89,7 +89,7 @@ export default function TasksApp() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [labelFilter, setLabelFilter] = useState('all');
-  const [toastMessage, setToastMessage] = useState('');
+  const [toast, setToast] = useState(null);
   const [reminderPrompt, setReminderPrompt] = useState(null);
   const [isSaved, setIsSaved] = useState(true);
   const [localStorageError, setLocalStorageError] = useState(false);
@@ -114,10 +114,34 @@ export default function TasksApp() {
 
   const dragTaskId = useRef(null);
   const fileInputRef = useRef(null);
+  const toastTimerRef = useRef(null);
+  const toastRef = useRef(null);
 
-  const showToast = useCallback((msg) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(''), 3000);
+  // `undo` is optional: { label, onUndo }. Undo toasts stay up longer since
+  // the user needs a moment to notice and react before the action is lost.
+  const showToast = useCallback((msg, undo) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    const next = { message: msg, undo };
+    toastRef.current = next;
+    setToast(next);
+    toastTimerRef.current = setTimeout(() => {
+      toastRef.current = null;
+      setToast(null);
+    }, undo ? 6000 : 3000);
+  }, []);
+
+  // Run undo outside the setState updater — React may invoke updaters twice
+  // in Strict Mode, which would restore the deleted item twice.
+  const dismissToastAndUndo = useCallback(() => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    const current = toastRef.current;
+    toastRef.current = null;
+    setToast(null);
+    current?.undo?.onUndo();
+  }, []);
+
+  useEffect(() => () => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
   }, []);
 
   useEffect(() => {
@@ -355,10 +379,24 @@ export default function TasksApp() {
 
   const handleDelete = async (id) => {
     if (!window.confirm(tt('alert.deleteConfirm', 'Delete this task?'))) return;
+    const removedIndex = tasks.findIndex(t => t.id === id);
+    const removedTask = tasks[removedIndex];
     await deleteTask(id);
     setSelectedId(null);
     setIsEditing(false);
-    showToast(tt('toast.deleted', 'Task deleted.'));
+    showToast(tt('toast.deleted', 'Task deleted.'), removedTask ? {
+      label: tt('toast.undo', 'Undo'),
+      onUndo: () => {
+        setTasks(prev => {
+          const next = [...prev];
+          next.splice(Math.min(removedIndex, next.length), 0, removedTask);
+          return next;
+        });
+        if (userRef.current) {
+          updateItem(userRef.current.uid, MODE, removedTask).then(clearSyncError).catch(markSyncError);
+        }
+      },
+    } : undefined);
   };
 
   const handleStepStatusToggle = useCallback(async (taskId, stepId) => {
@@ -399,7 +437,22 @@ export default function TasksApp() {
   };
 
   const handleDeleteStep = (stepId) => {
+    const steps = formData.steps || [];
+    const removedIndex = steps.findIndex(s => s.id === stepId);
+    const removedStep = steps[removedIndex];
     setFormData(prev => ({ ...prev, steps: (prev.steps || []).filter(s => s.id !== stepId) }));
+    if (removedStep) {
+      showToast(tt('toast.stepDeleted', 'Step deleted.'), {
+        label: tt('toast.undo', 'Undo'),
+        onUndo: () => {
+          setFormData(prev => {
+            const nextSteps = [...(prev.steps || [])];
+            nextSteps.splice(Math.min(removedIndex, nextSteps.length), 0, removedStep);
+            return { ...prev, steps: nextSteps };
+          });
+        },
+      });
+    }
   };
 
   const handleCreateLabel = useCallback((text) => {
@@ -416,8 +469,23 @@ export default function TasksApp() {
   }, []);
 
   const handleDeleteLabel = useCallback((id) => {
+    const labelIndex = labels.findIndex(l => l.id === id);
+    const removedLabel = labels[labelIndex];
+    if (!removedLabel) return;
+    // Snapshot everything the deletion can touch so Undo can restore it
+    // exactly, including labelIds stripped from the currently open form.
+    const previousTasks = tasksRef.current;
+    const previousFormLabelIds = formData.labelIds;
+    const previousFormSteps = formData.steps;
+
     setLabels(prev => prev.filter(l => l.id !== id));
-    setFormData(prev => ({ ...prev, labelIds: (prev.labelIds || []).filter(x => x !== id) }));
+    setFormData(prev => ({
+      ...prev,
+      labelIds: (prev.labelIds || []).filter(x => x !== id),
+      steps: (prev.steps || []).map(s => (Array.isArray(s.labelIds) && s.labelIds.includes(id)
+        ? { ...s, labelIds: s.labelIds.filter(x => x !== id) }
+        : s)),
+    }));
     setTasks(prev => {
       const changed = [];
       const updated = prev.map(task => {
@@ -444,7 +512,23 @@ export default function TasksApp() {
       }
       return updated;
     });
-  }, [clearSyncError, markSyncError]);
+
+    showToast(tt('toast.labelDeleted', 'Label deleted.'), {
+      label: tt('toast.undo', 'Undo'),
+      onUndo: () => {
+        setLabels(prev => {
+          const next = [...prev];
+          next.splice(Math.min(labelIndex, next.length), 0, removedLabel);
+          return next;
+        });
+        setFormData(prev => ({ ...prev, labelIds: previousFormLabelIds, steps: previousFormSteps }));
+        setTasks(previousTasks);
+        if (userRef.current) {
+          batchSaveItems(userRef.current.uid, MODE, previousTasks).then(clearSyncError).catch(markSyncError);
+        }
+      },
+    });
+  }, [labels, formData, clearSyncError, markSyncError, showToast, tt]);
 
   const handleTaskLabelToggle = useCallback((id) => {
     setFormData(prev => {
@@ -561,6 +645,11 @@ export default function TasksApp() {
   const handleImport = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    // Import fully overwrites tasks (and labels, if the file has them) with
+    // no merge option — snapshot both so an accidental import over real data
+    // can be undone.
+    const previousTasks = tasksRef.current;
+    const previousLabels = labels;
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
@@ -591,7 +680,16 @@ export default function TasksApp() {
             .catch(markSyncError);
         }
         if (rawLabels !== null) setLabels(sanitizeTaskLabels(rawLabels));
-        showToast(tt('toast.imported', 'File loaded!'));
+        showToast(tt('toast.imported', 'File loaded!'), {
+          label: tt('toast.undo', 'Undo'),
+          onUndo: () => {
+            saveTasks(previousTasks);
+            setLabels(previousLabels);
+            if (userRef.current) {
+              saveTaskLabels(userRef.current.uid, previousLabels).then(clearSyncError).catch(markSyncError);
+            }
+          },
+        });
       } catch {
         alert(tt('alert.importError', 'Error importing file.'));
       }
@@ -773,6 +871,7 @@ Rules:
                   {columnTasks.map(task => {
                     const prog = getProgress(task);
                     const next = getNextPendingStep(task);
+                    const overdue = isTaskOverdue(task);
                     return (
                       <div
                         key={task.id}
@@ -780,7 +879,7 @@ Rules:
                         onDragStart={() => handleDragStart(task.id)}
                         onClick={() => navigateTo('list', task.id)}
                         style={task.cardColor ? { backgroundColor: task.cardColor } : undefined}
-                        className={`${task.cardColor ? '' : 'bg-white'} border border-gray-200 rounded-xl p-2.5 sm:p-3 cursor-pointer hover:shadow-md hover:border-emerald-300 active:bg-emerald-50/50 transition-all group`}
+                        className={`${task.cardColor ? '' : 'bg-white'} border rounded-xl p-2.5 sm:p-3 cursor-pointer hover:shadow-md hover:border-emerald-300 active:bg-emerald-50/50 transition-all group ${overdue ? 'border-red-300' : 'border-gray-200'}`}
                       >
                         <div className="flex items-start justify-between gap-2 mb-1">
                           <p className="font-semibold text-gray-800 text-xs sm:text-sm leading-snug flex-1">{safeStr(task.name)}</p>
@@ -792,9 +891,10 @@ Rules:
                           </span>
                         )}
                         {task.dueDate && (
-                          <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
-                            <Calendar size={10} />
+                          <div className={`flex items-center gap-1 text-xs mt-1 ${overdue ? 'text-red-600 font-semibold' : 'text-gray-400'}`}>
+                            {overdue ? <AlertCircle size={10} /> : <Calendar size={10} />}
                             {formatDueDateTime(task.dueDate, task.dueTime, lang, formatDate)}
+                            {overdue && <span>· {tt('overdue', 'Overdue')}</span>}
                           </div>
                         )}
                         {(task.routine?.enabled || task.reminder?.enabled) && (
@@ -1215,6 +1315,7 @@ Rules:
     const steps = Array.isArray(task.steps) ? task.steps : [];
     const prog = getProgress(task);
     const statusDef = STATUSES_TASKS.find(s => s.id === task.status);
+    const overdue = isTaskOverdue(task);
 
     return (
       <div className="flex-1 overflow-y-auto p-3 sm:p-5 custom-scrollbar">
@@ -1233,9 +1334,10 @@ Rules:
                 </span>
               )}
               {task.dueDate && (
-                <span className="flex items-center gap-1 text-xs text-gray-500">
-                  <Calendar size={11} />
+                <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${overdue ? 'text-red-700 bg-red-50 font-bold' : 'text-gray-500'}`}>
+                  {overdue ? <AlertCircle size={11} /> : <Calendar size={11} />}
                   {formatDueDateTime(task.dueDate, task.dueTime, lang, formatDate)}
+                  {overdue && ` · ${tt('overdue', 'Overdue')}`}
                 </span>
               )}
               {task.routine?.enabled && (
@@ -1393,6 +1495,7 @@ Rules:
                   const prog = getProgress(task);
                   const statusDef = STATUSES_TASKS.find(s => s.id === task.status);
                   const isSelected = selectedId === task.id;
+                  const overdue = isTaskOverdue(task);
                   return (
                     <button
                       key={task.id}
@@ -1405,6 +1508,12 @@ Rules:
                         {statusDef && (
                           <span className={`text-xs px-1.5 py-0.5 rounded border font-medium ${statusDef.color}`}>
                             {tt(`status.${task.status}`, task.status)}
+                          </span>
+                        )}
+                        {overdue && (
+                          <span className="flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded border font-medium text-red-700 bg-red-50 border-red-200">
+                            <AlertCircle size={10} />
+                            {tt('overdue', 'Overdue')}
                           </span>
                         )}
                         {prog && (
@@ -1879,9 +1988,18 @@ Rules:
       </div>
 
       {/* Toast */}
-      {toastMessage && (
-        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-5 py-2.5 rounded-xl shadow-xl text-sm font-medium z-50 animate-fade-in">
-          {toastMessage}
+      {toast && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 bg-gray-900 text-white pl-5 pr-2.5 py-2.5 rounded-xl shadow-xl text-sm font-medium z-50 animate-fade-in flex items-center gap-3">
+          <span>{toast.message}</span>
+          {toast.undo && (
+            <button
+              type="button"
+              onClick={dismissToastAndUndo}
+              className="px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 font-bold text-emerald-300 transition-colors shrink-0"
+            >
+              {toast.undo.label}
+            </button>
+          )}
         </div>
       )}
 
