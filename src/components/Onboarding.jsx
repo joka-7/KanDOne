@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { X, Layout, List, BarChart2, Lightbulb, ChevronRight, ChevronLeft, CheckCircle2, Clock, Calendar, Cloud, Timer, Tag, Palette, Repeat, Bell } from 'lucide-react';
 import AppBrandMark from './AppBrandMark';
 import { STORAGE_KEYS } from '../storageKeys.js';

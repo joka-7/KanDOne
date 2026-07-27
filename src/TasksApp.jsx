@@ -1,9 +1,9 @@
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Plus, Search, Download, Upload, Layout, List, BarChart2, Activity,
   Trash2, Edit2, ArrowLeft, ArrowRight, CheckCircle2, CheckCircle, Circle,
-  Clock, AlertCircle, ChevronDown, Calendar, Cloud, CloudOff, RefreshCw,
+  Clock, AlertCircle, Calendar, Cloud, CloudOff, RefreshCw,
   ClipboardList, X, GripVertical, Languages, MoreVertical, Settings, Smartphone, Sparkles,
   Timer, Repeat, Bell,
 } from 'lucide-react';
@@ -15,7 +15,7 @@ import {
 import ChatModal from './components/ChatModal';
 import {
   signInWithGoogle, signOut, onAuthChange, loadAllItems, formatSignInError,
-  updateItem, deleteItem, batchSaveItems, loadUserProfile, saveUserProfile,
+  updateItem, deleteItem, batchSaveItems, saveUserProfile,
   loadTaskLabels, saveTaskLabels,
 } from './firebase';
 import { getStorageKey, STATUSES_TASKS, filterItemsForMode } from './statuses';
@@ -879,7 +879,6 @@ Rules:
                     </div>
                   )}
                   {columnTasks.map(task => {
-                    const prog = getProgress(task);
                     const next = getNextPendingStep(task);
                     const overdue = isTaskOverdue(task);
                     return (

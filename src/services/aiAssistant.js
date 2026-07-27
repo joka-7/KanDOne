@@ -1,5 +1,4 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { delimUserField } from '../utils/promptSafety';
 
 export const PROVIDERS = {
   gemini: {
@@ -164,7 +163,7 @@ function validateOllamaUrl(url) {
     }
     return parsed.origin;
   } catch (err) {
-    throw new Error(`Invalid Ollama URL: ${err.message}`);
+    throw new Error(`Invalid Ollama URL: ${err.message}`, { cause: err });
   }
 }
 
