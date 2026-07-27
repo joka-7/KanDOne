@@ -4,7 +4,7 @@ import {
   Plus, Search, Download, Upload, Layout, List, BarChart2, Activity,
   Trash2, Edit2, ArrowLeft, ArrowRight, CheckCircle2, CheckCircle, Circle,
   Clock, AlertCircle, ChevronDown, Calendar, Cloud, CloudOff, RefreshCw,
-  ClipboardList, X, GripVertical, Languages, MoreVertical, Settings, Smartphone, Sparkles,
+  ClipboardList, X, Languages, MoreVertical, Settings, Smartphone, Sparkles,
   Timer, Repeat, Bell,
 } from 'lucide-react';
 import { initAI, getGoalsTasksSystemPrompt } from './services/aiAssistant';
@@ -25,6 +25,7 @@ import APIKeySettings from './components/APIKeySettings';
 import { usePwaInstall } from './usePwaInstall';
 import AppBrandMark from './components/AppBrandMark';
 import Onboarding from './components/Onboarding';
+import KanbanBoard from './components/KanbanBoard';
 import { STORAGE_KEYS, TASKS_LABELS_KEY } from './storageKeys.js';
 import {
   sanitizeTaskRecords, parseTaskStoragePayload, generateId,
@@ -42,6 +43,9 @@ import {
   snoozeTaskReminder, isReminderSnoozed, SNOOZE_MINUTES,
 } from './utils/reminders';
 import { resolveLabelsOnSignIn, resolveTasksOnSignIn } from './utils/labelSync';
+import {
+  applyBoardDrag, ensureBoardOrders, nextBoardOrder, sanitizeBoardOrder,
+} from './utils/boardOrder';
 import {
   safeStr, cycleStepStatus, makeInitialDuration, makeInitialTask,
   getProgress, getNextPendingStep, formatDate, formatDuration, isTaskOverdue,
@@ -84,7 +88,7 @@ export default function TasksApp() {
 
   const [tasks, setTasks] = useState(() => {
     const sanitized = parseTaskStoragePayload(localStorage.getItem(getStorageKey(MODE)));
-    return filterItemsForMode(sanitized, MODE);
+    return ensureBoardOrders(filterItemsForMode(sanitized, MODE));
   });
   const [labels, setLabels] = useState(
     () => parseTaskLabelsStoragePayload(localStorage.getItem(TASKS_LABELS_KEY)),
@@ -120,7 +124,6 @@ export default function TasksApp() {
   );
   const { canInstall, runInstall } = usePwaInstall();
 
-  const dragTaskId = useRef(null);
   const fileInputRef = useRef(null);
   const toastTimerRef = useRef(null);
   const toastRef = useRef(null);
@@ -221,9 +224,9 @@ export default function TasksApp() {
           // silently leaving them with zero cloud backup.
           const { tasks: mergedTasks, pushToCloud: pushTasksToCloud } =
             resolveTasksOnSignIn(tasksRef.current, data);
-          setTasks(mergedTasks);
+          setTasks(ensureBoardOrders(mergedTasks));
           if (pushTasksToCloud && mergedTasks.length > 0) {
-            await batchSaveItems(firebaseUser.uid, MODE, mergedTasks);
+            await batchSaveItems(firebaseUser.uid, MODE, ensureBoardOrders(mergedTasks));
           }
           const localLabels = parseTaskLabelsStoragePayload(localStorage.getItem(TASKS_LABELS_KEY));
           const { labels: mergedLabels, pushToCloud } = resolveLabelsOnSignIn(localLabels, cloudLabels);
@@ -253,7 +256,7 @@ export default function TasksApp() {
         setSyncing(true);
         try {
           const data = await loadAllItems(firebaseUser.uid, MODE);
-          if (data && data.length > 0) setTasks(filterItemsForMode(data, MODE));
+          if (data && data.length > 0) setTasks(ensureBoardOrders(filterItemsForMode(data, MODE)));
           clearSyncError();
         } catch (e) { markSyncError(e); }
         setSyncing(false);
@@ -301,7 +304,7 @@ export default function TasksApp() {
         loadAllItems(user.uid, MODE),
         loadTaskLabels(user.uid),
       ]);
-      if (data && data.length > 0) setTasks(filterItemsForMode(data, MODE));
+      if (data && data.length > 0) setTasks(ensureBoardOrders(filterItemsForMode(data, MODE)));
       if (Array.isArray(cloudLabels)) {
         setLabels(sanitizeTaskLabels(cloudLabels));
       }
@@ -373,9 +376,16 @@ export default function TasksApp() {
         id: formData.id || generateId(),
         name: safeStr(formData.name).trim(),
       };
-      const task = rawTask.status === 'completed'
+      const withStatus = rawTask.status === 'completed'
         ? applyTaskStatusChange(rawTask, 'completed')
         : rawTask;
+      const existing = tasks.find((t) => t.id === withStatus.id);
+      const statusChanged = existing && existing.status !== withStatus.status;
+      const peers = tasks.filter((t) => t.status === withStatus.status && t.id !== withStatus.id);
+      const boardOrder = (!existing || statusChanged)
+        ? nextBoardOrder(peers)
+        : (sanitizeBoardOrder(existing.boardOrder) ?? nextBoardOrder(peers));
+      const task = { ...withStatus, boardOrder };
       await saveTask(task);
       setSelectedId(task.id);
       setIsEditing(false);
@@ -562,20 +572,29 @@ export default function TasksApp() {
     }));
   }, []);
 
-  const handleDragStart = (taskId) => { dragTaskId.current = taskId; };
-  const handleDragOver = (e) => { e.preventDefault(); };
-  const handleDrop = (statusId) => {
-    const id = dragTaskId.current;
-    if (!id) return;
-    setTasks(prev => {
-      const updated = prev.map(t => (t.id === id ? applyTaskStatusChange(t, statusId) : t));
-      const task = updated.find(t => t.id === id);
-      if (task && user) updateItem(user.uid, MODE, task).then(clearSyncError).catch(markSyncError);
-      return updated;
+  const handleBoardDragEnd = useCallback(({ activeId, overId, toStatus }) => {
+    const prev = tasksRef.current;
+    const { tasks: next, changed } = applyBoardDrag(prev, {
+      activeId,
+      overId,
+      toStatus,
+      applyStatusChange: applyTaskStatusChange,
     });
-    dragTaskId.current = null;
+    if (!changed) return;
+    setTasks(next);
+    const changedTasks = next.filter((task) => {
+      const old = prev.find((p) => p.id === task.id);
+      return !old || old.status !== task.status || old.boardOrder !== task.boardOrder;
+    });
+    const uid = userRef.current?.uid;
+    if (uid && changedTasks.length > 0) {
+      const persist = changedTasks.length === 1
+        ? updateItem(uid, MODE, changedTasks[0])
+        : batchSaveItems(uid, MODE, changedTasks);
+      persist.then(clearSyncError).catch(markSyncError);
+    }
     showToast(tt('toast.saved', 'Saved!'));
-  };
+  }, [clearSyncError, markSyncError, showToast, tt]);
 
   const handleReminderEnable = useCallback(async () => {
     const result = await requestReminderPermission();
@@ -674,7 +693,7 @@ export default function TasksApp() {
         }
         const sanitized = sanitizeTaskRecords(rawTasks);
         if (sanitized.length === 0) throw new Error('empty');
-        const nextTasks = filterItemsForMode(sanitized, MODE);
+        const nextTasks = ensureBoardOrders(filterItemsForMode(sanitized, MODE));
         // Import already fully replaces the local task list (no merge option
         // is offered) — bring the cloud copy to the same state, or restoring
         // an older backup would leave tasks it doesn't mention resurrected on
@@ -820,132 +839,59 @@ Rules:
     );
   };
 
-  const renderBoard = () => (
-    <div className="flex-1 overflow-y-auto overflow-x-hidden sm:overflow-x-auto sm:overflow-y-hidden p-3 sm:p-4 bg-slate-50 min-h-0 flex flex-col sm:flex-row gap-3 sm:gap-4">
-      {tasks.length === 0 ? (
-        <div className="flex items-center justify-center flex-1 min-h-[200px]">
-          <div className="text-center max-w-sm px-4">
-            <div className="mx-auto mb-4 w-14 h-14 flex items-center justify-center">
-              <AppBrandMark size={56} />
-            </div>
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-700 mb-2">{tt('board.emptyTitle', 'Welcome to KanDOne')}</h2>
-            <p className="text-sm text-gray-500 mb-6">{tt('board.emptyDesc', 'Add your first task to get started.')}</p>
-            <button
-              onClick={openNewForm}
-              className="bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-emerald-800 transition-colors mb-3"
-            >
-              {tt('board.addFirstButton', 'Add your first task')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowTasksWelcome(true)}
-              className="text-sm text-emerald-700 hover:text-emerald-900 font-medium"
-            >
-              💡 {tt('board.viewTutorial', 'View welcome')}
-            </button>
-          </div>
-        </div>
-      ) : filteredTasks.length === 0 ? (
-        <div className="flex items-center justify-center flex-1 min-h-[200px]">
-          <div className="text-center max-w-sm px-4">
-            <p className="text-sm text-gray-500">{tt('board.noResults', 'No tasks match your filters.')}</p>
-          </div>
-        </div>
-      ) : (
-        <>
-          {STATUSES_TASKS.map(status => {
-            const columnTasks = filteredTasks.filter(t => t.status === status.id);
-            return (
-              <div
-                key={status.id}
-                role="region"
-                aria-label={tt(`status.${status.id}`, status.id)}
-                className="board-column w-full sm:w-72 sm:flex-shrink-0 flex flex-col sm:h-full bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden"
-                onDragOver={handleDragOver}
-                onDrop={() => handleDrop(status.id)}
-              >
-                <div className="px-3 sm:px-4 py-2.5 sm:py-3 border-b border-gray-100 flex items-center justify-between shrink-0">
-                  <div className="flex items-center gap-2">
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold border ${status.color}`}>
-                      {tt(`status.${status.id}`, status.id)}
-                    </span>
-                    <span className="text-gray-400 text-xs sm:text-sm font-medium">{columnTasks.length}</span>
-                  </div>
-                </div>
-                <div className="p-2 sm:p-3 space-y-2 sm:space-y-3 sm:flex-1 sm:overflow-y-auto sm:custom-scrollbar sm:min-h-[80px]">
-                  {columnTasks.length === 0 && (
-                    <div className="text-center text-xs text-gray-300 italic py-4">
-                      {tt('board.emptyColumn', 'Drop a task here')}
-                    </div>
-                  )}
-                  {columnTasks.map(task => {
-                    const prog = getProgress(task);
-                    const next = getNextPendingStep(task);
-                    const overdue = isTaskOverdue(task);
-                    return (
-                      <div
-                        key={task.id}
-                        draggable
-                        onDragStart={() => handleDragStart(task.id)}
-                        onClick={() => navigateTo('list', task.id)}
-                        style={task.cardColor ? { backgroundColor: task.cardColor } : undefined}
-                        className={`${task.cardColor ? '' : 'bg-white'} border rounded-xl p-2.5 sm:p-3 cursor-pointer hover:shadow-md hover:border-emerald-300 active:bg-emerald-50/50 transition-all group ${overdue ? 'border-red-300' : 'border-gray-200'}`}
-                      >
-                        <div className="flex items-start justify-between gap-2 mb-1">
-                          <p className="font-semibold text-gray-800 text-xs sm:text-sm leading-snug flex-1">{safeStr(task.name)}</p>
-                          <GripVertical size={14} className="text-gray-300 shrink-0 mt-0.5 group-hover:text-gray-400 hidden sm:block" />
-                        </div>
-                        {task.priority && (
-                          <span className={`inline-block text-xs px-1.5 py-0.5 rounded border font-medium ${PRIORITY_COLORS[task.priority]}`}>
-                            {t(`priority.${task.priority}`, task.priority)}
-                          </span>
-                        )}
-                        {task.dueDate && (
-                          <div className={`flex items-center gap-1 text-xs mt-1 ${overdue ? 'text-red-600 font-semibold' : 'text-gray-400'}`}>
-                            {overdue ? <AlertCircle size={10} /> : <Calendar size={10} />}
-                            {formatDueDateTime(task.dueDate, task.dueTime, lang, formatDate)}
-                            {overdue && <span>· {tt('overdue', 'Overdue')}</span>}
-                          </div>
-                        )}
-                        {(task.routine?.enabled || task.reminder?.enabled) && (
-                          <div className="flex items-center gap-2 mt-1">
-                            {task.routine?.enabled && (
-                              <Repeat size={10} className="text-violet-500" aria-label={tt('routine.badge', 'Routine')} />
-                            )}
-                            {task.reminder?.enabled && (
-                              <Bell size={10} className="text-amber-500" aria-label={tt('reminder.badge', 'Reminder')} />
-                            )}
-                          </div>
-                        )}
-                        {formatDuration(task.duration, tt) && (
-                          <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
-                            <Timer size={10} />
-                            {formatDuration(task.duration, tt)}
-                          </div>
-                        )}
-                        {(task.labelIds || []).length > 0 && (
-                          <div className="mt-1.5">
-                            <LabelChipsReadOnly labels={labels} labelIds={task.labelIds} />
-                          </div>
-                        )}
-                        {renderProgressBar(task)}
-                        {next && (
-                          <div className="mt-2 text-xs text-gray-500 truncate">
-                            <span className="text-gray-400">{tt('detail.nextStep', 'Next')}: </span>
-                            {safeStr(next.title)}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+  const renderBoard = () => {
+    if (tasks.length === 0) {
+      return (
+        <div className="flex-1 overflow-y-auto p-3 sm:p-4 bg-slate-50 min-h-0 flex flex-col">
+          <div className="flex items-center justify-center flex-1 min-h-[200px]">
+            <div className="text-center max-w-sm px-4">
+              <div className="mx-auto mb-4 w-14 h-14 flex items-center justify-center">
+                <AppBrandMark size={56} />
               </div>
-            );
-          })}
-        </>
-      )}
-    </div>
-  );
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-700 mb-2">{tt('board.emptyTitle', 'Welcome to KanDOne')}</h2>
+              <p className="text-sm text-gray-500 mb-6">{tt('board.emptyDesc', 'Add your first task to get started.')}</p>
+              <button
+                onClick={openNewForm}
+                className="bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-emerald-800 transition-colors mb-3"
+              >
+                {tt('board.addFirstButton', 'Add your first task')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowTasksWelcome(true)}
+                className="text-sm text-emerald-700 hover:text-emerald-900 font-medium"
+              >
+                💡 {tt('board.viewTutorial', 'View welcome')}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    if (filteredTasks.length === 0) {
+      return (
+        <div className="flex-1 overflow-y-auto p-3 sm:p-4 bg-slate-50 min-h-0 flex flex-col">
+          <div className="flex items-center justify-center flex-1 min-h-[200px]">
+            <div className="text-center max-w-sm px-4">
+              <p className="text-sm text-gray-500">{tt('board.noResults', 'No tasks match your filters.')}</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <KanbanBoard
+        tasks={filteredTasks}
+        labels={labels}
+        lang={lang}
+        t={t}
+        tt={tt}
+        onOpenTask={(id) => navigateTo('list', id)}
+        onBoardDragEnd={handleBoardDragEnd}
+        renderProgressBar={renderProgressBar}
+      />
+    );
+  };
 
   const renderStepRow = (step, editable, taskId, taskDueDate) => {
     const cfg = STEP_STATUS_CONFIG[step.status] || STEP_STATUS_CONFIG.todo;
