@@ -60,8 +60,6 @@
     "noEvents": "No events on this day.",
     "selectDay": "Click a day to see events",
     "type": {
-      "interview": "Interview",
-      "assignment": "Assignment",
       "task": "Task",
       "step": "Step"
     }

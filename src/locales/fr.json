@@ -60,8 +60,6 @@
     "noEvents": "Aucun événement ce jour.",
     "selectDay": "Cliquez sur un jour pour voir les événements",
     "type": {
-      "interview": "Entretien",
-      "assignment": "Exercice",
       "task": "Tâche",
       "step": "Étape"
     }

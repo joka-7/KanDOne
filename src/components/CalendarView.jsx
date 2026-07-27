@@ -1,20 +1,8 @@
 import { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Briefcase, BookOpen, CheckSquare, ListChecks, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, CheckSquare, ListChecks, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 const TYPE_STYLES = {
-  interview: {
-    bg: 'bg-blue-500',
-    light: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-    border: 'border-blue-300',
-    icon: Briefcase,
-  },
-  assignment: {
-    bg: 'bg-orange-500',
-    light: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-    border: 'border-orange-300',
-    icon: BookOpen,
-  },
   task: {
     bg: 'bg-green-500',
     light: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
@@ -36,7 +24,7 @@ function toLocalDateStr(date) {
   return `${y}-${m}-${d}`;
 }
 
-const DEFAULT_LEGEND_TYPES = ['interview', 'assignment', 'task'];
+const DEFAULT_LEGEND_TYPES = ['task', 'step'];
 
 export default function CalendarView({ events = [], onEventClick, isRTL = false, legendTypes }) {
   const { t, i18n } = useTranslation();
