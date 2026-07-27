@@ -36,23 +36,21 @@ import LabelPicker, { LabelChipsReadOnly } from './components/LabelPicker';
 import CardColorPicker from './components/CardColorPicker';
 import RoutineReminderFields from './components/RoutineReminderFields';
 import { LABEL_COLOR_PALETTE, readableTextColor } from './utils/labelColors';
-import { applyTaskStatusChange, DEFAULT_ROUTINE, parseDateOnly } from './utils/recurrence';
+import { applyTaskStatusChange } from './utils/recurrence';
 import {
   buildReminderKey, formatDueDateTime, requestReminderPermission, shouldNotifyTask,
-  snoozeTaskReminder, isReminderSnoozed, SNOOZE_MINUTES, DEFAULT_REMINDER,
+  snoozeTaskReminder, isReminderSnoozed, SNOOZE_MINUTES,
 } from './utils/reminders';
 import { resolveLabelsOnSignIn, resolveTasksOnSignIn } from './utils/labelSync';
+import {
+  safeStr, cycleStepStatus, makeInitialDuration, makeInitialTask,
+  getProgress, getNextPendingStep, formatDate, formatDuration,
+  buildCalendarEvents, buildTimelineEvents, mergeTaskIntoList, DURATION_UNITS,
+} from './utils/taskHelpers';
 
 const TASKS_LABELS_KEY = 'tasksLabelsV1';
-const DURATION_UNITS = ['minute', 'hour', 'day', 'month'];
 
 const MODE = 'tasks';
-
-const safeStr = (v) => {
-  if (v === null || v === undefined) return '';
-  if (typeof v === 'string') return v;
-  return String(v);
-};
 
 const PRIORITY_COLORS = {
   high: 'bg-red-100 text-red-700 border-red-200',
@@ -65,74 +63,6 @@ const STEP_STATUS_CONFIG = {
   in_progress: { icon: Clock, color: 'text-blue-500', bg: 'bg-blue-50', label: 'in_progress' },
   done: { icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-50', label: 'done' },
   blocked: { icon: AlertCircle, color: 'text-red-500', bg: 'bg-red-50', label: 'blocked' },
-};
-
-const STEP_STATUS_CYCLE = ['todo', 'in_progress', 'done', 'blocked'];
-
-const cycleStepStatus = (current) => {
-  const idx = STEP_STATUS_CYCLE.indexOf(current);
-  return STEP_STATUS_CYCLE[(idx + 1) % STEP_STATUS_CYCLE.length];
-};
-
-const makeInitialDuration = () => ({ value: '', unit: 'hour' });
-
-const makeInitialTask = () => ({
-  name: '',
-  description: '',
-  status: 'active',
-  priority: 'medium',
-  dueDate: '',
-  dueTime: '',
-  duration: makeInitialDuration(),
-  labelIds: [],
-  cardColor: '',
-  routine: { ...DEFAULT_ROUTINE },
-  reminder: { ...DEFAULT_REMINDER },
-  lastReminderKey: '',
-  steps: [],
-  notes: '',
-});
-
-const getProgress = (task) => {
-  const steps = Array.isArray(task.steps) ? task.steps : [];
-  if (steps.length === 0) return null;
-  const done = steps.filter(s => s.status === 'done').length;
-  return { done, total: steps.length };
-};
-
-const getNextPendingStep = (task) => {
-  const steps = Array.isArray(task.steps) ? task.steps : [];
-  return steps.find(s => s.status !== 'done' && s.status !== 'blocked') || null;
-};
-
-const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-const formatDate = (dateStr, lang) => {
-  if (!dateStr) return '';
-  try {
-    // Date-only strings must parse as local time, not UTC — new Date('2026-07-16')
-    // parses as UTC midnight, which renders as the previous day west of UTC.
-    const d = DATE_ONLY_RE.test(dateStr) ? parseDateOnly(dateStr) : new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
-    return new Intl.DateTimeFormat(lang === 'he' ? 'he-IL' : lang === 'fr' ? 'fr-FR' : 'en-US', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-    }).format(d);
-  } catch { return dateStr; }
-};
-
-const formatDuration = (duration, tt) => {
-  const value = safeStr(duration?.value).trim();
-  if (!value) return null;
-  const unit = DURATION_UNITS.includes(duration?.unit) ? duration.unit : 'hour';
-  return `${value} ${tt(`duration.${unit}`, unit)}`;
-};
-
-const getAvatarColor = (name) => {
-  const s = safeStr(name);
-  if (!s) return 'bg-gray-500';
-  const colors = ['bg-emerald-500', 'bg-teal-500', 'bg-cyan-500', 'bg-green-500', 'bg-lime-600', 'bg-indigo-500', 'bg-violet-500'];
-  const idx = s.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-  return colors[idx % colors.length];
 };
 
 export default function TasksApp() {
@@ -314,10 +244,7 @@ export default function TasksApp() {
   }, [user, clearSyncError, markSyncError]);
 
   const saveTask = useCallback(async (task) => {
-    setTasks(prev => {
-      const exists = prev.find(t => t.id === task.id);
-      return exists ? prev.map(t => t.id === task.id ? task : t) : [task, ...prev];
-    });
+    setTasks(prev => mergeTaskIntoList(prev, task));
     if (user) {
       try {
         await updateItem(user.uid, MODE, task);
@@ -751,61 +678,9 @@ Rules:
     return { total, active, completed, totalSteps, doneSteps, byStatus, byLabel };
   }, [tasks, labels]);
 
-  const calendarEvents = useMemo(() => {
-    const events = [];
-    tasks.forEach(task => {
-      const taskName = safeStr(task.name) || 'Untitled';
-      if (task.dueDate) {
-        events.push({
-          date: task.dueDate,
-          title: taskName,
-          type: 'task',
-          parentId: task.id,
-        });
-      }
-      (task.steps || []).forEach(step => {
-        if (!step.dueDate) return;
-        const stepTitle = safeStr(step.title);
-        events.push({
-          date: step.dueDate,
-          title: stepTitle ? `${taskName} – ${stepTitle}` : taskName,
-          type: 'step',
-          parentId: task.id,
-        });
-      });
-    });
-    return events;
-  }, [tasks]);
+  const calendarEvents = useMemo(() => buildCalendarEvents(tasks), [tasks]);
 
-  const timelineEvents = useMemo(() => {
-    const events = [];
-    tasks.forEach(task => {
-      if (task.dueDate) {
-        events.push({
-          date: task.dueDate,
-          taskName: safeStr(task.name),
-          status: task.status,
-          notes: safeStr(task.notes),
-          parentId: task.id,
-          isStep: false,
-        });
-      }
-      (task.steps || []).forEach(step => {
-        if (!step.dueDate) return;
-        const overdue = task.dueDate && new Date(step.dueDate) > new Date(task.dueDate);
-        events.push({
-          date: step.dueDate,
-          taskName: safeStr(task.name),
-          stepTitle: safeStr(step.title),
-          stepStatus: step.status,
-          parentId: task.id,
-          isStep: true,
-          overdue,
-        });
-      });
-    });
-    return events.sort((a, b) => new Date(safeStr(a.date)) - new Date(safeStr(b.date)));
-  }, [tasks]);
+  const timelineEvents = useMemo(() => buildTimelineEvents(tasks), [tasks]);
 
   const timelineBorder = isRTL ? 'border-r-2 pr-6' : 'border-l-2 pl-6';
   const timelineDot = isRTL ? '-right-[31px]' : '-left-[31px]';

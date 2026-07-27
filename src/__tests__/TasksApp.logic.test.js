@@ -1,37 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-
-// ── helpers mirrored from TasksApp ──────────────────────────────────────────
-
-const STEP_STATUSES = ['todo', 'in_progress', 'done', 'blocked'];
-const cycleStepStatus = (s) => {
-  const i = STEP_STATUSES.indexOf(s);
-  return STEP_STATUSES[(i + 1) % STEP_STATUSES.length];
-};
-
-const makeInitialTask = () => ({
-  name: '',
-  description: '',
-  status: 'active',
-  priority: 'medium',
-  dueDate: '',
-  steps: [],
-  notes: '',
-});
-
-const getProgress = (task) => {
-  const steps = Array.isArray(task.steps) ? task.steps : [];
-  if (steps.length === 0) return null;
-  const done = steps.filter(s => s.status === 'done').length;
-  return { done, total: steps.length };
-};
-
-// Simulate saveTask logic (new vs update)
-const applyTaskSave = (tasks, task) => {
-  const exists = tasks.find(t => t.id === task.id);
-  return exists ? tasks.map(t => t.id === task.id ? task : t) : [task, ...tasks];
-};
-
-// ── tests ────────────────────────────────────────────────────────────────────
+import { describe, it, expect } from 'vitest';
+import {
+  cycleStepStatus, makeInitialTask, getProgress, mergeTaskIntoList,
+  buildCalendarEvents, buildTimelineEvents,
+} from '../utils/taskHelpers';
 
 describe('TasksApp – step status cycling', () => {
   it('cycles todo → in_progress → done → blocked → todo', () => {
@@ -71,24 +42,24 @@ describe('TasksApp – progress calculation', () => {
 describe('TasksApp – duplicate save prevention', () => {
   it('does not add duplicate task when saved twice with same id', () => {
     const task = { id: 'abc', name: 'Test', steps: [] };
-    let tasks = applyTaskSave([], task);
-    tasks = applyTaskSave(tasks, task); // second call with same id
+    let tasks = mergeTaskIntoList([], task);
+    tasks = mergeTaskIntoList(tasks, task); // second call with same id
     expect(tasks).toHaveLength(1);
   });
 
   it('prepends new task to list', () => {
     const existing = { id: '1', name: 'Old', steps: [] };
     const newTask = { id: '2', name: 'New', steps: [] };
-    const tasks = applyTaskSave([existing], newTask);
+    const tasks = mergeTaskIntoList([existing], newTask);
     expect(tasks[0].id).toBe('2');
     expect(tasks).toHaveLength(2);
   });
 
   it('updates existing task without adding duplicate', () => {
     const task = { id: '1', name: 'Original', steps: [] };
-    let tasks = applyTaskSave([], task);
+    let tasks = mergeTaskIntoList([], task);
     const updated = { ...task, name: 'Updated' };
-    tasks = applyTaskSave(tasks, updated);
+    tasks = mergeTaskIntoList(tasks, updated);
     expect(tasks).toHaveLength(1);
     expect(tasks[0].name).toBe('Updated');
   });
@@ -125,29 +96,6 @@ describe('TasksApp – step management', () => {
 });
 
 describe('TasksApp – calendar events', () => {
-  const safeStr = (v) => (v === null || v === undefined ? '' : String(v));
-
-  const buildCalendarEvents = (tasks) => {
-    const events = [];
-    tasks.forEach(task => {
-      const taskName = safeStr(task.name) || 'Untitled';
-      if (task.dueDate) {
-        events.push({ date: task.dueDate, title: taskName, type: 'task', parentId: task.id });
-      }
-      (task.steps || []).forEach(step => {
-        if (!step.dueDate) return;
-        const stepTitle = safeStr(step.title);
-        events.push({
-          date: step.dueDate,
-          title: stepTitle ? `${taskName} – ${stepTitle}` : taskName,
-          type: 'step',
-          parentId: task.id,
-        });
-      });
-    });
-    return events;
-  };
-
   it('includes task due dates and step due dates', () => {
     const tasks = [{
       id: '1', name: 'Launch', dueDate: '2026-06-20',
@@ -173,21 +121,6 @@ describe('TasksApp – calendar events', () => {
 });
 
 describe('TasksApp – timeline step overdue detection', () => {
-  const buildTimelineEvents = (tasks) => {
-    const events = [];
-    tasks.forEach(task => {
-      if (task.dueDate) {
-        events.push({ date: task.dueDate, isStep: false, taskName: task.name });
-      }
-      (task.steps || []).forEach(step => {
-        if (!step.dueDate) return;
-        const overdue = task.dueDate && new Date(step.dueDate) > new Date(task.dueDate);
-        events.push({ date: step.dueDate, isStep: true, stepTitle: step.title, taskName: task.name, overdue });
-      });
-    });
-    return events.sort((a, b) => new Date(a.date) - new Date(b.date));
-  };
-
   it('marks step as overdue when its date is after task due date', () => {
     const tasks = [{
       id: '1', name: 'Task', dueDate: '2026-06-10',
