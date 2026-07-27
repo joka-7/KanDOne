@@ -306,15 +306,12 @@
     "analyzing": "מנתח..."
   },
   "chat": {
-    "title": "צ'אט AI",
     "empty": "התחל את השיחה...",
     "context": "הקשר",
     "privacy": "הימנע מכתיבת שמות אישיים",
     "placeholder": "כתוב הודעה... (Enter לשליחה)",
     "saveToNotes": "שמור להערות",
     "saved": "נשמר ✓",
-    "simulationTitle": "ראיון מדומה",
-    "simulationEmpty": "מתחיל את הראיון המדומה...",
     "titleTasks": "מאמן משימות",
     "coachingTitle": "אימון AI",
     "coachingEmpty": "מתחיל את מפגש האימון...",

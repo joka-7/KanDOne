@@ -306,15 +306,12 @@
     "analyzing": "Analyzing..."
   },
   "chat": {
-    "title": "AI Chat",
     "empty": "Start the conversation...",
     "context": "Context",
     "privacy": "Avoid writing personal names",
     "placeholder": "Type a message... (Enter to send)",
     "saveToNotes": "Save to notes",
     "saved": "Saved ✓",
-    "simulationTitle": "Mock Interview",
-    "simulationEmpty": "Starting your mock interview...",
     "titleTasks": "Task Coach",
     "coachingTitle": "AI Coaching",
     "coachingEmpty": "Starting your coaching session...",

@@ -1970,7 +1970,6 @@ Rules:
         <ChatModal
           key={`task-chat-${selectedTask?.id || 'general'}`}
           t={t}
-          variant="tasks"
           task={selectedTask}
           language={lang}
           sessionKey={`task-chat-${selectedTask?.id || 'general'}`}
@@ -1984,7 +1983,6 @@ Rules:
         <ChatModal
           key={`task-sim-${simulationData.title}`}
           t={t}
-          variant="tasks"
           task={selectedTask}
           language={lang}
           sessionKey={simulationData.title}
@@ -2001,7 +1999,6 @@ Rules:
         <ChatModal
           key="goals-tasks-finder"
           t={t}
-          variant="tasks"
           language={lang}
           sessionKey="goals-tasks-finder"
           systemPromptOverride={getGoalsTasksSystemPrompt(tasks, lang)}
