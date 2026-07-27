@@ -25,7 +25,7 @@ import APIKeySettings from './components/APIKeySettings';
 import { usePwaInstall } from './usePwaInstall';
 import AppBrandMark from './components/AppBrandMark';
 import Onboarding from './components/Onboarding';
-import { STORAGE_KEYS } from './storageKeys.js';
+import { STORAGE_KEYS, TASKS_LABELS_KEY } from './storageKeys.js';
 import {
   sanitizeTaskRecords, parseTaskStoragePayload, generateId,
   parseTaskLabelsStoragePayload,
@@ -47,8 +47,6 @@ import {
   getProgress, getNextPendingStep, formatDate, formatDuration,
   buildCalendarEvents, buildTimelineEvents, mergeTaskIntoList, DURATION_UNITS,
 } from './utils/taskHelpers';
-
-const TASKS_LABELS_KEY = 'tasksLabelsV1';
 
 const MODE = 'tasks';
 
