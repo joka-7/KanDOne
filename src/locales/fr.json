@@ -355,25 +355,12 @@
     "priority": "Haute = processus actif ou entreprise de rêve. Utilisez pour filtrer et concentrer votre énergie."
   },
   "templates": {
-    "title": "Bibliothèque de modèles d'entretien",
-    "titleRecruiter": "Guide d'entretien candidat",
     "titleTasks": "Questions de planification de tâches",
     "search": "Rechercher des questions...",
     "copy": "Copier",
     "copied": "Copié !",
-    "footer": "Utilisez ces questions pour vous entraîner. Les réponses comportementales doivent suivre le format STAR.",
     "footerTasks": "Utilisez ces questions pour planifier, décomposer ou revoir vos tâches.",
-    "practiceButton": "Entretien simulé",
-    "practiceButtonRecruiter": "Pratiquer la conduite",
     "practiceButtonTasks": "Pratiquer avec le coach IA",
-    "categories": {
-      "hr": "RH / Présélection",
-      "technical": "Technique",
-      "behavioral": "Comportemental",
-      "manager": "Manager",
-      "culture": "Culture d'entreprise",
-      "questions_to_ask": "Questions à poser"
-    },
     "taskCategories": {
       "planning": "Planification et cadrage",
       "breakdown": "Décomposition en étapes",

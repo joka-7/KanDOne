@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Search, Copy, Check } from 'lucide-react';
-import { TEMPLATES } from '../data/interviewTemplates';
 import { TASK_TEMPLATES } from '../data/taskTemplates';
 import { getLocalizedQuestions, getLocalizedCategoryLabel } from '../utils/templateQuestions';
 
@@ -40,27 +39,25 @@ function CopyButton({ text, label, copiedLabel }) {
   );
 }
 
-export default function TemplateLibrary({ t: tProp, onClose, onStartSimulation, isRecruiter, libraryMode }) {
+export default function TemplateLibrary({ t: tProp, onClose, onStartSimulation }) {
   const { t: tI18n, i18n } = useTranslation();
   const t = tProp || tI18n;
-  const isTasks = libraryMode === 'tasks';
-  const templates = isTasks ? TASK_TEMPLATES : TEMPLATES;
-  const categoryKeys = Object.keys(templates);
+  const categoryKeys = Object.keys(TASK_TEMPLATES);
   const [activeCategory, setActiveCategory] = useState(categoryKeys[0]);
   const [searchQuery, setSearchQuery] = useState('');
 
   const localizedTemplates = useMemo(() => {
     const out = {};
     categoryKeys.forEach((key) => {
-      const cat = templates[key];
+      const cat = TASK_TEMPLATES[key];
       out[key] = {
         ...cat,
-        label: getLocalizedCategoryLabel(t, isTasks, key, cat.label),
-        questions: getLocalizedQuestions(t, isTasks, key, cat.questions),
+        label: getLocalizedCategoryLabel(t, key, cat.label),
+        questions: getLocalizedQuestions(t, key, cat.questions),
       };
     });
     return out;
-  }, [t, i18n.language, isTasks, templates, categoryKeys]);
+  }, [t, i18n.language, categoryKeys]);
 
   const isSearching = searchQuery.trim().length > 0;
 
@@ -95,15 +92,9 @@ export default function TemplateLibrary({ t: tProp, onClose, onStartSimulation, 
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden max-h-[90vh]">
 
         {/* Header */}
-        <div className={`flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r text-white flex-shrink-0 ${
-          isTasks ? 'from-emerald-600 to-green-600' : isRecruiter ? 'from-amber-500 to-yellow-500' : 'from-indigo-600 to-blue-600'
-        }`}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-emerald-600 to-green-600 text-white flex-shrink-0">
           <h2 className="text-lg font-bold tracking-tight flex items-center gap-2">
-            📚 {isTasks
-              ? t('templates.titleTasks', 'Task Planning Prompts')
-              : isRecruiter
-                ? t('templates.titleRecruiter', 'Candidate Interview Guide')
-                : t('templates.title', 'Interview Template Library')}
+            📚 {t('templates.titleTasks', 'Task Planning Prompts')}
           </h2>
           <button
             onClick={onClose}
@@ -152,19 +143,9 @@ export default function TemplateLibrary({ t: tProp, onClose, onStartSimulation, 
                         type="button"
                         data-testid="template-start-simulation"
                         onClick={() => onStartSimulation(key)}
-                        className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all text-white flex items-center gap-1.5 ${
-                          isTasks
-                            ? 'bg-emerald-600 hover:bg-emerald-700 border-emerald-600'
-                            : isRecruiter
-                              ? 'bg-amber-500 hover:bg-amber-600 border-amber-500'
-                              : 'bg-indigo-600 hover:bg-indigo-700 border-indigo-600'
-                        }`}
+                        className="w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all text-white flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 border-emerald-600"
                       >
-                        🎭 {isTasks
-                          ? t('templates.practiceButtonTasks', 'Practice with AI coach')
-                          : isRecruiter
-                            ? t('templates.practiceButtonRecruiter', 'Practice conducting')
-                            : t('templates.practiceButton', 'Mock interview')}
+                        🎭 {t('templates.practiceButtonTasks', 'Practice with AI coach')}
                       </button>
                     )}
                   </div>
@@ -211,19 +192,9 @@ export default function TemplateLibrary({ t: tProp, onClose, onStartSimulation, 
                       type="button"
                       data-testid="template-start-simulation"
                       onClick={() => onStartSimulation(activeCategory)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 text-white text-xs font-bold rounded-lg transition-colors ${
-                        isTasks
-                          ? 'bg-emerald-600 hover:bg-emerald-700'
-                          : isRecruiter
-                            ? 'bg-amber-500 hover:bg-amber-600'
-                            : 'bg-indigo-600 hover:bg-indigo-700'
-                      }`}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-white text-xs font-bold rounded-lg transition-colors bg-emerald-600 hover:bg-emerald-700"
                     >
-                      🎭 {isTasks
-                        ? t('templates.practiceButtonTasks', 'Practice with AI coach')
-                        : isRecruiter
-                          ? t('templates.practiceButtonRecruiter', 'Practice conducting')
-                          : t('templates.practiceButton', 'Mock interview')}
+                      🎭 {t('templates.practiceButtonTasks', 'Practice with AI coach')}
                     </button>
                   )}
                 </div>
@@ -244,9 +215,7 @@ export default function TemplateLibrary({ t: tProp, onClose, onStartSimulation, 
         {/* Footer */}
         <div className="px-6 py-3 border-t border-gray-100 bg-gray-50 flex-shrink-0">
           <p className="text-xs text-gray-500 text-center">
-            {isTasks
-              ? t('templates.footerTasks', 'Use these prompts when planning, breaking down, or reviewing tasks.')
-              : t('templates.footer', 'Use these to practice. Behavioral answers should follow the STAR format.')}
+            {t('templates.footerTasks', 'Use these prompts when planning, breaking down, or reviewing tasks.')}
           </p>
         </div>
       </div>

@@ -625,8 +625,8 @@ export default function TasksApp() {
   const handleStartSimulation = useCallback((categoryKey) => {
     const cat = TASK_TEMPLATES[categoryKey];
     if (!cat) return;
-    const label = getLocalizedCategoryLabel(t, true, categoryKey, cat.label);
-    const questions = getLocalizedQuestions(t, true, categoryKey, cat.questions);
+    const label = getLocalizedCategoryLabel(t, categoryKey, cat.label);
+    const questions = getLocalizedQuestions(t, categoryKey, cat.questions);
     const questionList = formatQuestionList(questions);
     const taskCtx = selectedTask
       ? `The user is working on task "${selectedTask.name}" (status: ${selectedTask.status}${selectedTask.dueDate ? `, due ${selectedTask.dueDate}` : ''}).`
@@ -1961,7 +1961,6 @@ Rules:
       {showTemplates && (
         <TemplateLibrary
           t={t}
-          libraryMode="tasks"
           onClose={() => setShowTemplates(false)}
           onStartSimulation={handleStartSimulation}
         />
