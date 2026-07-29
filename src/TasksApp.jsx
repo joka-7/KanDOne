@@ -12,6 +12,7 @@ import { TASK_TEMPLATES } from './data/taskTemplates';
 import {
   getLocalizedQuestions, getLocalizedCategoryLabel, formatQuestionList,
 } from './utils/templateQuestions';
+import { delimUserField } from './utils/promptSafety';
 import {
   signInWithGoogle, signOut, onAuthChange, loadAllItems, formatSignInError,
   updateItem, deleteItem, batchSaveItems, loadUserProfile, saveUserProfile,
@@ -726,7 +727,7 @@ export default function TasksApp() {
     const questions = getLocalizedQuestions(t, categoryKey, cat.questions);
     const questionList = formatQuestionList(questions);
     const taskCtx = selectedTask
-      ? `The user is working on task "${selectedTask.name}" (status: ${selectedTask.status}${selectedTask.dueDate ? `, due ${selectedTask.dueDate}` : ''}).`
+      ? `The user is working on task ${delimUserField(selectedTask.name)} (status: ${delimUserField(selectedTask.status || '', 40)}${selectedTask.dueDate ? `, due ${delimUserField(selectedTask.dueDate, 40)}` : ''}).`
       : 'No specific task is selected — general task-management practice.';
     const systemPrompt = `You are a supportive productivity coach running a ${label} coaching session.
 ${taskCtx}

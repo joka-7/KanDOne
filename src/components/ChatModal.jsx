@@ -4,6 +4,7 @@ import {
   streamChat, buildApiMessages, loadAIConfigFromStorage, isAIReady, getCurrentProvider,
   PROVIDERS, AI_CONFIG_UPDATED,
 } from '../services/aiAssistant';
+import { delimUserField } from '../utils/promptSafety';
 
 const SIM_TRIGGER = '__sim_start__';
 
@@ -113,11 +114,13 @@ const buildTaskCoachPrompt = (task) => {
   }
   const steps = Array.isArray(task.steps) ? task.steps : [];
   const done = steps.filter(s => s.status === 'done').length;
+  // User-controlled fields go through delimUserField so a task name/description
+  // cannot break out of the system prompt and inject instructions.
   return `You are a helpful task management coach. The user is working on this task:
-- Name: ${task.name || 'Untitled'}
-- Status: ${task.status || 'active'}
-- Priority: ${task.priority || 'medium'}${task.dueDate ? `\n- Due: ${task.dueDate}` : ''}${task.description ? `\n- Description: ${task.description}` : ''}
-- Steps: ${steps.length ? `${done}/${steps.length} done` : 'none yet'}${task.notes ? `\n- Notes: ${task.notes}` : ''}
+- Name: ${delimUserField(task.name || 'Untitled')}
+- Status: ${delimUserField(task.status || 'active', 40)}
+- Priority: ${delimUserField(task.priority || 'medium', 40)}${task.dueDate ? `\n- Due: ${delimUserField(task.dueDate, 40)}` : ''}${task.description ? `\n- Description: ${delimUserField(task.description, 1000)}` : ''}
+- Steps: ${steps.length ? `${done}/${steps.length} done` : 'none yet'}${task.notes ? `\n- Notes: ${delimUserField(task.notes, 1000)}` : ''}
 Be concise and practical. Suggest concrete next actions.`;
 };
 
