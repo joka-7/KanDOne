@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { visualizer } from 'rollup-plugin-visualizer'
 
 export default defineConfig({
   plugins: [
@@ -43,7 +44,14 @@ export default defineConfig({
         ],
       },
     }),
-  ],
+    // Opt-in: `npm run build:analyze` writes dist/stats.html (not run in CI).
+    process.env.ANALYZE === '1' && visualizer({
+      filename: 'dist/stats.html',
+      gzipSize: true,
+      brotliSize: true,
+      open: false,
+    }),
+  ].filter(Boolean),
   test: {
     environment: 'jsdom',
     globals: true,
