@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Plus, Search, Download, Upload, Layout, List, BarChart2, Activity,
@@ -12,19 +12,15 @@ import { TASK_TEMPLATES } from './data/taskTemplates';
 import {
   getLocalizedQuestions, getLocalizedCategoryLabel, formatQuestionList,
 } from './utils/templateQuestions';
-import ChatModal from './components/ChatModal';
+import { delimUserField } from './utils/promptSafety';
 import {
   signInWithGoogle, signOut, onAuthChange, loadAllItems, formatSignInError,
   updateItem, deleteItem, batchSaveItems, saveUserProfile,
   loadTaskLabels, saveTaskLabels,
 } from './firebase';
 import { getStorageKey, STATUSES_TASKS, filterItemsForMode } from './statuses';
-import CalendarView from './components/CalendarView';
-import TemplateLibrary from './components/TemplateLibrary';
-import APIKeySettings from './components/APIKeySettings';
 import { usePwaInstall } from './usePwaInstall';
 import AppBrandMark from './components/AppBrandMark';
-import Onboarding from './components/Onboarding';
 import { STORAGE_KEYS, TASKS_LABELS_KEY } from './storageKeys.js';
 import {
   sanitizeTaskRecords, parseTaskStoragePayload, generateId,
@@ -47,6 +43,13 @@ import {
   getProgress, getNextPendingStep, formatDate, formatDuration, isTaskOverdue,
   buildCalendarEvents, buildTimelineEvents, mergeTaskIntoList, DURATION_UNITS,
 } from './utils/taskHelpers';
+
+// Modal / tab-scoped views — keep them out of the initial board paint.
+const ChatModal = lazy(() => import('./components/ChatModal'));
+const CalendarView = lazy(() => import('./components/CalendarView'));
+const TemplateLibrary = lazy(() => import('./components/TemplateLibrary'));
+const APIKeySettings = lazy(() => import('./components/APIKeySettings'));
+const Onboarding = lazy(() => import('./components/Onboarding'));
 
 const MODE = 'tasks';
 
@@ -724,7 +727,7 @@ export default function TasksApp() {
     const questions = getLocalizedQuestions(t, categoryKey, cat.questions);
     const questionList = formatQuestionList(questions);
     const taskCtx = selectedTask
-      ? `The user is working on task "${selectedTask.name}" (status: ${selectedTask.status}${selectedTask.dueDate ? `, due ${selectedTask.dueDate}` : ''}).`
+      ? `The user is working on task ${delimUserField(selectedTask.name)} (status: ${delimUserField(selectedTask.status || '', 40)}${selectedTask.dueDate ? `, due ${delimUserField(selectedTask.dueDate, 40)}` : ''}).`
       : 'No specific task is selected — general task-management practice.';
     const systemPrompt = `You are a supportive productivity coach running a ${label} coaching session.
 ${taskCtx}
@@ -1993,12 +1996,14 @@ Rules:
         {activeTab === 'stats' && renderStats()}
         {activeTab === 'calendar' && (
           <div className="flex-1 overflow-auto calendar-page min-h-0">
-            <CalendarView
-              events={calendarEvents}
-              legendTypes={['task', 'step']}
-              isRTL={isRTL}
-              onEventClick={ev => { navigateTo('list', ev.parentId); }}
-            />
+            <Suspense fallback={<div className="p-8 text-center text-sm text-gray-400">…</div>}>
+              <CalendarView
+                events={calendarEvents}
+                legendTypes={['task', 'step']}
+                isRTL={isRTL}
+                onEventClick={ev => { navigateTo('list', ev.parentId); }}
+              />
+            </Suspense>
           </div>
         )}
       </div>
@@ -2049,74 +2054,76 @@ Rules:
         </div>
       )}
 
-      {showTasksWelcome && (
-        <Onboarding
-          t={t}
-          i18n={i18n}
-          isRTL={isRTL}
-          onClose={() => setShowTasksWelcome(false)}
-          openNewForm={() => { setShowTasksWelcome(false); openNewForm(); }}
-          openAISettings={() => { setShowTasksWelcome(false); setShowAISettings(true); }}
-        />
-      )}
+      <Suspense fallback={null}>
+        {showTasksWelcome && (
+          <Onboarding
+            t={t}
+            i18n={i18n}
+            isRTL={isRTL}
+            onClose={() => setShowTasksWelcome(false)}
+            openNewForm={() => { setShowTasksWelcome(false); openNewForm(); }}
+            openAISettings={() => { setShowTasksWelcome(false); setShowAISettings(true); }}
+          />
+        )}
 
-      {showAISettings && (
-        <APIKeySettings
-          t={t}
-          onClose={() => setShowAISettings(false)}
-        />
-      )}
+        {showAISettings && (
+          <APIKeySettings
+            t={t}
+            onClose={() => setShowAISettings(false)}
+          />
+        )}
 
-      {showTemplates && (
-        <TemplateLibrary
-          t={t}
-          onClose={() => setShowTemplates(false)}
-          onStartSimulation={handleStartSimulation}
-        />
-      )}
+        {showTemplates && (
+          <TemplateLibrary
+            t={t}
+            onClose={() => setShowTemplates(false)}
+            onStartSimulation={handleStartSimulation}
+          />
+        )}
 
-      {chatOpen && !simulationData && (
-        <ChatModal
-          key={`task-chat-${selectedTask?.id || 'general'}`}
-          t={t}
-          task={selectedTask}
-          language={lang}
-          sessionKey={`task-chat-${selectedTask?.id || 'general'}`}
-          onClose={() => setChatOpen(false)}
-          onOpenSettings={() => { setChatOpen(false); setShowAISettings(true); }}
-          onSaveToTask={selectedTask ? handleSaveToTask : null}
-        />
-      )}
+        {chatOpen && !simulationData && (
+          <ChatModal
+            key={`task-chat-${selectedTask?.id || 'general'}`}
+            t={t}
+            task={selectedTask}
+            language={lang}
+            sessionKey={`task-chat-${selectedTask?.id || 'general'}`}
+            onClose={() => setChatOpen(false)}
+            onOpenSettings={() => { setChatOpen(false); setShowAISettings(true); }}
+            onSaveToTask={selectedTask ? handleSaveToTask : null}
+          />
+        )}
 
-      {simulationData && (
-        <ChatModal
-          key={`task-sim-${simulationData.title}`}
-          t={t}
-          task={selectedTask}
-          language={lang}
-          sessionKey={simulationData.title}
-          systemPromptOverride={simulationData.systemPrompt}
-          simulationTitle={simulationData.title}
-          autoStart={true}
-          onClose={() => setSimulationData(null)}
-          onOpenSettings={() => setShowAISettings(true)}
-          onSaveToTask={selectedTask ? handleSaveToTask : null}
-        />
-      )}
+        {simulationData && (
+          <ChatModal
+            key={`task-sim-${simulationData.title}`}
+            t={t}
+            task={selectedTask}
+            language={lang}
+            sessionKey={simulationData.title}
+            systemPromptOverride={simulationData.systemPrompt}
+            simulationTitle={simulationData.title}
+            autoStart={true}
+            onClose={() => setSimulationData(null)}
+            onOpenSettings={() => setShowAISettings(true)}
+            onSaveToTask={selectedTask ? handleSaveToTask : null}
+          />
+        )}
 
-      {showGoalsFinder && (
-        <ChatModal
-          key="goals-tasks-finder"
-          t={t}
-          language={lang}
-          sessionKey="goals-tasks-finder"
-          systemPromptOverride={getGoalsTasksSystemPrompt(tasks, lang)}
-          simulationTitle={t('ai.goalsAndTasks', 'Goals & Tasks')}
-          autoStart={true}
-          onClose={() => setShowGoalsFinder(false)}
-          onOpenSettings={() => { setShowGoalsFinder(false); setShowAISettings(true); }}
-        />
-      )}
+        {showGoalsFinder && (
+          <ChatModal
+            key="goals-tasks-finder"
+            t={t}
+            language={lang}
+            sessionKey="goals-tasks-finder"
+            systemPromptOverride={getGoalsTasksSystemPrompt(tasks, lang)}
+            simulationTitle={t('ai.goalsAndTasks', 'Goals & Tasks')}
+            autoStart={true}
+            onClose={() => setShowGoalsFinder(false)}
+            onOpenSettings={() => { setShowGoalsFinder(false); setShowAISettings(true); }}
+          />
+        )}
+      </Suspense>
 
       {!chatOpen && !simulationData && !showGoalsFinder && (
         <button

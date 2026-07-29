@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { delimUserField } from '../utils/promptSafety';
 
 export const PROVIDERS = {
   gemini: {
@@ -254,6 +254,9 @@ export async function streamChat(messages, systemPrompt, onChunk) {
   }
 
   if (provider === 'anthropic') {
+    // Lazy-load the SDK only when Anthropic is the active provider — the other
+    // four providers use plain fetch and should not pay for this chunk.
+    const { default: Anthropic } = await import('@anthropic-ai/sdk');
     const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
     const stream = await client.messages.stream({
       model, max_tokens: 1024,
@@ -311,8 +314,18 @@ const LANG = { en: 'Respond in English.', he: 'ענה בעברית.', fr: 'Répo
 
 export function getGoalsTasksSystemPrompt(tasks = [], language = 'en') {
   const langInstruction = LANG[language] || LANG.en;
-  const activeTasks = tasks.filter(t => t.status === 'active').map(t => t.name).filter(Boolean).slice(0, 8);
-  const completedTasks = tasks.filter(t => t.status === 'completed').map(t => t.name).filter(Boolean).slice(0, 5);
+  const activeTasks = tasks
+    .filter(t => t.status === 'active')
+    .map(t => t.name)
+    .filter(Boolean)
+    .slice(0, 8)
+    .map((name) => delimUserField(name));
+  const completedTasks = tasks
+    .filter(t => t.status === 'completed')
+    .map(t => t.name)
+    .filter(Boolean)
+    .slice(0, 5)
+    .map((name) => delimUserField(name));
 
   return `You are a personal productivity coach, goal-setting expert, and opportunity finder.
 
