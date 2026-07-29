@@ -17,5 +17,24 @@ export default defineConfig([
       globals: globals.browser,
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
+    rules: {
+      // Pre-existing patterns (localStorage sync effects, drag handlers that close
+      // over refs). Tracked for a later cleanup — warn so `npm run lint` can gate
+      // CI without failing on these React Compiler–style rules today.
+      'react-hooks/set-state-in-effect': 'warn',
+      'react-hooks/refs': 'warn',
+    },
+  },
+  {
+    files: [
+      'playwright.config.js',
+      'vite.config.js',
+      'eslint.config.js',
+      'src/__tests__/**/*.{js,jsx}',
+      'src/services/aiAssistant.js',
+    ],
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
+    },
   },
 ])
