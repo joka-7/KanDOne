@@ -1,12 +1,3 @@
-import { initializeApp } from 'firebase/app';
-import {
-  getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
-  browserPopupRedirectResolver, signOut as firebaseSignOut, onAuthStateChanged,
-} from 'firebase/auth';
-import {
-  initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-  doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch,
-} from 'firebase/firestore';
 import { getCollectionName } from './statuses';
 
 const firebaseConfig = {
@@ -18,16 +9,56 @@ const firebaseConfig = {
   appId: "1:1072442648740:web:dc65116f6cf04a9aca9e31"
 };
 
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-// Persistent IndexedDB cache: queues writes made while offline and replays
-// them on reconnect, and serves reads from cache instead of failing outright.
-// Multi-tab manager keeps the cache consistent if the app is open in more
-// than one tab (the app itself doesn't restrict that).
-export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-});
-const provider = new GoogleAuthProvider();
+/**
+ * Firebase Auth/Firestore are optional (offline-first app). Keep them out of the
+ * initial JS parse by loading the SDK only when a cloud API is first needed.
+ */
+let firebaseReady = null;
+
+async function ensureFirebase() {
+  if (!firebaseReady) {
+    firebaseReady = (async () => {
+      const { initializeApp } = await import('firebase/app');
+      const {
+        getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
+        browserPopupRedirectResolver, signOut: firebaseSignOut, onAuthStateChanged,
+      } = await import('firebase/auth');
+      const {
+        initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+        doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch,
+      } = await import('firebase/firestore');
+
+      const app = initializeApp(firebaseConfig);
+      const auth = getAuth(app);
+      // Persistent IndexedDB cache: queues writes made while offline and replays
+      // them on reconnect, and serves reads from cache instead of failing outright.
+      const db = initializeFirestore(app, {
+        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      });
+      const provider = new GoogleAuthProvider();
+
+      return {
+        auth, db, provider,
+        signInWithPopup, signInWithRedirect, getRedirectResult,
+        browserPopupRedirectResolver, firebaseSignOut, onAuthStateChanged,
+        doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch,
+      };
+    })();
+  }
+  return firebaseReady;
+}
+
+/** True when Firebase Auth may have a redirect result waiting to be consumed. */
+function hasPendingAuthRedirect() {
+  try {
+    return Object.keys(sessionStorage).some(
+      (k) => k.startsWith('firebase:') && /redirect/i.test(k),
+    );
+  } catch {
+    // sessionStorage blocked — load the SDK so we don't drop a real redirect.
+    return true;
+  }
+}
 
 /** User-facing message for Firebase Google sign-in failures (header "Connect Drive"). */
 export function formatSignInError(err) {
@@ -52,9 +83,11 @@ export function formatSignInError(err) {
   return msg || 'Sign-in failed.';
 }
 
-/** Call once on app load after Google redirect sign-in. */
+/** Call once on app load after Google redirect sign-in. No-ops if nothing pending. */
 export async function completeRedirectSignIn() {
-  const result = await getRedirectResult(auth);
+  if (!hasPendingAuthRedirect()) return null;
+  const fb = await ensureFirebase();
+  const result = await fb.getRedirectResult(fb.auth);
   return result?.user ?? null;
 }
 
@@ -69,12 +102,13 @@ function shouldFallbackToRedirect(err) {
 }
 
 export async function signInWithGoogle() {
+  const fb = await ensureFirebase();
   try {
-    const result = await signInWithPopup(auth, provider, browserPopupRedirectResolver);
+    const result = await fb.signInWithPopup(fb.auth, fb.provider, fb.browserPopupRedirectResolver);
     return result.user;
   } catch (err) {
     if (shouldFallbackToRedirect(err)) {
-      await signInWithRedirect(auth, provider);
+      await fb.signInWithRedirect(fb.auth, fb.provider);
       return null;
     }
     throw err;
@@ -82,20 +116,38 @@ export async function signInWithGoogle() {
 }
 
 export async function signOut() {
-  await firebaseSignOut(auth);
+  const fb = await ensureFirebase();
+  await fb.firebaseSignOut(fb.auth);
 }
 
+/**
+ * Subscribe to auth state. Returns an unsubscribe that is safe to call before
+ * the SDK has finished loading (no-op until the real listener is attached).
+ */
 export function onAuthChange(callback) {
-  return onAuthStateChanged(auth, callback);
+  let unsub = () => {};
+  let cancelled = false;
+  ensureFirebase().then((fb) => {
+    if (cancelled) return;
+    unsub = fb.onAuthStateChanged(fb.auth, callback);
+  }).catch((err) => {
+    console.error('Failed to initialize Firebase auth listener', err);
+  });
+  return () => {
+    cancelled = true;
+    unsub();
+  };
 }
 
 export async function loadUserProfile(uid) {
-  const snap = await getDoc(doc(db, 'users', uid));
+  const fb = await ensureFirebase();
+  const snap = await fb.getDoc(fb.doc(fb.db, 'users', uid));
   return snap.exists() ? snap.data() : {};
 }
 
 export async function saveUserProfile(uid, data) {
-  await setDoc(doc(db, 'users', uid), data, { merge: true });
+  const fb = await ensureFirebase();
+  await fb.setDoc(fb.doc(fb.db, 'users', uid), data, { merge: true });
 }
 
 /** Load the task label library stored on the user profile (`tasksLabels` field). */
@@ -110,33 +162,33 @@ export async function saveTaskLabels(uid, labels) {
   await saveUserProfile(uid, { tasksLabels: labels, appMode: 'tasks' });
 }
 
-function collectionRef(uid, mode) {
-  return collection(db, 'users', uid, getCollectionName(mode));
-}
-
 export async function loadAllItems(uid, mode) {
-  const colRef = collectionRef(uid, mode);
-  const snap = await getDocs(colRef);
+  const fb = await ensureFirebase();
+  const colRef = fb.collection(fb.db, 'users', uid, getCollectionName(mode));
+  const snap = await fb.getDocs(colRef);
   return snap.empty ? null : snap.docs.map(d => d.data());
 }
 
 export async function updateItem(uid, mode, item) {
-  const ref = doc(db, 'users', uid, getCollectionName(mode), String(item.id));
-  await setDoc(ref, item);
+  const fb = await ensureFirebase();
+  const ref = fb.doc(fb.db, 'users', uid, getCollectionName(mode), String(item.id));
+  await fb.setDoc(ref, item);
 }
 
 export async function deleteItem(uid, mode, id) {
-  const ref = doc(db, 'users', uid, getCollectionName(mode), String(id));
-  await deleteDoc(ref);
+  const fb = await ensureFirebase();
+  const ref = fb.doc(fb.db, 'users', uid, getCollectionName(mode), String(id));
+  await fb.deleteDoc(ref);
 }
 
 export async function batchSaveItems(uid, mode, items) {
   if (!items.length) return;
+  const fb = await ensureFirebase();
   const CHUNK = 490;
   for (let i = 0; i < items.length; i += CHUNK) {
-    const batch = writeBatch(db);
+    const batch = fb.writeBatch(fb.db);
     items.slice(i, i + CHUNK).forEach(item => {
-      const ref = doc(db, 'users', uid, getCollectionName(mode), String(item.id));
+      const ref = fb.doc(fb.db, 'users', uid, getCollectionName(mode), String(item.id));
       batch.set(ref, item);
     });
     await batch.commit();
