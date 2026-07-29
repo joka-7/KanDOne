@@ -32,6 +32,7 @@ export const makeInitialTask = () => ({
   routine: { ...DEFAULT_ROUTINE },
   reminder: { ...DEFAULT_REMINDER },
   lastReminderKey: '',
+  boardOrder: 0,
   steps: [],
   notes: '',
 });

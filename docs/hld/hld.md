@@ -85,14 +85,17 @@ backward-compatible data cleansing, but the app boots straight into `tasks` mode
 - FR12 — Schedule optional due time (`HH:mm`) alongside due date.
 - FR13 — Mark tasks as routines; on completion, reset steps and advance the next due date.
 - FR14 — Optional browser reminders before due date/time (while app/PWA is active).
+- FR15 — Highlight overdue (past due, non-terminal) tasks on board, list, and detail.
+- FR16 — Undo toast for delete task/step/label and for import overwrite.
 
 ### 4.2 Non-Functional
 - NFR1 — **Offline-first:** all core features work without a network.
 - NFR2 — **Privacy:** API keys and data stay client-side unless the user signs in.
-- NFR3 — **Security:** Firestore rules restrict each user to their own document tree; user text is delimited before being placed into AI prompts.
-- NFR4 — **Performance:** list rendering is paginated (25-at-a-time); derived data is memoised.
+- NFR3 — **Security:** Firestore rules restrict each user to their own document tree; user text is delimited before being placed into AI prompts; CSP without `script-src 'unsafe-inline'` (meta + Vercel response header).
+- NFR4 — **Performance:** list rendering is paginated (25-at-a-time); derived data is memoised; Firebase, Anthropic SDK, and heavy UI (calendar/modals) load lazily.
 - NFR5 — **Installability:** valid PWA manifest + service worker with auto-update.
-- NFR6 — **Resilience:** malformed imports/localStorage are sanitised, not fatal.
+- NFR6 — **Resilience:** malformed imports/localStorage are sanitised, not fatal; root `AppErrorBoundary` can export local data after a render crash.
+- NFR7 — **Accessibility / i18n:** `<html lang/dir>` tracks i18n; locale key parity is tested; dialogs use `role="dialog"` / focus trapping via `useModalA11y`.
 
 ---
 
@@ -122,6 +125,7 @@ service/persistence layer talks to `localStorage`, Firestore and AI providers.
 graph TD
     subgraph Browser["Browser (Client)"]
         subgraph UI["UI Layer (React)"]
+            EB[AppErrorBoundary]
             APP[App.jsx]
             TA[TasksApp.jsx<br/>state + views + handlers]
             VIEWS[Board / List / Timeline<br/>Calendar / Stats]
@@ -130,14 +134,16 @@ graph TD
         subgraph LOGIC["Domain / Utilities"]
             ST[statuses.js<br/>status defs + filtering]
             SAN[sanitize.js<br/>whitelist + validate]
+            TH[taskHelpers.js<br/>pure task logic]
             REC[recurrence.js<br/>routine scheduling]
             REM[reminders.js<br/>notification timing]
             SK[storageKeys.js]
             PS[promptSafety.js]
+            LSNC[labelSync.js]
         end
         subgraph SVC["Services"]
             AI[services/aiAssistant.js<br/>provider streaming]
-            FB[firebase.js<br/>auth + firestore]
+            FB[firebase.js<br/>lazy auth + firestore]
             PWA[usePwaInstall.js]
         end
         LS[(localStorage)]
@@ -149,12 +155,15 @@ graph TD
         LLM[AI Providers<br/>Gemini/Groq/OpenAI/<br/>Anthropic/Ollama]
     end
 
+    EB --> APP
     APP --> TA
     TA --> VIEWS
     TA --> MODALS
     TA --> ST
     TA --> SAN
+    TA --> TH
     TA --> SK
+    TA --> LSNC
     TA --> AI
     TA --> FB
     TA --> PWA
@@ -168,16 +177,18 @@ graph TD
 
 ### 6.1 Layer responsibilities
 
-- **UI layer** — `App.jsx` boots the app; `TasksApp.jsx` is the single stateful
-  container that owns the `tasks` array and all view/modal orchestration. Views
-  and modals are (mostly) presentational and driven by props/callbacks.
+- **UI layer** — `main.jsx` wraps `<App/>` in `AppErrorBoundary`. `App.jsx`
+  boots the app; `TasksApp.jsx` is the single stateful container that owns the
+  `tasks` array and all view/modal orchestration. Calendar and settings/chat
+  modals are `React.lazy`-loaded. Views and modals are (mostly) presentational.
 - **Domain / utilities** — pure modules with no React dependency: status
-  definitions and mode-filtering (`statuses.js`), input whitelisting
-  (`sanitize.js`), storage-key constants (`storageKeys.js`), and prompt-injection
-  hardening (`promptSafety.js`).
+  definitions (`statuses.js`), input whitelisting (`sanitize.js`), pure task
+  helpers (`taskHelpers.js`), label cloud merge (`labelSync.js`), storage keys,
+  recurrence/reminders, and prompt-injection hardening (`promptSafety.js`).
 - **Services** — side-effecting integrations: `aiAssistant.js` (multi-provider
-  streaming chat), `firebase.js` (auth + Firestore CRUD), `usePwaInstall.js`
-  (install prompt).
+  streaming; Anthropic SDK imported only when that provider is used),
+  `firebase.js` (SDK loaded on first cloud call via `ensureFirebase()`),
+  `usePwaInstall.js`.
 - **Persistence** — `localStorage` is the always-on local store; Firestore is an
   optional cloud mirror keyed by the signed-in user.
 
@@ -248,9 +259,9 @@ sequenceDiagram
 
     U->>M: open app
     M->>M: register service worker (PROD)
-    M->>M: init i18n (saved language)
-    M->>A: render <App/>
-    A->>A: completeRedirectSignIn() (resolve pending Google redirect)
+    M->>M: init i18n (saved language; sync html lang/dir)
+    M->>A: render AppErrorBoundary > App
+    A->>A: completeRedirectSignIn() (lazy Firebase; resolve pending Google redirect)
     A->>T: render <TasksApp/>
     T->>LS: read tasks key
     T->>T: parseTaskStoragePayload + filterItemsForMode
@@ -324,8 +335,9 @@ sequenceDiagram
     U->>CM: open coach / send message
     CM->>AI: loadAIConfigFromStorage() (provider,key,model)
     CM->>CM: build systemPrompt (task/goal context)
-    CM->>PS: delimUserField() wraps user text (<<< >>>)
+    CM->>PS: delimUserField() on task fields + user text (<<< >>>)
     CM->>AI: streamChat(messages, systemPrompt, onChunk)
+    Note over AI: Anthropic SDK loaded only if provider=anthropic
     AI->>AI: checkRateLimit + buildApiMessages (role validation)
     AI->>P: POST (SSE / streaming)
     P-->>AI: token stream
@@ -338,7 +350,8 @@ sequenceDiagram
 - **Export:** `{ version: 2, tasks, labels }` → download `tasks-backup-<ts>.json`.
 - **Import:** accepts legacy task-only arrays **or** v2 objects with optional
   `labels`. Tasks pass through `sanitizeTaskRecords`; labels through
-  `sanitizeTaskLabels`. Invalid files are rejected with an alert.
+  `sanitizeTaskLabels`. Invalid files are rejected with an alert. Successful
+  overwrite offers a toast **Undo** that restores the previous tasks/labels.
 
 ### 8.6 Reminders
 
@@ -357,11 +370,10 @@ fire a `Notification` once per occurrence (deduped via `lastReminderKey`).
 | **Cloud Firestore** | Optional cloud mirror | One doc per task under `users/{uid}/tasks/{taskId}`; batched writes (chunks of 490). |
 | **AI providers** | Coaching/chat | Gemini, Groq, OpenAI, Anthropic (SDK) and local Ollama. Streaming responses. Keys stored per-browser. |
 | **PWA / Workbox** | Offline + install | Precache app shell; `NetworkFirst` runtime caching for Firestore. |
-| **Vercel** | Static hosting | SPA served as static assets (`vercel.json`). |
+| **Vercel** | Static hosting | SPA + security headers (full CSP) via `vercel.json`. |
 
 The Firebase web config in `firebase.js` is a **public web API key** (not a
-secret). It points at the original JobFlowTracker project; users can swap in
-their own project config.
+secret). Default project is `kandone-a6c91`; users can swap in their own config.
 
 ---
 
@@ -369,28 +381,42 @@ their own project config.
 
 - **Internationalization** — `i18n.js` loads en/he/fr resources merged with
   per-language template questions. Language persists in `localStorage`
-  (`appLanguage`); Hebrew triggers `dir="rtl"` and mirrored layout/icons.
+  (`appLanguage`). Both `i18n` init and `TasksApp` keep `<html lang>` /
+  `dir` in sync (Hebrew → RTL). Locale key parity is enforced by unit tests.
 - **Security & privacy**
   - Firestore rules: a user can read/write only their own `users/{uid}` subtree.
-  - AI keys never leave the browser except as auth headers to the chosen provider.
-  - `sanitize.js` whitelists and size-caps all imported/loaded records.
-  - `promptSafety.delimUserField()` strips control chars/angle brackets and wraps
-    user data in `<<< >>>` to reduce prompt-injection risk.
+  - AI keys never leave the browser except as auth headers to the chosen provider
+    (plaintext `localStorage` is an **accepted** risk — no backend proxy).
+  - `sanitize.js` whitelists and size-caps all imported/loaded records (covered
+    by unit tests).
+  - `promptSafety.delimUserField()` is applied on live coach / goals / simulation
+    prompt paths (task names, descriptions, notes, user chat text).
+  - CSP: `script-src 'self'` (+ Google/Firebase origins); no `'unsafe-inline'`
+    for scripts. Same policy in `index.html` meta and `vercel.json` header.
+  - Dependabot watches npm and GitHub Actions weekly.
   - AI calls are rate-limited (3s throttle) outside browser/test environments.
 - **Offline & persistence** — `localStorage` is the source of truth; the service
   worker precaches the shell so the app opens offline.
-- **Performance** — `useMemo` for derived views (filtered list, stats, calendar,
-  timeline); list pagination via `visibleCount`; best-effort async cloud writes.
-- **Error handling** — `ChatErrorBoundary` isolates chat crashes; import/parse
-  and network paths fail soft (alerts/toasts, swallowed cloud errors).
+- **Performance** — lazy Firebase + Anthropic; `React.lazy` for Calendar and
+  modals; `useMemo` for derived views; list pagination; `npm run build:analyze`
+  for local bundle inspection.
+- **Error handling** — root `AppErrorBoundary` (reload + export-data); 
+  `ChatErrorBoundary` isolates chat crashes; import/parse and network paths fail
+  soft (alerts/toasts, swallowed cloud errors). Undo toast for destructive
+  deletes and import overwrite.
+- **Accessibility** — toast `aria-live`; header icon `aria-label`s; modals use
+  `useModalA11y` (dialog role, focus trap, Escape); axe-core in Playwright e2e.
 
 ---
 
 ## 11. Deployment & Environments
 
 - **Build:** `npm run build` → Vite static bundle in `dist/` (with PWA assets).
+  Optional: `npm run build:analyze` opens a rollup visualizer report.
 - **Dev:** `npm run dev` (Vite dev server on `:5173`).
-- **Hosting:** static hosting (Vercel). No server runtime required.
+- **CI:** lint → unit tests → build; separate Playwright Chromium e2e job.
+- **Hosting:** static hosting (Vercel) with CSP and related security headers.
+  No server runtime required.
 - **Config to run cloud sync under your own account:** replace `firebaseConfig`
   in `src/firebase.js` and deploy `firestore.rules`.
 
@@ -401,12 +427,14 @@ their own project config.
 | Risk / Limitation | Mitigation / Direction |
 | --- | --- |
 | `localStorage` size limits for very large boards | JSON export as backup; consider IndexedDB. |
-| AI keys readable by malicious extensions | User-facing security notice; keys are opt-in and local. |
-| Shared JobFlowTracker Firebase project by default | Documented; users swap in their own config. |
-| Legacy multi-mode helpers add complexity | Isolated in `statuses.js`; `tasks` path is the only live one. |
+| AI keys readable by malicious extensions / XSS | User-facing security notice; keys opt-in and local. **Accepted** without a backend proxy. |
+| Default shared Firebase project | Documented (`kandone-a6c91`); users swap in their own config. |
+| Legacy multi-mode helpers add complexity | Isolated in `statuses.js` / sanitize; `tasks` is the only live path. |
 | No conflict resolution across devices | Last-write-wins; acceptable for single-user use. |
-| Labels not synced to Firestore | **Resolved:** labels sync via `users/{uid}.tasksLabels` on sign-in and on change. |
 | Reminders require active app/PWA | No service-worker background scheduling in v1. |
+| Board DnD is HTML5-only (no touch / keyboard reorder) | Deferred; phone PWA cannot drag cards yet. |
+| Manual card order within a column | Deferred (needs schema `order` + migration). |
+| `TasksApp.jsx` remains a large container | Pure helpers extracted; full view split deferred pending careful browser QA. |
 
 ---
 
@@ -414,16 +442,38 @@ their own project config.
 
 | Requirement | Primary component(s) |
 | --- | --- |
-| FR1/FR2 task & step CRUD | `TasksApp.jsx`, `sanitize.js` |
+| FR1/FR2 task & step CRUD | `TasksApp.jsx`, `sanitize.js`, `taskHelpers.js` |
 | FR3 drag-and-drop | `TasksApp.jsx` (`handleDragStart/Over/Drop`) |
 | FR4 local persistence | `TasksApp.jsx` effect, `storageKeys.js` |
-| FR5 import/export | `TasksApp.jsx`, `sanitize.js` |
-| FR6 cloud sync | `firebase.js`, `firestore.rules` |
-| FR7 views | Board/List/Timeline/Stats in `TasksApp.jsx`, `CalendarView.jsx` |
+| FR5 import/export | `TasksApp.jsx`, `sanitize.js`, undo toast |
+| FR6 cloud sync | `firebase.js` (`ensureFirebase`), `firestore.rules`, `labelSync.js` |
+| FR7 views | Board/List/Timeline/Stats in `TasksApp.jsx`, lazy `CalendarView.jsx` |
 | FR8 AI | `services/aiAssistant.js`, `ChatModal.jsx`, `promptSafety.js` |
-| FR9 i18n | `i18n.js`, `locales/*` |
+| FR9 i18n | `i18n.js`, `locales/*`, locale parity tests |
 | FR10 labels | `LabelPicker.jsx`, `labelColors.js`, `sanitize.js` |
 | FR11 card color & duration | `CardColorPicker.jsx`, `TasksApp.jsx`, `sanitize.js` |
 | FR12–FR14 due time, routines, reminders | `RoutineReminderFields.jsx`, `recurrence.js`, `reminders.js` |
+| FR15 overdue | `taskHelpers.isTaskOverdue`, board/list/detail UI |
+| FR16 undo | `TasksApp` toast action for delete/import |
 
 See the [LLD](../lld/lld.md) for the function-by-function realisation of each item.
+
+---
+
+## 14. Audit follow-ups (A–I)
+
+A 2026 full-app audit shipped as PRs **#8–#16** (sections A–I). Highlights:
+
+| Section | Focus | Notable outcomes |
+| --- | --- | --- |
+| A | Correctness | Local-date parsing, reminder timing, related board bugs |
+| B | Data integrity | Cloud/local persistence paths that could drop data |
+| C | Dead code | Removed unused JobFlowTracker / interview template surface |
+| D | Architecture | `taskHelpers.js`, root `AppErrorBoundary`, real unit tests |
+| E | Features | Overdue highlighting, undo toast, calendar dark-mode fix |
+| F | A11y / i18n | `html` lang/dir, locale parity, modal a11y, axe e2e |
+| G | Performance | Lazy Firebase, Anthropic, Calendar/modals; bundle analyze |
+| H | Security | CSP harden + Vercel header, wire `delimUserField`, Dependabot |
+| I | Testing / CI | Lint gate, `sanitize.test.js`, Playwright path cleanup |
+
+Deferred items (still open product work) are listed in §12 and in each PR body.

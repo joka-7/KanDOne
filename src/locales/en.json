@@ -415,6 +415,7 @@
       "addFirstButton": "Add your first task",
       "noResults": "No tasks match your filters.",
       "emptyColumn": "Drop a task here",
+      "dragHandle": "Drag to reorder",
       "signInButton": "Sign in with Google — sync everywhere",
       "loadButton": "Restore from JSON backup"
     },
