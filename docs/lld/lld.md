@@ -17,46 +17,63 @@
 
 ```
 src/
-├── main.jsx                    # React root, SW registration, i18n bootstrap
+├── main.jsx                    # React root, AppErrorBoundary, SW, i18n
 ├── App.jsx                     # resolves redirect sign-in, renders TasksApp
 ├── TasksApp.jsx                # stateful container: tasks, views, handlers
-├── firebase.js                 # auth + Firestore CRUD
+├── firebase.js                 # lazy ensureFirebase(); auth + Firestore CRUD
 ├── statuses.js                 # status defs, collection/keys, mode filtering
 ├── sanitize.js                 # ID gen, whitelisting, import parsing
 ├── storageKeys.js              # localStorage key constants + helpers
-├── i18n.js                     # i18next init (en/he/fr + template questions)
+├── i18n.js                     # i18next init + syncDocumentLang/dir
 ├── usePwaInstall.js            # PWA install prompt hook
+├── hooks/
+│   └── useModalA11y.js         # dialog role, focus trap, Escape, restore focus
 ├── services/
-│   └── aiAssistant.js          # multi-provider streaming AI client
+│   └── aiAssistant.js          # multi-provider streaming (lazy Anthropic SDK)
 ├── components/
+│   ├── AppErrorBoundary.jsx    # root crash UI: reload + export local data
 │   ├── ChatModal.jsx           # AI chat/coach UI + streaming state machine
-│   ├── CalendarView.jsx        # month grid + day detail
-│   ├── APIKeySettings.jsx      # AI provider/key settings modal
-│   ├── TemplateLibrary.jsx     # coaching prompt catalog
-│   ├── Onboarding.jsx          # welcome/tour modal
+│   ├── CalendarView.jsx        # month grid + day detail (lazy-loaded)
+│   ├── APIKeySettings.jsx      # AI provider/key settings (lazy)
+│   ├── TemplateLibrary.jsx     # coaching prompt catalog (lazy)
+│   ├── Onboarding.jsx          # welcome/tour modal (lazy)
+│   ├── LabelPicker.jsx         # label library & chips
+│   ├── CardColorPicker.jsx     # card background tint
+│   ├── RoutineReminderFields.jsx
 │   └── AppBrandMark.jsx        # logo SVG
 ├── utils/
+│   ├── taskHelpers.js          # pure task/display helpers (tested)
+│   ├── labelSync.js            # merge local/cloud label libraries
 │   ├── promptSafety.js         # delimUserField() prompt hardening
+│   ├── recurrence.js           # routine schedule logic
+│   ├── reminders.js            # notification timing
+│   ├── labelColors.js
+│   ├── saveFile.js
 │   └── templateQuestions.js    # localized question helpers
 ├── data/
-│   ├── taskTemplates.js        # coaching prompt sets
-│   └── interviewTemplates.js   # (legacy) interview prompt sets
+│   └── taskTemplates.js        # coaching prompt sets
 └── locales/                    # en/he/fr JSON + templateQuestions/*.js
 ```
 
+Unit tests live under `src/__tests__/` (taskHelpers, sanitize, localeParity,
+labelSync, phaseB, AppErrorBoundary, storage key e2e parity, …).
 ---
 
 ## 2. Entry Points
 
 ### 2.1 `main.jsx`
-- Creates the React root and renders `<App/>` inside `<StrictMode>`.
+- Creates the React root and renders `<AppErrorBoundary><App/></AppErrorBoundary>`
+  inside `<StrictMode>`.
+- On a render crash, `AppErrorBoundary` offers reload and an “export my data”
+  button that reads `localStorage` directly (no dependency on the broken tree).
 - Registers the service worker **only in production** (`import.meta.env.PROD`)
   via `registerSW({ immediate: true })`.
 - Imports `./i18n` for its init side effect and `./index.css`.
 
 ### 2.2 `App.jsx`
 - On mount, calls `completeRedirectSignIn()` to resolve a pending Google
-  **redirect** sign-in (errors swallowed), then renders `<TasksApp/>`.
+  **redirect** sign-in (errors swallowed; Firebase SDK loaded lazily), then
+  renders `<TasksApp/>`.
 - Deliberately thin — the multi-mode selector from the parent project is gone;
   the app boots straight into tasks.
 
@@ -75,7 +92,7 @@ src/
 | `formData` | Working copy for the add/edit form (`makeInitialTask()` default). |
 | `activeTab` | Current view: `board \| list \| timeline \| calendar \| stats`. |
 | `searchQuery` / `statusFilter` | List filters. |
-| `toastMessage` / `isSaved` / `syncing` | Transient UI feedback. |
+| `toast` / `isSaved` / `syncing` | Transient UI feedback; `toast` is `{ message, undo? }` for optional Undo. |
 | `user` | Firebase user (or `null`). |
 | `newStepTitle` | Buffer for the "add step" input. |
 | `visibleCount` | List pagination window (starts at 25). |
@@ -101,16 +118,18 @@ Refs: `dragTaskId` (current drag), `fileInputRef` (import), `isSavingRef`
 - `deleteTask(id)` — filter out by id + `deleteItem`.
 - `handleSave()` — validates non-empty name (guarded by `isSavingRef`), assigns
   `id` (`formData.id || Date.now().toString()`), calls `saveTask`, closes form.
-- `handleDelete(id)` — `window.confirm` then `deleteTask`.
+- `handleDelete(id)` — `window.confirm` then `deleteTask`, with toast **Undo**
+  that restores the deleted task.
 
 All cloud calls are wrapped in `try/catch` and swallow errors so local editing
 never breaks offline.
 
 ### 3.4 Step operations
 
-- `cycleStepStatus(current)` (module-level) advances `todo → in_progress → done → blocked → todo`.
+- `cycleStepStatus(current)` (from `utils/taskHelpers.js`) advances
+  `todo → in_progress → done → blocked → todo`.
 - `handleStepStatusToggle(taskId, stepId)` — cycles a saved task's step and best-effort cloud-updates that task.
-- `handleFormStepToggle(stepId)` / `handleAddStep()` / `handleDeleteStep(stepId)` — operate on `formData.steps` during editing.
+- `handleFormStepToggle(stepId)` / `handleAddStep()` / `handleDeleteStep(stepId)` — operate on `formData.steps` during editing; step delete offers Undo.
 
 ### 3.5 Drag-and-drop (Board)
 
@@ -124,7 +143,7 @@ cloud-updates, clears the ref, toasts.
 - `handleExport()` — `{ version: 2, tasks, labels }` via `saveJsonFile`.
 - `handleImport(e)` — accepts legacy task arrays **or** v2 objects with optional
   `labels` → `sanitizeTaskRecords` / `sanitizeTaskLabels` → `saveTasks` /
-  `setLabels`. Empty/invalid → alert.
+  `setLabels`. Empty/invalid → alert. Overwrite path snapshots prior state for Undo.
 
 ### 3.7 Derived data (memoised)
 
@@ -132,8 +151,10 @@ cloud-updates, clears the ref, toasts.
 | --- | --- |
 | `filteredTasks` | `tasks` filtered by `statusFilter`, optional `labelFilter`, and case-insensitive `searchQuery`. |
 | `stats` | totals, active/completed counts, step totals, `byStatus` and `byLabel` maps. |
-| `calendarEvents` | one event per task due date + per step due date (`type: 'task' \| 'step'`). |
-| `timelineEvents` | task + step events sorted by date; steps flagged `overdue` when after the task due date. |
+| `timelineEvents` | task + step events sorted by date; steps flagged `overdue` when after the task due date (`buildTimelineEvents`). |
+| `calendarEvents` | built via `buildCalendarEvents` in `taskHelpers.js`. |
+
+Board/list/detail also call `isTaskOverdue(task)` to style past-due, non-terminal tasks.
 
 ### 3.8 Rendering
 
@@ -142,8 +163,8 @@ export/import, template/goals/settings/welcome buttons + mobile overflow menu),
 a tab bar, and the active view. Render helpers:
 
 - `renderBoard()` — one column per non-empty status; draggable cards showing
-  priority, due date/time, label chips, routine/reminder icons, card color,
-  `renderProgressBar`, and next pending step.
+  priority, due date/time (overdue styling), label chips, routine/reminder icons,
+  card color, `renderProgressBar`, and next pending step.
 - `renderList()` — master/detail: searchable/filterable list (paginated with
   "Load more") + `renderDetailPanel()`. Mobile shows list *or* detail with a
   back button.
@@ -158,10 +179,10 @@ a tab bar, and the active view. Render helpers:
   events; overdue steps highlighted.
 - Calendar tab delegates to `<CalendarView/>` with `calendarEvents`.
 
-Modals mounted conditionally at the end: `Onboarding`, `APIKeySettings`,
-`TemplateLibrary`, and three `ChatModal` instances (general coach, template
-simulation, goals finder) keyed to reset state per session. A floating Sparkles
-button opens the general coach.
+Modals are `React.lazy`-loaded and mounted conditionally: `Onboarding`,
+`APIKeySettings`, `TemplateLibrary`, and `ChatModal` instances (general coach,
+template simulation, goals finder). A floating Sparkles button opens the general
+coach. Toast is an `aria-live` region with an optional Undo control.
 
 ### 3.9 Navigation
 
@@ -251,60 +272,79 @@ Caps: ≤10,000 tasks per import, ≤200 steps per task, string coercion via
   cap 10,000; the single source of truth for a well-formed task.
 - `parseTaskStoragePayload(raw)` — parse localStorage JSON → sanitized tasks (`[]`
   on any error).
+- Covered by `src/__tests__/sanitize.test.js` (hostile/malformed import cases).
 - (`sanitizeTrackerRecords` / `parseTrackerImportPayload` remain for legacy
   job/recruiter data.)
 
 ### 5.3 `storageKeys.js`
-- `STORAGE_KEYS` — canonical keys (`appMode`, onboarding/welcome flags).
+- `STORAGE_KEYS` — canonical keys (`appMode`, onboarding/welcome flags,
+  `TASKS_LABELS_KEY` / `tasksLabelsV1`).
 - `getEnabledModes()` / `APP_MODES` — legacy mode config helpers.
 - `E2E_AI_STORAGE`, `E2E_MODE_INIT` — fixtures consumed by e2e/unit tests to
   seed a ready state.
 
 ### 5.4 `utils/promptSafety.js`
 - `delimUserField(value, maxLen=500)` — slices, strips `\n\r\t` and `<>`, trims,
-  wraps in `<<< >>>`. Applied to every user-controlled value interpolated into an
-  AI prompt to bound it as literal data.
+  wraps in `<<< >>>`. Wired into `ChatModal` task-coach prompts and
+  `aiAssistant` goals/simulation system prompts for every user-controlled field.
 
-### 5.5 `utils/templateQuestions.js`
+### 5.5 `utils/taskHelpers.js`
+Pure helpers extracted from `TasksApp` (unit-tested):
+- `safeStr`, `cycleStepStatus`, `makeInitialTask`, `makeInitialDuration`
+- `getProgress`, `getNextPendingStep`, `isTaskOverdue`
+- `mergeTaskIntoList`, `formatDate` (calendar-date local parsing — avoids UTC
+  off-by-one), `formatDuration`
+- `buildCalendarEvents`, `buildTimelineEvents`
+
+### 5.6 `utils/labelSync.js`
+Merges local and cloud label libraries on sign-in / save so label IDs stay
+consistent across devices.
+
+### 5.7 `utils/templateQuestions.js`
 - `getLocalizedQuestions(t, isTasks, categoryKey, fallback)` — reads a translated
   array from i18next or falls back to the raw template list.
 - `getLocalizedCategoryLabel(...)` and `formatQuestionList(questions)` — build a
   numbered prompt list for coaching sessions.
 
-### 5.6 `data/taskTemplates.js`
+### 5.8 `data/taskTemplates.js`
 `TASK_TEMPLATES` — six coaching categories (planning, breakdown, execution,
 review, collaboration, retrospective), each with `label`, `icon`, `color`, and a
 set of reflective `questions` used to seed a guided AI session.
 
-### 5.7 `utils/recurrence.js`
+### 5.9 `utils/recurrence.js`
 - `sanitizeRoutine(routine)` — defaults and caps for routine config.
 - `computeNextDueDate(routine, currentDueDate)` — next `YYYY-MM-DD`.
 - `advanceRoutineTask(task)` — reset steps, clear `lastReminderKey`, set next due.
 - `applyTaskStatusChange(task, newStatus)` — applies routine advance when completing.
 
-### 5.8 `utils/reminders.js`
+### 5.10 `utils/reminders.js`
 - `sanitizeDueTime` / `sanitizeReminder` — validate time and reminder offsets.
 - `getTaskDueDateTime(task)` — combine `dueDate` + `dueTime` (default 09:00).
 - `shouldNotifyTask(task, now)` — window check + dedupe via `lastReminderKey`.
 - `requestReminderPermission()` — wraps `Notification.requestPermission()`.
 
-### 5.9 UI components (Phase A/B)
+### 5.11 UI components (Phase A/B + shared)
 - `LabelPicker.jsx` — create/toggle/delete labels; `LabelChipsReadOnly` for cards.
 - `CardColorPicker.jsx` — 18 swatch card background picker.
 - `RoutineReminderFields.jsx` — due time, routine schedule, reminder form block.
-
+- `AppErrorBoundary.jsx` — root error UI (see §2.1).
+- `hooks/useModalA11y.js` — `role="dialog"`, `aria-modal`, focus trap, Escape,
+  restore focus on close (used by settings/templates/onboarding).
 ---
 
 ## 6. Services
 
 ### 6.1 `firebase.js`
 
-Initialises the Firebase app; exports `auth` and `db`.
+Firebase Auth/Firestore are **optional**. The SDK is not loaded until the first
+cloud API call (`ensureFirebase()`). Exports remain sync wrappers that await the
+lazy init.
 
 | Function | Responsibility |
 | --- | --- |
+| `ensureFirebase()` | Dynamic-import `firebase/app|auth|firestore`, init app/auth/db once. |
 | `signInWithGoogle()` | Popup sign-in; on popup/internal errors falls back to `signInWithRedirect`. |
-| `completeRedirectSignIn()` | Resolves a pending redirect result on load. |
+| `completeRedirectSignIn()` | Resolves a pending redirect result on load (triggers lazy init). |
 | `signOut()` / `onAuthChange(cb)` | Sign out / subscribe to auth state. |
 | `formatSignInError(err)` | Maps Firebase error codes/messages to friendly guidance (popup blocked, unauthorized domain, API-key referrer, …). |
 | `loadUserProfile/saveUserProfile(uid[,data])` | Read/merge the `users/{uid}` root doc. |
@@ -315,7 +355,7 @@ Initialises the Firebase app; exports `auth` and `db`.
 | `loadAll*/update*/batchSave*` (companies) | Thin jobseeker-mode aliases (legacy). |
 
 Firestore layout used by tasks: `users/{uid}/tasks/{taskId}` → the task object;
-`users/{uid}` root doc stores `{ appMode }` profile data.
+`users/{uid}` root doc stores `{ appMode, tasksLabels }` profile data.
 
 ### 6.2 `services/aiAssistant.js`
 
@@ -336,8 +376,9 @@ Provider-agnostic streaming AI client.
   same-role turns (required by Anthropic/Gemini).
 - **Streaming**
   - `streamChat(messages, systemPrompt, onChunk)` — multi-turn chat; branches per
-    provider (Gemini SSE, Anthropic SDK, Ollama NDJSON, OpenAI/Groq SSE via
-    `streamOpenAICompat`). Emits cumulative text through `onChunk`.
+    provider (Gemini SSE, Anthropic SDK via **dynamic `import()`**, Ollama NDJSON,
+    OpenAI/Groq SSE via `streamOpenAICompat`). Emits cumulative text through
+    `onChunk`. Non-Anthropic users never download the Anthropic SDK.
   - `runStream(prompt, onChunk)` — single-prompt helper for the one-shot coaching
     functions.
   - `streamGemini`, `streamOpenAICompat`, `streamOllama`, `streamAnthropic` —
@@ -365,7 +406,8 @@ The AI chat surface and its streaming state machine.
   `sendingRef` (re-entrancy), `mountedRef` (avoid setState after unmount),
   `autoStartGen` (guards duplicate auto-starts).
 - **System prompt** — `systemPromptOverride` (simulation/goals) or
-  `buildTaskCoachPrompt(task)` for tasks, or a job prompt otherwise.
+  `buildTaskCoachPrompt(task)` for tasks. User-controlled fields pass through
+  `delimUserField` before interpolation.
 - **`send(textOverride)`** — the core flow: guard empty/duplicate, ensure AI
   ready (else open settings), append user + placeholder assistant message, call
   `streamChat` with a `patchStreamingAssistant` chunk handler, finalise streaming
@@ -388,29 +430,28 @@ with "+N more", a day-detail side panel, and a legend filtered by `legendTypes`
 survive OS dark mode. `onEventClick(ev)` bubbles up to `navigateTo('list', parentId)`.
 
 ### 7.3 `APIKeySettings.jsx`
-Provider/key settings modal. Local state seeded from `localStorage`; provider
-grid (`PROVIDER_ORDER`), key or Ollama-URL input (with show/hide), optional model
-override, and a "get key" link. `handleSave` writes `aiProvider/aiApiKey/aiModel/
-ollamaUrl` and calls `loadAIConfigFromStorage()` (which notifies open chats).
-`handleClear` removes keys and reloads. Shows a persistent security notice.
+Provider/key settings modal (`useModalA11y`). Local state seeded from
+`localStorage`; provider grid (`PROVIDER_ORDER`), key or Ollama-URL input (with
+show/hide), optional model override, and a "get key" link. `handleSave` writes
+`aiProvider/aiApiKey/aiModel/ollamaUrl` and calls `loadAIConfigFromStorage()`.
+`handleClear` removes keys and reloads. Shows a persistent security notice that
+keys live in plaintext `localStorage` (accepted risk).
 
 ### 7.4 Other components
-- `TemplateLibrary.jsx` — searchable catalog of coaching categories; selecting one
-  calls `onStartSimulation(categoryKey)` → `handleStartSimulation` builds a coach
-  system prompt and opens a `ChatModal`.
-- `Onboarding.jsx` — welcome/tour modal (tasks variant) with hooks to add a first
-  task or open AI settings.
+- `TemplateLibrary.jsx` / `Onboarding.jsx` — lazy modals with `useModalA11y`.
 - `AppBrandMark.jsx` — inline SVG logo used in header/empty states.
+- `AppErrorBoundary.jsx` — see §2.1.
 
 ---
 
 ## 8. Internationalization (`i18n.js`)
 Initialises i18next with `initReactI18next`; merges base locale JSON (en/he/fr)
-with per-language `templateQuestions` (interview/task question arrays). Initial
-language from `localStorage.appLanguage` (fallback `en`); `escapeValue:false`
-because React escapes. Components call `useTranslation()`; `TasksApp` derives
-`isRTL = language === 'he'` to flip layout, and a namespaced `tt(key, fb)` helper
-prefixes `tasks.`.
+with per-language `templateQuestions`. Initial language from
+`localStorage.appLanguage` (fallback `en`); `escapeValue:false` because React
+escapes. On init and language change, syncs `document.documentElement.lang` and
+`dir`. Components call `useTranslation()`; `TasksApp` derives `isRTL` and also
+re-syncs `html` attributes. Locale key-set parity across en/he/fr is asserted by
+`localeParity.test.js`.
 
 ---
 
@@ -460,41 +501,41 @@ by default.
 - Runtime caching: `NetworkFirst` for `firebaseio.com` and
   `firestore.googleapis.com` so cloud reads work then fall back to cache.
 - Vitest block: `jsdom` env, globals on, excludes `node_modules` and `e2e`.
+- Optional: `npm run build:analyze` enables `rollup-plugin-visualizer`.
 
 ---
 
 ## 12. Test Strategy
-`src/__tests__/TasksApp.logic.test.js` unit-tests core task logic mirrored from
-`TasksApp` (rather than mounting the whole tree):
 
-- Step status cycling (including unknown → `todo`).
-- `getProgress` (null when no steps; correct done/total; non-array safe).
-- Save de-duplication (insert vs replace by id; prepend order).
-- Step add/delete/update immutability.
-- Calendar event building (task + step dates; omit dateless steps).
-- Timeline overdue detection (step date vs task due date; sorting).
+Unit tests under `src/__tests__/` import real modules (not re-implemented copies):
 
-`src/__tests__/phaseB.test.js` covers routine scheduling and reminder timing:
+| Suite | Covers |
+| --- | --- |
+| `taskHelpers.test.js` / `TasksApp.logic.test.js` | `cycleStepStatus`, progress, merge/save, calendar/timeline builders, `isTaskOverdue`, date formatting |
+| `sanitize.test.js` | Hostile/malformed import & label payloads |
+| `phaseB.test.js` | Routines + reminder timing |
+| `labelSync.test.js` | Local/cloud label merge |
+| `localeParity.test.js` | en/he/fr key-set parity |
+| `AppErrorBoundary.test.jsx` | Crash UI / export path |
+| `storageKeys.e2eParity.test.js` | E2E seed fixtures match production keys |
 
-- `computeNextDueDate` for daily/weekly/monthly patterns.
-- `applyTaskStatusChange` / `advanceRoutineTask` step reset and due advance.
-- `shouldNotifyTask` window and dedupe via `lastReminderKey`.
+Run with `npm test` (Vitest). E2E under `e2e/` includes flows, dark-mode calendar
+legibility, and `@axe-core/playwright` accessibility checks. CI (`.github/workflows/ci.yml`):
+**lint → unit tests → build**, plus a separate Chromium Playwright job. Hardcoded
+Playwright browser revision paths were removed so CI `npx playwright install` stays
+stable across bumps.
 
-Run with `npm test` (Vitest). E2E specs live under `e2e/` (excluded from Vitest)
-and rely on the `storageKeys.js` seed fixtures. Init parity is checked by
-`src/__tests__/storageKeys.e2eParity.test.js`. CI runs unit tests, build, and
-Playwright on pull requests (see `.github/workflows/ci.yml`).
-
-Practical guidance: keep the canonical logic (`sanitizeTaskRecords`,
-`cycleStepStatus`, event builders) pure and mirrored in tests; when changing the
-task/step schema, update `sanitize.js`, the data-structure section above, and the
-mirrored test helpers together.
+Practical guidance: keep canonical logic (`sanitizeTaskRecords`, `taskHelpers`,
+event builders) pure and tested; when changing the task/step schema, update
+`sanitize.js`, this LLD’s data-structure section, and the tests together.
 
 ---
 
 ## 13. Cross-References
-- Architecture, flows, requirements → [HLD](../hld/hld.md)
+- Architecture, flows, requirements, audit A–I → [HLD](../hld/hld.md)
 - Status/collection/key rules → `src/statuses.js`
 - Data whitelisting → `src/sanitize.js`
+- Pure task helpers → `src/utils/taskHelpers.js`
 - AI providers & streaming → `src/services/aiAssistant.js`
 - Cloud rules → `firestore.rules`
+- Security headers / CSP → `vercel.json`, `index.html`
