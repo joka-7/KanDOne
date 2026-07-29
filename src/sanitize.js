@@ -1,6 +1,7 @@
 import { STATUSES_TASKS } from './statuses';
 import { sanitizeRoutine } from './utils/recurrence.js';
 import { sanitizeDueTime, sanitizeReminder } from './utils/reminders.js';
+import { sanitizeBoardOrder } from './utils/boardOrder.js';
 
 /** Generate a cryptographically random ID (fallback to timestamp if crypto unavailable) */
 export function generateId() {
@@ -98,6 +99,7 @@ export function sanitizeTaskRecords(rows) {
     routine: sanitizeRoutine(t.routine),
     reminder: sanitizeReminder(t.reminder),
     lastReminderKey: safeStr(t.lastReminderKey || '').slice(0, 64),
+    boardOrder: sanitizeBoardOrder(t.boardOrder) ?? 0,
     steps: sanitizeTaskSteps(t.steps),
     notes: safeStr(t.notes || ''),
   }));

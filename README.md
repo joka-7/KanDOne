@@ -32,9 +32,11 @@ calendar and stats views, with optional AI coaching and Firebase cloud sync. Off
 | **Steps** | Sub-tasks with status cycling (`todo → in_progress → done → blocked`) |
 | **Phase A** | Custom labels & colors, per-task card color, estimated duration, label filter & stats |
 | **Phase B** | Optional due time, recurring routine tasks (daily/weekly/monthly), browser reminders |
+| **UX** | Overdue highlighting; Undo toast for delete task/step/label and import overwrite |
 | **Data** | Auto-save to `localStorage`, JSON backup (tasks + labels), optional Google/Firestore sync |
 | **AI** | Task coach, template sessions, goals finder (bring-your-own API key) |
 | **PWA** | Installable, works offline once loaded |
+| **A11y / i18n** | `html` lang/dir sync, en/he/fr with locale parity tests, dialog focus trapping |
 
 ### Routine tasks
 
@@ -56,17 +58,18 @@ React 19 · Vite · Tailwind CSS · i18next · Firebase (Auth + Firestore) · Vi
 
 ```bash
 npm install
-npm run dev      # start dev server (http://localhost:5173)
-npm run build    # production build
-npm test         # run unit tests
-npm run test:e2e # Playwright browser tests (port 5199)
-npm run test:all # unit + e2e
-npm run lint     # eslint
+npm run dev           # start dev server (http://localhost:5173)
+npm run build         # production build
+npm run build:analyze # production build + rollup visualizer report
+npm test              # run unit tests
+npm run test:e2e      # Playwright browser tests (port 5199)
+npm run test:all      # unit + e2e
+npm run lint          # eslint (also runs in CI)
 ```
 
 ## Documentation
 
-- [High Level Design (HLD)](docs/hld/hld.md) — architecture, flows, integrations
+- [High Level Design (HLD)](docs/hld/hld.md) — architecture, flows, integrations, audit A–I summary
 - [Low Level Design (LLD)](docs/lld/lld.md) — modules, data shapes, function map
 
 ## Project layout (high level)
@@ -75,14 +78,20 @@ npm run lint     # eslint
 src/
 ├── TasksApp.jsx              # main UI + state
 ├── components/
-│   ├── LabelPicker.jsx       # label library & chips
-│   ├── CardColorPicker.jsx   # card background tint
+│   ├── AppErrorBoundary.jsx  # root crash: reload + export data
+│   ├── LabelPicker.jsx
+│   ├── CardColorPicker.jsx
 │   └── RoutineReminderFields.jsx
+├── hooks/
+│   └── useModalA11y.js       # dialog a11y helpers
 ├── utils/
-│   ├── recurrence.js         # routine schedule logic
-│   ├── reminders.js          # notification timing
-│   └── labelColors.js
+│   ├── taskHelpers.js        # pure task/display logic
+│   ├── recurrence.js
+│   ├── reminders.js
+│   ├── labelSync.js
+│   └── promptSafety.js
 ├── sanitize.js               # import/localStorage whitelisting
+├── firebase.js               # lazy-loaded Firebase SDK
 └── locales/                  # en / he / fr
 ```
 
@@ -97,13 +106,24 @@ Everything the Tasks feature needs, standalone:
 - i18n: `en` / `he` / `fr` locales
 
 The multi-mode architecture (jobseeker / recruiter modes, mode selection screen, mode
-switcher/dropdown) was removed — `App.jsx` boots straight into the tasks view.
+switcher/dropdown) was removed — `App.jsx` boots straight into the tasks view. Dead
+interview-template assets were removed in a later cleanup.
 
 ## Notes
 
 - `src/firebase.js` points at the `kandone-a6c91` Firebase project (the config is a public
-  web API key, not a secret). The app works fully offline without it.
+  web API key, not a secret). The app works fully offline without it; the Firebase SDK
+  loads only when a cloud API is first used.
 - Labels are stored in `localStorage` (`tasksLabelsV1`) and synced to the user
   profile in Firestore (`tasksLabels` field) when signed in; also included in JSON export v2.
 - Reminders require the app to be open (or running as an installed PWA); background
   service-worker scheduling is not implemented in v1.
+- AI API keys are stored in plaintext `localStorage` by design (no backend proxy). The
+  settings modal warns about this; treat it as an accepted privacy trade-off.
+- Calendar UI is forced light for readability; under OS dark mode it stays a light panel
+  (stray Tailwind `dark:` classes were removed to avoid white-on-white text).
+- CSP uses `script-src 'self'` (plus Google/Firebase origins) — no `'unsafe-inline'` for
+  scripts. The same policy is set in `index.html` and as a Vercel response header.
+- Board card drag uses HTML5 DnD (desktop). Touch drag and manual within-column ordering
+  are not implemented yet.
+- A render crash shows a recovery screen that can still export your local backup JSON.
