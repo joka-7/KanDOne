@@ -415,6 +415,7 @@
       "addFirstButton": "Ajouter votre première tâche",
       "noResults": "Aucune tâche ne correspond à vos filtres.",
       "emptyColumn": "Déposez une tâche ici",
+      "dragHandle": "Glisser pour réordonner",
       "signInButton": "Se connecter avec Google — synchroniser partout",
       "loadButton": "Restaurer depuis une sauvegarde JSON"
     },

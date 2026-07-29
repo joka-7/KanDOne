@@ -122,7 +122,7 @@ test.describe('KanDOne task flows', () => {
     await saveForm(page);
 
     await goToBoardTab(page);
-    const card = page.locator('[draggable="true"]').filter({ hasText: 'Late report' });
+    const card = page.getByTestId('board-task-card').filter({ hasText: 'Late report' });
     await expect(card.getByText('· Overdue')).toBeVisible();
   });
 
