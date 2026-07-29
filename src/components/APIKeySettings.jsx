@@ -1,5 +1,5 @@
-import React, { useState, useRef, useCallback } from 'react';
-import { X, Key, Eye, EyeOff, ExternalLink, CheckCircle, Trash2, Settings } from 'lucide-react';
+import { useState, useRef, useCallback } from 'react';
+import { X, Eye, EyeOff, ExternalLink, CheckCircle, Trash2, Settings } from 'lucide-react';
 import { loadAIConfigFromStorage, isAIReady, PROVIDERS } from '../services/aiAssistant';
 import { useModalA11y } from '../hooks/useModalA11y';
 

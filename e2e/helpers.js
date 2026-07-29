@@ -56,9 +56,22 @@ export async function acceptNextDialog(page) {
 
 /** Drag a kanban card into a column identified by its status header text. */
 export async function dragCardToColumn(page, cardName, columnHeaderPattern) {
-  const card = page.locator('[draggable="true"]').filter({ hasText: cardName });
+  const card = page.getByTestId('board-task-card').filter({ hasText: cardName });
   const column = page.locator('.board-column').filter({ has: page.getByText(columnHeaderPattern) });
-  await card.dragTo(column);
+  await expectVisible(card);
+  await expectVisible(column);
+  const from = await card.boundingBox();
+  const to = await column.boundingBox();
+  if (!from || !to) throw new Error('dragCardToColumn: missing bounding boxes');
+  // Pointer path with enough steps for dnd-kit PointerSensor (distance: 8).
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + Math.min(to.height / 2, 80), { steps: 25 });
+  await page.mouse.up();
+}
+
+async function expectVisible(locator) {
+  await locator.waitFor({ state: 'visible' });
 }
 
 /** Configure localStorage so isAIReady() is true (gemini + fake key). */

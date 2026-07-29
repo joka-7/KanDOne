@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, Component } from 'react';
 import { X, Send, Loader2, Save, MessageSquare } from 'lucide-react';
 import {
   streamChat, buildApiMessages, loadAIConfigFromStorage, isAIReady, getCurrentProvider,
@@ -70,7 +70,7 @@ function Message({ msg, onSave, t }) {
   );
 }
 
-class ChatErrorBoundary extends React.Component {
+class ChatErrorBoundary extends Component {
   constructor(props) {
     super(props);
     this.state = { error: null };
