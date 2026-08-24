@@ -56,7 +56,8 @@
     "list": "List & Edit",
     "timeline": "Timeline",
     "calendar": "Calendar",
-    "stats": "Statistics"
+    "stats": "Statistics",
+    "priority": "Priority"
   },
   "calendar": {
     "today": "Today",
@@ -428,7 +429,11 @@
       "remaining": "remaining",
       "selectTask": "Select a task from the list",
       "noTasks": "No tasks yet.",
-      "allLabels": "All Labels"
+      "allLabels": "All Labels",
+      "sortBy": "Sort by",
+      "sortManual": "Sort: Manual order",
+      "sortScore": "Sort: Priority score",
+      "sortDue": "Sort: Due date"
     },
     "form": {
       "editTitle": "Edit Task",
@@ -473,7 +478,13 @@
       "routineEndDate": "End date (optional)",
       "reminder": "Reminder",
       "reminderWhen": "Notify",
-      "reminderHint": "Browser notifications while KanDOne is open (or installed as a PWA)."
+      "reminderHint": "Browser notifications while KanDOne is open (or installed as a PWA).",
+      "impact": "Impact",
+      "impactHint": "How much does finishing this actually move things?",
+      "effort": "Effort",
+      "stepEffort": "Step size",
+      "when": "When",
+      "whenHint": "Sets the due date below. You can still edit it by hand."
     },
     "routine": {
       "daily": "Daily",
@@ -515,7 +526,15 @@
       "minute": "Minutes",
       "hour": "Hours",
       "day": "Days",
-      "month": "Months"
+      "month": "Months",
+      "year": "Years",
+      "short": {
+        "minute": "m",
+        "hour": "h",
+        "day": "d",
+        "month": "mo",
+        "year": "y"
+      }
     },
     "overdue": "Overdue",
     "detail": {
@@ -550,6 +569,48 @@
       "deleteConfirm": "Are you sure you want to delete this task?",
       "noData": "No task data found in the uploaded file.",
       "importError": "Error importing file. Make sure this is a valid JSON file."
+    },
+    "impact": {
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "urgency": {
+      "now": "Now",
+      "today": "Today",
+      "week": "This week",
+      "month": "This month",
+      "someday": "Someday",
+      "overdue": "Overdue"
+    },
+    "effort": {
+      "none": "No estimate",
+      "unitGroup": "Effort unit",
+      "tiersButton": "Effort sizes",
+      "tiersHint": "Choose where small and medium effort end. Everything above is a big task.",
+      "smallUpTo": "Small effort — up to",
+      "mediumUpTo": "Medium effort — up to",
+      "tier": {
+        "small": "small effort",
+        "medium": "medium effort",
+        "large": "big effort"
+      }
+    },
+    "priorityView": {
+      "title": "What to do next",
+      "subtitle": "Ranked by urgency, impact and effort.",
+      "empty": "No tasks to rank yet.",
+      "untitled": "Untitled",
+      "bise": "BISE",
+      "scoreTitle": "Priority score",
+      "biseTitle": "Big impact, small effort — do these first",
+      "group": {
+        "doNow": "Do Now",
+        "bise": "Quick Wins",
+        "bigProject": "Big Projects",
+        "fillIn": "Fill-ins",
+        "later": "Later"
+      }
     }
   },
   "recruiter": {
