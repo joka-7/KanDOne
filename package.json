@@ -20,12 +20,12 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@joka-7/modeldispatcher-browser-agent": "^0.3.0",
-    "firebase": "^12.13.0",
-    "i18next": "^26.3.0",
+    "firebase": "^12.17.0",
+    "i18next": "^26.3.6",
     "lucide-react": "^1.27.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-i18next": "^17.0.8"
+    "react-i18next": "^17.0.11"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
@@ -41,12 +41,12 @@
     "eslint": "^10.3.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
-    "globals": "^17.6.0",
+    "globals": "^17.8.0",
     "jsdom": "^30.0.1",
     "postcss": "^8.5.25",
     "rollup-plugin-visualizer": "^7.0.1",
     "tailwindcss": "^3.4.19",
-    "vite": "^8.1.5",
+    "vite": "^8.2.0",
     "vite-plugin-pwa": "^1.3.0",
     "vitest": "^4.1.7"
   }

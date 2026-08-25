@@ -25,6 +25,10 @@ import {
 } from '../utils/taskHelpers';
 import { formatDueDateTime } from '../utils/reminders';
 import { sortByBoardOrder } from '../utils/boardOrder';
+import { scoreTask, getBandStyle } from '../utils/taskPriority';
+import { DEFAULT_EFFORT_TIERS } from '../utils/effortScale';
+import { EffortChip } from './EffortPicker';
+import PriorityBadge from './PriorityBadge';
 
 const PRIORITY_COLORS = {
   high: 'bg-red-100 text-red-700 border-red-200',
@@ -78,6 +82,7 @@ function BoardColumn({ statusId, colorClass, label, count, emptyLabel, children,
 
 function SortableTaskCard({
   task, labels, lang, tt, t, onOpen, renderProgressBar,
+  tiers = DEFAULT_EFFORT_TIERS, isRTL = false,
 }) {
   const {
     attributes, listeners, setNodeRef, transform, transition, isDragging,
@@ -94,6 +99,7 @@ function SortableTaskCard({
   };
   const overdue = isTaskOverdue(task);
   const next = getNextPendingStep(task);
+  const priority = scoreTask(task, { tiers });
 
   return (
     <div
@@ -104,6 +110,8 @@ function SortableTaskCard({
       aria-label={`${safeStr(task.name)}. ${tt('board.dragHandle', 'Drag to reorder')}`}
       onClick={() => onOpen(task.id)}
       className={`${task.cardColor ? '' : 'bg-white'} border rounded-xl p-2.5 sm:p-3 cursor-grab active:cursor-grabbing hover:shadow-md hover:border-emerald-300 active:bg-emerald-50/50 transition-shadow group touch-manipulation ${
+        isRTL ? 'border-r-4' : 'border-l-4'
+      } ${getBandStyle(priority.band).stripe} ${
         overdue ? 'border-red-300' : 'border-gray-200'
       } ${isDragging ? 'z-10 shadow-lg' : ''}`}
       {...attributes}
@@ -119,11 +127,15 @@ function SortableTaskCard({
           <GripVertical size={16} />
         </span>
       </div>
-      {task.priority && (
-        <span className={`inline-block text-xs px-1.5 py-0.5 rounded border font-medium ${PRIORITY_COLORS[task.priority]}`}>
-          {t(`priority.${task.priority}`, task.priority)}
-        </span>
-      )}
+      <div className="flex flex-wrap items-center gap-1">
+        <PriorityBadge priority={priority} tt={tt} />
+        <EffortChip effort={task.effort?.value ? task.effort : task.duration} tt={tt} tiers={tiers} />
+        {task.priority && (
+          <span className={`inline-block text-xs px-1.5 py-0.5 rounded border font-medium ${PRIORITY_COLORS[task.priority]}`}>
+            {t(`priority.${task.priority}`, task.priority)}
+          </span>
+        )}
+      </div>
       {task.dueDate && (
         <div className={`flex items-center gap-1 text-xs mt-1 ${overdue ? 'text-red-600 font-semibold' : 'text-gray-400'}`}>
           {overdue ? <AlertCircle size={10} /> : <Calendar size={10} />}
@@ -195,6 +207,8 @@ export default function KanbanBoard({
   onOpenTask,
   onBoardDragEnd,
   renderProgressBar,
+  tiers = DEFAULT_EFFORT_TIERS,
+  isRTL = false,
 }) {
   const [activeId, setActiveId] = useState(null);
 
@@ -274,6 +288,8 @@ export default function KanbanBoard({
                   t={t}
                   onOpen={onOpenTask}
                   renderProgressBar={renderProgressBar}
+                  tiers={tiers}
+                  isRTL={isRTL}
                 />
               ))}
             </BoardColumn>
