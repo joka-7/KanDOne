@@ -56,7 +56,8 @@
     "list": "רשימה ועריכה",
     "timeline": "ציר זמן",
     "calendar": "לוח שנה",
-    "stats": "סטטיסטיקות"
+    "stats": "סטטיסטיקות",
+    "priority": "עדיפות"
   },
   "calendar": {
     "today": "היום",
@@ -428,7 +429,11 @@
       "remaining": "נותרו",
       "selectTask": "בחר משימה מהרשימה",
       "noTasks": "אין משימות עדיין.",
-      "allLabels": "כל התוויות"
+      "allLabels": "כל התוויות",
+      "sortBy": "מיין לפי",
+      "sortManual": "מיון: סדר ידני",
+      "sortScore": "מיון: ציון עדיפות",
+      "sortDue": "מיון: תאריך יעד"
     },
     "form": {
       "editTitle": "עריכת משימה",
@@ -473,7 +478,13 @@
       "routineEndDate": "תאריך סיום (אופציונלי)",
       "reminder": "תזכורת",
       "reminderWhen": "הודע",
-      "reminderHint": "התראות דפדפן כש-KanDOne פתוח (או מותקן כ-PWA)."
+      "reminderHint": "התראות דפדפן כש-KanDOne פתוח (או מותקן כ-PWA).",
+      "impact": "השפעה",
+      "impactHint": "כמה סיום המשימה הזו באמת מקדם אותך?",
+      "effort": "מאמץ",
+      "stepEffort": "גודל הצעד",
+      "when": "מתי",
+      "whenHint": "קובע את תאריך היעד למטה. תמיד אפשר לערוך אותו ידנית."
     },
     "detail": {
       "editDetails": "ערוך פרטים",
@@ -512,7 +523,15 @@
       "minute": "דקות",
       "hour": "שעות",
       "day": "ימים",
-      "month": "חודשים"
+      "month": "חודשים",
+      "year": "שנים",
+      "short": {
+        "minute": "ד",
+        "hour": "ש",
+        "day": "י",
+        "month": "ח",
+        "year": "שנ"
+      }
     },
     "overdue": "באיחור",
     "routine": {
@@ -550,6 +569,48 @@
       "body": "המשימה שלך מתקרבת.",
       "defaultTitle": "תזכורת משימה",
       "permissionDenied": "הפעל התראות בהגדרות הדפדפן כדי להשתמש בתזכורות."
+    },
+    "impact": {
+      "high": "גבוהה",
+      "medium": "בינונית",
+      "low": "נמוכה"
+    },
+    "urgency": {
+      "now": "עכשיו",
+      "today": "היום",
+      "week": "השבוע",
+      "month": "החודש",
+      "someday": "מתישהו",
+      "overdue": "באיחור"
+    },
+    "effort": {
+      "none": "ללא הערכה",
+      "unitGroup": "יחידת מאמץ",
+      "tiersButton": "גדלי מאמץ",
+      "tiersHint": "בחר היכן נגמר מאמץ קטן ובינוני. כל מה שמעל נחשב משימה גדולה.",
+      "smallUpTo": "מאמץ קטן — עד",
+      "mediumUpTo": "מאמץ בינוני — עד",
+      "tier": {
+        "small": "מאמץ קטן",
+        "medium": "מאמץ בינוני",
+        "large": "מאמץ גדול"
+      }
+    },
+    "priorityView": {
+      "title": "מה לעשות עכשיו",
+      "subtitle": "מדורג לפי דחיפות, השפעה ומאמץ.",
+      "empty": "אין עדיין משימות לדירוג.",
+      "untitled": "ללא שם",
+      "bise": "השג\"ק",
+      "scoreTitle": "ציון עדיפות",
+      "biseTitle": "השפעה גדולה, מאמץ קטן — התחל מאלה",
+      "group": {
+        "doNow": "לעשות עכשיו",
+        "bise": "הישגים מהירים",
+        "bigProject": "פרויקטים גדולים",
+        "fillIn": "משימות מילוי",
+        "later": "אחר כך"
+      }
     }
   },
   "recruiter": {

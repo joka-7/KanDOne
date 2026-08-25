@@ -19,11 +19,17 @@ export const cycleStepStatus = (current) => {
 
 export const makeInitialDuration = () => ({ value: '', unit: 'hour' });
 
+/** Effort reuses the duration shape, but its values are snapped to the ladder. */
+export const makeInitialEffort = () => ({ value: '', unit: 'hour' });
+
 export const makeInitialTask = () => ({
   name: '',
   description: '',
   status: 'active',
   priority: 'medium',
+  impact: 'medium',
+  urgency: '',
+  effort: makeInitialEffort(),
   dueDate: '',
   dueTime: '',
   duration: makeInitialDuration(),
