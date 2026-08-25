@@ -56,7 +56,8 @@
     "list": "Liste & Édition",
     "timeline": "Chronologie",
     "calendar": "Calendrier",
-    "stats": "Statistiques"
+    "stats": "Statistiques",
+    "priority": "Priorité"
   },
   "calendar": {
     "today": "Aujourd'hui",
@@ -428,7 +429,11 @@
       "remaining": "restants",
       "selectTask": "Sélectionnez une tâche dans la liste",
       "noTasks": "Aucune tâche pour l'instant.",
-      "allLabels": "Toutes les étiquettes"
+      "allLabels": "Toutes les étiquettes",
+      "sortBy": "Trier par",
+      "sortManual": "Tri : Ordre manuel",
+      "sortScore": "Tri : Score de priorité",
+      "sortDue": "Tri : Date d'échéance"
     },
     "form": {
       "editTitle": "Modifier la tâche",
@@ -473,7 +478,13 @@
       "routineEndDate": "Date de fin (optionnelle)",
       "reminder": "Rappel",
       "reminderWhen": "Notifier",
-      "reminderHint": "Notifications navigateur lorsque KanDOne est ouvert (ou installé en PWA)."
+      "reminderHint": "Notifications navigateur lorsque KanDOne est ouvert (ou installé en PWA).",
+      "impact": "Impact",
+      "impactHint": "Dans quelle mesure terminer ceci fait-il vraiment avancer les choses ?",
+      "effort": "Effort",
+      "stepEffort": "Taille de l'étape",
+      "when": "Quand",
+      "whenHint": "Définit la date d'échéance ci-dessous. Vous pouvez toujours la modifier."
     },
     "detail": {
       "editDetails": "Modifier les détails",
@@ -512,7 +523,15 @@
       "minute": "Minutes",
       "hour": "Heures",
       "day": "Jours",
-      "month": "Mois"
+      "month": "Mois",
+      "year": "Années",
+      "short": {
+        "minute": "m",
+        "hour": "h",
+        "day": "j",
+        "month": "mo",
+        "year": "a"
+      }
     },
     "overdue": "En retard",
     "routine": {
@@ -550,6 +569,48 @@
       "body": "Votre tâche approche.",
       "defaultTitle": "Rappel de tâche",
       "permissionDenied": "Activez les notifications dans votre navigateur pour utiliser les rappels."
+    },
+    "impact": {
+      "high": "Fort",
+      "medium": "Moyen",
+      "low": "Faible"
+    },
+    "urgency": {
+      "now": "Maintenant",
+      "today": "Aujourd'hui",
+      "week": "Cette semaine",
+      "month": "Ce mois-ci",
+      "someday": "Un jour",
+      "overdue": "En retard"
+    },
+    "effort": {
+      "none": "Sans estimation",
+      "unitGroup": "Unité d'effort",
+      "tiersButton": "Tailles d'effort",
+      "tiersHint": "Choisissez où s'arrêtent le petit et le moyen effort. Au-delà, c'est une grosse tâche.",
+      "smallUpTo": "Petit effort — jusqu'à",
+      "mediumUpTo": "Effort moyen — jusqu'à",
+      "tier": {
+        "small": "petit effort",
+        "medium": "effort moyen",
+        "large": "gros effort"
+      }
+    },
+    "priorityView": {
+      "title": "Que faire ensuite",
+      "subtitle": "Classé par urgence, impact et effort.",
+      "empty": "Aucune tâche à classer pour le moment.",
+      "untitled": "Sans titre",
+      "bise": "GIPE",
+      "scoreTitle": "Score de priorité",
+      "biseTitle": "Fort impact, petit effort — à faire en premier",
+      "group": {
+        "doNow": "À faire maintenant",
+        "bise": "Gains rapides",
+        "bigProject": "Gros projets",
+        "fillIn": "Petits riens",
+        "later": "Plus tard"
+      }
     }
   },
   "recruiter": {
