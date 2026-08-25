@@ -42,6 +42,20 @@ export async function goToListTab(page) {
   await page.getByRole('button', { name: /List & Edit/i }).click();
 }
 
+export async function goToPriorityTab(page) {
+  await page.getByRole('button', { name: /^Priority$/i }).click();
+}
+
+/**
+ * Pick a point on the effort ladder. The picker shows one unit at a time, so
+ * the unit tab has to be selected before its ticks exist in the DOM.
+ */
+export async function pickEffort(page, unitLabel, value, { scope } = {}) {
+  const root = scope || page;
+  await root.getByRole('tab', { name: unitLabel }).first().click();
+  await root.getByRole('radio', { name: new RegExp(`^${value} ${unitLabel.source || unitLabel}`, 'i') }).first().click();
+}
+
 export async function goToCalendarTab(page) {
   await page.getByRole('button', { name: /^Calendar$/i }).click();
 }

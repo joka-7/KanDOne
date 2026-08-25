@@ -5,6 +5,7 @@ import {
   PROVIDERS, AI_CONFIG_UPDATED,
 } from '../services/aiAssistant';
 import { delimUserField } from '../utils/promptSafety';
+import { scoreTask } from '../utils/taskPriority';
 
 const SIM_TRIGGER = '__sim_start__';
 
@@ -114,12 +115,18 @@ const buildTaskCoachPrompt = (task) => {
   }
   const steps = Array.isArray(task.steps) ? task.steps : [];
   const done = steps.filter(s => s.status === 'done').length;
+  // Computed, not user text — safe to interpolate, but still kept behind
+  // delimUserField for the string fields so the shape stays uniform.
+  const priority = scoreTask(task);
   // User-controlled fields go through delimUserField so a task name/description
   // cannot break out of the system prompt and inject instructions.
   return `You are a helpful task management coach. The user is working on this task:
 - Name: ${delimUserField(task.name || 'Untitled')}
 - Status: ${delimUserField(task.status || 'active', 40)}
-- Priority: ${delimUserField(task.priority || 'medium', 40)}${task.dueDate ? `\n- Due: ${delimUserField(task.dueDate, 40)}` : ''}${task.description ? `\n- Description: ${delimUserField(task.description, 1000)}` : ''}
+- Priority: ${delimUserField(task.priority || 'medium', 40)}
+- Impact: ${delimUserField(priority.impact, 40)}
+- Effort: ${delimUserField(priority.effortTier, 40)}${priority.urgency ? `\n- Urgency: ${delimUserField(priority.urgency, 40)}` : ''}
+- Priority score: ${priority.score}/100${priority.isBise ? ' (big impact, small effort — a quick win)' : ''}${task.dueDate ? `\n- Due: ${delimUserField(task.dueDate, 40)}` : ''}${task.description ? `\n- Description: ${delimUserField(task.description, 1000)}` : ''}
 - Steps: ${steps.length ? `${done}/${steps.length} done` : 'none yet'}${task.notes ? `\n- Notes: ${delimUserField(task.notes, 1000)}` : ''}
 Be concise and practical. Suggest concrete next actions.`;
 };

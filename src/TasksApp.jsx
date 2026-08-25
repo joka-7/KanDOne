@@ -5,7 +5,7 @@ import {
   Trash2, Edit2, ArrowLeft, ArrowRight, CheckCircle2, CheckCircle, Circle,
   Clock, AlertCircle, Calendar, Cloud, CloudOff, RefreshCw,
   ClipboardList, X, Languages, MoreVertical, Settings, Smartphone, Sparkles,
-  Timer, Repeat, Bell,
+  Timer, Repeat, Bell, Zap,
 } from 'lucide-react';
 import { initAI, getGoalsTasksSystemPrompt } from './services/aiAssistant';
 import { TASK_TEMPLATES } from './data/taskTemplates';
@@ -22,7 +22,7 @@ import { getStorageKey, STATUSES_TASKS, filterItemsForMode } from './statuses';
 import { usePwaInstall } from './usePwaInstall';
 import AppBrandMark from './components/AppBrandMark';
 import KanbanBoard from './components/KanbanBoard';
-import { STORAGE_KEYS, TASKS_LABELS_KEY } from './storageKeys.js';
+import { STORAGE_KEYS, TASKS_LABELS_KEY, TASKS_EFFORT_TIERS_KEY } from './storageKeys.js';
 import {
   sanitizeTaskRecords, parseTaskStoragePayload, generateId,
   parseTaskLabelsStoragePayload,
@@ -43,10 +43,17 @@ import {
   applyBoardDrag, ensureBoardOrders, nextBoardOrder, sanitizeBoardOrder,
 } from './utils/boardOrder';
 import {
-  safeStr, cycleStepStatus, makeInitialDuration, makeInitialTask,
+  safeStr, cycleStepStatus, makeInitialDuration, makeInitialEffort, makeInitialTask,
   getProgress, formatDate, formatDuration, isTaskOverdue,
   buildCalendarEvents, buildTimelineEvents, mergeTaskIntoList, DURATION_UNITS,
 } from './utils/taskHelpers';
+import EffortPicker, { EffortChip } from './components/EffortPicker';
+import PriorityBadge from './components/PriorityBadge';
+import {
+  scoreTask, sortByScore, sortByDueDate, urgencyToDueDate, getBandStyle,
+  IMPACT_LEVELS, URGENCY_CHOICES,
+} from './utils/taskPriority';
+import { parseEffortTiersPayload, sanitizeEffortTiers } from './utils/effortScale';
 
 // Modal / tab-scoped views — keep them out of the initial board paint.
 const ChatModal = lazy(() => import('./components/ChatModal'));
@@ -54,6 +61,7 @@ const CalendarView = lazy(() => import('./components/CalendarView'));
 const TemplateLibrary = lazy(() => import('./components/TemplateLibrary'));
 const APIKeySettings = lazy(() => import('./components/APIKeySettings'));
 const Onboarding = lazy(() => import('./components/Onboarding'));
+const PriorityView = lazy(() => import('./components/PriorityView'));
 
 const MODE = 'tasks';
 
@@ -96,6 +104,12 @@ export default function TasksApp() {
   const [labels, setLabels] = useState(
     () => parseTaskLabelsStoragePayload(localStorage.getItem(TASKS_LABELS_KEY)),
   );
+  // Where small/medium/large fall on the effort ladder — a local preference,
+  // so it is not synced to Firestore alongside the tasks themselves.
+  const [effortTiers, setEffortTiers] = useState(
+    () => parseEffortTiersPayload(localStorage.getItem(TASKS_EFFORT_TIERS_KEY)),
+  );
+  const [sortMode, setSortMode] = useState('manual');
 
   const [selectedId, setSelectedId] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -190,6 +204,18 @@ export default function TasksApp() {
         .catch((e) => { console.error(e); setSyncError(true); });
     }
   }, [labels, user]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(TASKS_EFFORT_TIERS_KEY, JSON.stringify(effortTiers));
+    } catch (e) {
+      console.error('Failed to save effort tiers to localStorage', e);
+    }
+  }, [effortTiers]);
+
+  const handleEffortTiersChange = useCallback((next) => {
+    setEffortTiers(sanitizeEffortTiers(next));
+  }, []);
 
   useEffect(() => {
     const provider = localStorage.getItem('aiProvider') || 'gemini';
@@ -451,7 +477,7 @@ export default function TasksApp() {
     if (!title) return;
     const newStep = {
       id: generateId(), title, status: 'todo', notes: '', dueDate: '',
-      duration: makeInitialDuration(), labelIds: [],
+      duration: makeInitialDuration(), effort: makeInitialEffort(), labelIds: [],
     };
     setFormData(prev => ({ ...prev, steps: [...(prev.steps || []), newStep] }));
     setNewStepTitle('');
@@ -782,8 +808,10 @@ Rules:
         safeStr(t.description).toLowerCase().includes(q)
       );
     }
+    if (sortMode === 'score') return sortByScore(result, { tiers: effortTiers });
+    if (sortMode === 'due') return sortByDueDate(result);
     return result;
-  }, [tasks, statusFilter, labelFilter, searchQuery]);
+  }, [tasks, statusFilter, labelFilter, searchQuery, sortMode, effortTiers]);
 
   const stats = useMemo(() => {
     const total = tasks.length;
@@ -892,6 +920,8 @@ Rules:
         onOpenTask={(id) => navigateTo('list', id)}
         onBoardDragEnd={handleBoardDragEnd}
         renderProgressBar={renderProgressBar}
+        tiers={effortTiers}
+        isRTL={isRTL}
       />
     );
   };
@@ -995,6 +1025,27 @@ Rules:
                   <option key={u} value={u}>{tt(`duration.${u}`, u)}</option>
                 ))}
               </select>
+            </div>
+          )}
+          {editable && (
+            <div className="mt-1.5">
+              <EffortPicker
+                label={tt('form.stepEffort', 'Step size')}
+                value={step.effort}
+                onChange={next => setFormData(prev => ({
+                  ...prev,
+                  steps: prev.steps.map(s => s.id === step.id ? { ...s, effort: next } : s),
+                }))}
+                tiers={effortTiers}
+                tt={tt}
+                size="sm"
+                noneLabel={tt('effort.none', 'No estimate')}
+              />
+            </div>
+          )}
+          {!editable && (
+            <div className="mt-0.5">
+              <EffortChip effort={step.effort} tt={tt} tiers={effortTiers} />
             </div>
           )}
           {!editable && formatDuration(step.duration, tt) && (
@@ -1106,6 +1157,74 @@ Rules:
                   ))}
                 </select>
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                  {tt('form.impact', 'Impact')}
+                </label>
+                <select
+                  value={formData.impact || 'medium'}
+                  onChange={e => setFormData(prev => ({ ...prev, impact: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 text-sm"
+                >
+                  {IMPACT_LEVELS.map(level => (
+                    <option key={level} value={level}>{tt(`impact.${level}`, level)}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-end">
+                <p className="text-xs text-gray-400 pb-2.5">
+                  {tt('form.impactHint', 'How much does finishing this actually move things?')}
+                </p>
+              </div>
+            </div>
+
+            <EffortPicker
+              label={tt('form.effort', 'Effort')}
+              value={formData.effort}
+              onChange={next => setFormData(prev => ({ ...prev, effort: next }))}
+              tiers={effortTiers}
+              tt={tt}
+              noneLabel={tt('effort.none', 'No estimate')}
+            />
+
+            <div>
+              <span className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                {tt('form.when', 'When')}
+              </span>
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label={tt('form.when', 'When')}>
+                {URGENCY_CHOICES.map(choice => {
+                  const selected = formData.urgency === choice;
+                  return (
+                    <button
+                      key={choice}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setFormData(prev => {
+                        // Toggling off clears only the urgency; the date the
+                        // user can see stays put rather than vanishing on them.
+                        if (prev.urgency === choice) return { ...prev, urgency: '' };
+                        const due = urgencyToDueDate(choice);
+                        return due
+                          ? { ...prev, urgency: choice, dueDate: due.dueDate, dueTime: due.dueTime || prev.dueTime }
+                          : { ...prev, urgency: choice };
+                      })}
+                      className={`text-xs px-2.5 py-1.5 rounded-full border font-medium transition-colors min-h-[34px] ${
+                        selected
+                          ? 'bg-emerald-600 text-white border-emerald-600'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-emerald-400'
+                      }`}
+                    >
+                      {tt(`urgency.${choice}`, choice)}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                {tt('form.whenHint', 'Sets the due date below. You can still edit it by hand.')}
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -1292,6 +1411,27 @@ Rules:
                   {t(`priority.${task.priority}`, task.priority)}
                 </span>
               )}
+              {(() => {
+                const priority = scoreTask(task, { tiers: effortTiers });
+                return (
+                  <>
+                    <PriorityBadge priority={priority} tt={tt} />
+                    <span className="text-xs px-2 py-0.5 rounded-full border border-gray-200 text-gray-500">
+                      {tt('form.impact', 'Impact')}: {tt(`impact.${priority.impact}`, priority.impact)}
+                    </span>
+                    <EffortChip
+                      effort={task.effort?.value ? task.effort : task.duration}
+                      tt={tt}
+                      tiers={effortTiers}
+                    />
+                    {priority.urgency && (
+                      <span className="text-xs px-2 py-0.5 rounded-full border border-gray-200 text-gray-500">
+                        {tt(`urgency.${priority.urgency}`, priority.urgency)}
+                      </span>
+                    )}
+                  </>
+                );
+              })()}
               {task.dueDate && (
                 <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${overdue ? 'text-red-700 bg-red-50 font-bold' : 'text-gray-500'}`}>
                   {overdue ? <AlertCircle size={11} /> : <Calendar size={11} />}
@@ -1430,6 +1570,16 @@ Rules:
                 <option key={s.id} value={s.id}>{tt(`status.${s.id}`, s.id)}</option>
               ))}
             </select>
+            <select
+              value={sortMode}
+              onChange={e => setSortMode(e.target.value)}
+              aria-label={tt('list.sortBy', 'Sort by')}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            >
+              <option value="manual">{tt('list.sortManual', 'Sort: Manual order')}</option>
+              <option value="score">{tt('list.sortScore', 'Sort: Priority score')}</option>
+              <option value="due">{tt('list.sortDue', 'Sort: Due date')}</option>
+            </select>
             {labels.length > 0 && (
               <select
                 value={labelFilter}
@@ -1455,14 +1605,18 @@ Rules:
                   const statusDef = STATUSES_TASKS.find(s => s.id === task.status);
                   const isSelected = selectedId === task.id;
                   const overdue = isTaskOverdue(task);
+                  const priority = scoreTask(task, { tiers: effortTiers });
                   return (
                     <button
                       key={task.id}
                       onClick={() => { setSelectedId(task.id); setIsEditing(false); }}
                       style={task.cardColor ? { backgroundColor: task.cardColor } : undefined}
-                      className={`w-full text-left px-3 sm:px-4 py-3 min-h-[52px] border-b border-gray-50 transition-colors ${task.cardColor ? '' : 'hover:bg-emerald-50 active:bg-emerald-100'} ${isSelected ? 'ring-2 ring-inset ring-emerald-500' : ''} ${isSelected && !task.cardColor ? 'bg-emerald-50' : ''}`}
+                      className={`w-full text-left px-3 sm:px-4 py-3 min-h-[52px] border-b border-gray-50 transition-colors ${isRTL ? 'border-r-4' : 'border-l-4'} ${getBandStyle(priority.band).stripe} ${task.cardColor ? '' : 'hover:bg-emerald-50 active:bg-emerald-100'} ${isSelected ? 'ring-2 ring-inset ring-emerald-500' : ''} ${isSelected && !task.cardColor ? 'bg-emerald-50' : ''}`}
                     >
-                      <p className="font-semibold text-gray-800 text-xs sm:text-sm truncate">{safeStr(task.name)}</p>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-semibold text-gray-800 text-xs sm:text-sm truncate flex-1">{safeStr(task.name)}</p>
+                        <PriorityBadge priority={priority} tt={tt} />
+                      </div>
                       <div className="flex items-center gap-2 mt-1">
                         {statusDef && (
                           <span className={`text-xs px-1.5 py-0.5 rounded border font-medium ${statusDef.color}`}>
@@ -1673,6 +1827,7 @@ Rules:
   const TABS = [
     { id: 'board', icon: Layout, label: t('tabs.board', 'Board') },
     { id: 'list', icon: List, label: t('tabs.list', 'List & Edit') },
+    { id: 'priority', icon: Zap, label: t('tabs.priority', 'Priority') },
     { id: 'timeline', icon: Activity, label: t('tabs.timeline', 'Timeline') },
     { id: 'calendar', icon: Calendar, label: t('tabs.calendar', 'Calendar') },
     { id: 'stats', icon: BarChart2, label: t('tabs.stats', 'Statistics') },
@@ -1939,6 +2094,18 @@ Rules:
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {activeTab === 'board' && renderBoard()}
         {activeTab === 'list' && renderList()}
+        {activeTab === 'priority' && (
+          <Suspense fallback={<div className="p-8 text-center text-sm text-gray-400">…</div>}>
+            <PriorityView
+              tasks={tasks}
+              labels={labels}
+              tiers={effortTiers}
+              onTiersChange={handleEffortTiersChange}
+              onOpenTask={(id) => navigateTo('list', id)}
+              isRTL={isRTL}
+            />
+          </Suspense>
+        )}
         {activeTab === 'timeline' && renderTimeline()}
         {activeTab === 'stats' && renderStats()}
         {activeTab === 'calendar' && (
