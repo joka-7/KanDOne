@@ -1,4 +1,8 @@
 import { delimUserField } from '../utils/promptSafety';
+import {
+  streamComplete as agentStreamComplete,
+  buildMessages as agentBuildMessages,
+} from '@joka-7/modeldispatcher-browser-agent';
 
 export const PROVIDERS = {
   gemini: {
@@ -118,54 +122,12 @@ export function getCurrentProvider() {
   return config.provider;
 }
 
-// SSE stream parser for OpenAI-compatible APIs (OpenAI, Groq)
-async function streamOpenAICompat(url, apiKey, body, onChunk) {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ ...body, stream: true }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || `HTTP ${res.status}`);
-  }
-  const reader = res.body.getReader();
-  const dec = new TextDecoder();
-  let buf = '';
-  let full = '';
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    const lines = buf.split('\n');
-    buf = lines.pop();
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue;
-      const raw = line.slice(6).trim();
-      if (raw === '[DONE]') continue;
-      try {
-        const delta = JSON.parse(raw).choices?.[0]?.delta?.content;
-        if (delta) { full += delta; onChunk(full); }
-      } catch { /* skip malformed */ }
-    }
-  }
-  return full;
-}
-
-// Validate Ollama URL for security (HTTPS only or localhost)
-function validateOllamaUrl(url) {
-  try {
-    const parsed = new URL(url);
-    // Allow localhost/127.0.0.1 over HTTP (for development)
-    const isLocalhost = ['localhost', '127.0.0.1', '::1'].includes(parsed.hostname);
-    if (!isLocalhost && parsed.protocol !== 'https:') {
-      throw new Error('Remote Ollama must use HTTPS. For local testing, use http://localhost:11434');
-    }
-    return parsed.origin;
-  } catch (err) {
-    throw new Error(`Invalid Ollama URL: ${err.message}`, { cause: err });
-  }
-}
+// Request/response translation, SSE parsing, and Ollama URL validation for
+// every provider now live in @joka-7/modeldispatcher-browser-agent (the
+// shared core extracted from this file — and JobFlowTracker/HighFive/
+// StepByLearn, which had each independently built the same thing). This
+// file keeps only what's genuinely app-specific: the PROVIDERS table's own
+// copy/wording, config state, rate limiting, and the prompt below.
 
 /**
  * Build a provider-safe chat history from UI messages.
@@ -173,32 +135,12 @@ function validateOllamaUrl(url) {
  * Validates and sanitizes message roles to prevent injection.
  */
 const SIM_TRIGGER = '__sim_start__';
-const VALID_ROLES = new Set(['user', 'assistant']);
 
 export function buildApiMessages(uiMessages, { appendSimBegin = false } = {}) {
-  let msgs = (Array.isArray(uiMessages) ? uiMessages : [])
-    .map(({ role, content }) => ({
-      role: VALID_ROLES.has(role) ? role : 'user', // Strict role validation
-      content: String(content ?? '').trim().slice(0, 4000), // Cap message length
-    }))
-    .filter(m => m.content.length > 0 && m.content !== SIM_TRIGGER);
-
-  if (appendSimBegin) {
-    msgs = [...msgs, { role: 'user', content: 'begin' }];
-  } else if (msgs.length > 0 && msgs[0].role === 'assistant') {
-    msgs = [{ role: 'user', content: 'begin' }, ...msgs];
-  }
-
-  const out = [];
-  for (const msg of msgs) {
-    const last = out[out.length - 1];
-    if (last && last.role === msg.role) {
-      last.content = `${last.content}\n\n${msg.content}`;
-    } else {
-      out.push({ ...msg });
-    }
-  }
-  return out.length > 0 ? out : [{ role: 'user', content: 'begin' }];
+  return agentBuildMessages(uiMessages, {
+    forceTrailingFiller: appendSimBegin,
+    dropContent: SIM_TRIGGER,
+  });
 }
 
 // Multi-turn chat streaming (messages must already be normalized via buildApiMessages)
@@ -206,7 +148,7 @@ export async function streamChat(messages, systemPrompt, onChunk) {
   // Rate limit check
   checkRateLimit('chat-stream');
 
-  const { provider, apiKey, model, ollamaUrl } = config;
+  const { provider, apiKey } = config;
   const apiMessages = Array.isArray(messages) && messages.length > 0
     ? messages
     : buildApiMessages(messages);
@@ -223,91 +165,10 @@ export async function streamChat(messages, systemPrompt, onChunk) {
     throw new Error('API key is not configured');
   }
 
-  if (provider === 'gemini') {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
-    const contents = apiMessages.map(m => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
-    }));
-    const body = { contents };
-    if (systemPrompt) body.systemInstruction = { parts: [{ text: systemPrompt }] };
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
-    const reader = res.body.getReader();
-    const dec = new TextDecoder();
-    let buf = '', full = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      const lines = buf.split('\n'); buf = lines.pop();
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        try { const t = JSON.parse(line.slice(6)).candidates?.[0]?.content?.parts?.[0]?.text; if (t) { full += t; emit(full); } } catch { /* skip */ }
-      }
-    }
-    return full;
-  }
-
-  if (provider === 'anthropic') {
-    // Lazy-load the SDK only when Anthropic is the active provider — the other
-    // four providers use plain fetch and should not pay for this chunk.
-    const { default: Anthropic } = await import('@anthropic-ai/sdk');
-    const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
-    const stream = await client.messages.stream({
-      model, max_tokens: 1024,
-      ...(systemPrompt ? { system: systemPrompt } : {}),
-      messages: apiMessages,
-    });
-    let full = '';
-    for await (const chunk of stream) {
-      if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
-        full += chunk.delta.text; emit(full);
-      }
-    }
-    return full;
-  }
-
-  if (provider === 'ollama') {
-    const validUrl = validateOllamaUrl(ollamaUrl);
-    const res = await fetch(`${validUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        messages: systemPrompt ? [{ role: 'system', content: systemPrompt }, ...apiMessages] : apiMessages,
-        stream: true,
-      }),
-    });
-    if (!res.ok) throw new Error(`Ollama error: HTTP ${res.status}`);
-    const reader = res.body.getReader();
-    const dec = new TextDecoder();
-    let buf = '', full = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      const lines = buf.split('\n'); buf = lines.pop();
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try { const t = JSON.parse(line).message?.content; if (t) { full += t; emit(full); } } catch { /* skip */ }
-      }
-    }
-    return full;
-  }
-
-  // OpenAI / Groq
-  const urls = { openai: 'https://api.openai.com/v1/chat/completions', groq: 'https://api.groq.com/openai/v1/chat/completions' };
-  return streamOpenAICompat(
-    urls[provider],
-    apiKey,
-    { model, messages: systemPrompt ? [{ role: 'system', content: systemPrompt }, ...apiMessages] : apiMessages },
-    emit,
-  );
+  return agentStreamComplete(config, apiMessages, {
+    systemInstruction: systemPrompt,
+    onChunk: emit,
+  });
 }
 
 const LANG = { en: 'Respond in English.', he: 'ענה בעברית.', fr: 'Réponds en français.' };

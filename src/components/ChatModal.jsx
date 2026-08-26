@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, Component } from 'react';
-import { X, Send, Loader2, Save, MessageSquare } from 'lucide-react';
+import { X, Send, Loader2, Save, MessageSquare, ExternalLink } from 'lucide-react';
+import { EXTERNAL_CHAT_PROVIDERS } from '@joka-7/modeldispatcher-browser-agent';
 import {
   streamChat, buildApiMessages, loadAIConfigFromStorage, isAIReady, getCurrentProvider,
   PROVIDERS, AI_CONFIG_UPDATED,
@@ -12,6 +13,39 @@ const SIM_TRIGGER = '__sim_start__';
 function safeTranslate(t, key, fallback) {
   if (typeof t === 'function') return t(key, fallback);
   return fallback ?? key;
+}
+
+/** Best-effort clipboard copy — never throws (permissions/non-secure context). */
+function copyToClipboard(text) {
+  navigator.clipboard?.writeText(text).catch(() => {});
+}
+
+/** "Or ask directly: ChatGPT / Claude / Gemini / Groq" — a no-key escape
+ * hatch for a failed chat turn, offering the exact question back to the
+ * user as a deep link into a free public AI chat product. */
+function ExternalChatLinks({ question, t }) {
+  if (!question) return null;
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs text-gray-500 mt-1">
+      <ExternalLink size={11} className="shrink-0" />
+      <span>{safeTranslate(t, 'chat.askElsewhere', 'Or ask directly:')}</span>
+      {Object.values(EXTERNAL_CHAT_PROVIDERS).map((provider) => {
+        const url = provider.buildUrl ? provider.buildUrl(question) : provider.homeUrl;
+        return (
+          <a
+            key={provider.id}
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => copyToClipboard(question)}
+            className="font-medium text-purple-600 hover:text-purple-700 underline"
+          >
+            {provider.name}
+          </a>
+        );
+      })}
+    </div>
+  );
 }
 
 function MarkdownText({ text }) {
@@ -142,6 +176,7 @@ function ChatModalInner({
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [failedText, setFailedText] = useState('');
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const sendingRef = useRef(false);
@@ -220,6 +255,7 @@ function ChatModalInner({
     if (visibleUserMsg) setMessages(historyForApi);
     if (!explicit) setInput('');
     setError('');
+    setFailedText('');
     setLoading(true);
     setMessages(prev => [...prev, { role: 'assistant', content: '', streaming: true }]);
 
@@ -245,6 +281,9 @@ function ChatModalInner({
         setMessages(prev => prev.filter(m => !m.streaming));
         const providerName = PROVIDERS[getCurrentProvider()]?.name || 'AI';
         setError(e?.message || `Request failed (${providerName}). Check your API key and provider in settings.`);
+        // isTrigger's SIM_TRIGGER isn't real user text — nothing sensible to
+        // hand an external AI in that case.
+        setFailedText(isTrigger ? '' : text);
       }
     } finally {
       sendingRef.current = false;
@@ -330,6 +369,7 @@ function ChatModalInner({
               <button onClick={onOpenSettings} className="text-xs text-purple-600 underline">
                 ⚙️ {safeTranslate(t, 'ai.changeSettings', 'Change AI settings')}
               </button>
+              <ExternalChatLinks question={failedText} t={t} />
             </div>
           )}
           <div ref={bottomRef} className="h-8" />

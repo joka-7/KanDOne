@@ -37,7 +37,10 @@ jobs:
           cache: npm
 
       - name: Install dependencies
+        # See ci.yml for why NODE_AUTH_TOKEN is needed.
         run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
 
       - name: Audit dependencies
         run: npm audit --omit=dev --audit-level=high
