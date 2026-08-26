@@ -38,6 +38,7 @@
     "uploadTooltip": "Charger un fichier de sauvegarde",
     "driveOn": "Drive actif",
     "driveSyncing": "Synchronisation...",
+    "checkingSession": "Vérification…",
     "connectDrive": "Connecter Drive",
     "driveOnTooltip": "Drive synchronisé — cliquer pour déconnecter",
     "connectDriveTooltip": "Connecter Google Drive pour synchroniser sur tous les appareils",
@@ -412,7 +413,7 @@
     "board": {
       "emptyTitle": "Bienvenue sur KanDOne",
       "emptyDesc": "Organisez vos tâches avec plusieurs étapes et suivez la progression.",
-      "viewTutorial": "Voir l'accueil",
+      "viewTutorial": "Visite rapide",
       "addFirstButton": "Ajouter votre première tâche",
       "noResults": "Aucune tâche ne correspond à vos filtres.",
       "emptyColumn": "Déposez une tâche ici",

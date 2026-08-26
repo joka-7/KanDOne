@@ -38,6 +38,7 @@
     "uploadTooltip": "טען קובץ גיבוי קיים",
     "driveOn": "Drive פעיל",
     "driveSyncing": "מסנכרן...",
+    "checkingSession": "בודק חיבור…",
     "connectDrive": "חבר Drive",
     "driveOnTooltip": "Drive מסנכרן — לחץ לניתוק",
     "connectDriveTooltip": "חבר Google Drive לסנכרון בין מכשירים",
@@ -412,7 +413,7 @@
     "board": {
       "emptyTitle": "ברוכים הבאים ל-KanDOne",
       "emptyDesc": "ארגן את המשימות שלך עם שלבים מרובים ועקוב אחרי ההתקדמות.",
-      "viewTutorial": "צפה בברכה",
+      "viewTutorial": "סיור מהיר",
       "addFirstButton": "הוסף את המשימה הראשונה שלך",
       "noResults": "אין משימות התואמות את המסננים שלך.",
       "emptyColumn": "גרור משימה לכאן",

@@ -38,6 +38,7 @@
     "uploadTooltip": "Load existing backup file",
     "driveOn": "Drive On",
     "driveSyncing": "Syncing...",
+    "checkingSession": "Checking…",
     "connectDrive": "Connect Drive",
     "driveOnTooltip": "Drive syncing — click to disconnect",
     "connectDriveTooltip": "Connect Google Drive for cross-device sync",
@@ -412,7 +413,7 @@
     "board": {
       "emptyTitle": "Welcome to KanDOne",
       "emptyDesc": "Organize your tasks with multiple steps and track progress at a glance.",
-      "viewTutorial": "View welcome",
+      "viewTutorial": "Quick Tour",
       "addFirstButton": "Add your first task",
       "noResults": "No tasks match your filters.",
       "emptyColumn": "Drop a task here",
