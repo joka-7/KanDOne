@@ -29,6 +29,7 @@ import { scoreTask, getBandStyle } from '../utils/taskPriority';
 import { DEFAULT_EFFORT_TIERS } from '../utils/effortScale';
 import { EffortChip } from './EffortPicker';
 import PriorityBadge from './PriorityBadge';
+import TypeBadge from './TypeBadge';
 
 const PRIORITY_COLORS = {
   high: 'bg-red-100 text-red-700 border-red-200',
@@ -130,6 +131,7 @@ function SortableTaskCard({
       <div className="flex flex-wrap items-center gap-1">
         <PriorityBadge priority={priority} tt={tt} />
         <EffortChip effort={task.effort?.value ? task.effort : task.duration} tt={tt} tiers={tiers} />
+        <TypeBadge type={task.type} tt={tt} />
         {task.priority && (
           <span className={`inline-block text-xs px-1.5 py-0.5 rounded border font-medium ${PRIORITY_COLORS[task.priority]}`}>
             {t(`priority.${task.priority}`, task.priority)}

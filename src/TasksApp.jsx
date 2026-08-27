@@ -5,7 +5,7 @@ import {
   Trash2, Edit2, ArrowLeft, ArrowRight, CheckCircle2, CheckCircle, Circle,
   Clock, AlertCircle, Calendar, Cloud, CloudOff, RefreshCw,
   ClipboardList, X, Languages, MoreVertical, Settings, Smartphone, Sparkles,
-  Timer, Repeat, Bell, Zap,
+  Timer, Repeat, Bell, Zap, Tag,
 } from 'lucide-react';
 import { initAI, getGoalsTasksSystemPrompt } from './services/aiAssistant';
 import { TASK_TEMPLATES } from './data/taskTemplates';
@@ -54,6 +54,9 @@ import {
   IMPACT_LEVELS, URGENCY_CHOICES,
 } from './utils/taskPriority';
 import { parseEffortTiersPayload, sanitizeEffortTiers } from './utils/effortScale';
+import { TASK_TYPES, sortByType } from './utils/taskTypes';
+import TypePicker from './components/TypePicker';
+import TypeBadge from './components/TypeBadge';
 
 // Modal / tab-scoped views — keep them out of the initial board paint.
 const ChatModal = lazy(() => import('./components/ChatModal'));
@@ -62,6 +65,7 @@ const TemplateLibrary = lazy(() => import('./components/TemplateLibrary'));
 const APIKeySettings = lazy(() => import('./components/APIKeySettings'));
 const Onboarding = lazy(() => import('./components/Onboarding'));
 const PriorityView = lazy(() => import('./components/PriorityView'));
+const TypeView = lazy(() => import('./components/TypeView'));
 
 const MODE = 'tasks';
 
@@ -118,6 +122,7 @@ export default function TasksApp() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [labelFilter, setLabelFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [toast, setToast] = useState(null);
   const [reminderPrompt, setReminderPrompt] = useState(null);
   const [isSaved, setIsSaved] = useState(true);
@@ -843,6 +848,9 @@ Rules:
         return taskLabels.includes(labelFilter) || stepLabels.includes(labelFilter);
       });
     }
+    if (typeFilter !== 'all') {
+      result = result.filter(t => (typeFilter === 'untyped' ? !t.type : t.type === typeFilter));
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter(t =>
@@ -852,8 +860,9 @@ Rules:
     }
     if (sortMode === 'score') return sortByScore(result, { tiers: effortTiers });
     if (sortMode === 'due') return sortByDueDate(result);
+    if (sortMode === 'type') return sortByType(result);
     return result;
-  }, [tasks, statusFilter, labelFilter, searchQuery, sortMode, effortTiers]);
+  }, [tasks, statusFilter, labelFilter, typeFilter, searchQuery, sortMode, effortTiers]);
 
   const stats = useMemo(() => {
     const total = tasks.length;
@@ -1201,6 +1210,13 @@ Rules:
               </div>
             </div>
 
+            <TypePicker
+              label={tt('form.type', 'Type')}
+              value={formData.type}
+              onChange={next => setFormData(prev => ({ ...prev, type: next }))}
+              tt={tt}
+            />
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
@@ -1453,6 +1469,7 @@ Rules:
                   {t(`priority.${task.priority}`, task.priority)}
                 </span>
               )}
+              <TypeBadge type={task.type} tt={tt} />
               {(() => {
                 const priority = scoreTask(task, { tiers: effortTiers });
                 return (
@@ -1621,6 +1638,18 @@ Rules:
               <option value="manual">{tt('list.sortManual', 'Sort: Manual order')}</option>
               <option value="score">{tt('list.sortScore', 'Sort: Priority score')}</option>
               <option value="due">{tt('list.sortDue', 'Sort: Due date')}</option>
+              <option value="type">{tt('list.sortType', 'Sort: Type')}</option>
+            </select>
+            <select
+              value={typeFilter}
+              onChange={e => setTypeFilter(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            >
+              <option value="all">{tt('list.allTypes', 'All Types')}</option>
+              {TASK_TYPES.map(type => (
+                <option key={type} value={type}>{tt(`type.${type}`, type)}</option>
+              ))}
+              <option value="untyped">{tt('type.untyped', 'No type')}</option>
             </select>
             {labels.length > 0 && (
               <select
@@ -1665,6 +1694,7 @@ Rules:
                             {tt(`status.${task.status}`, task.status)}
                           </span>
                         )}
+                        <TypeBadge type={task.type} tt={tt} />
                         {overdue && (
                           <span className="flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded border font-medium text-red-700 bg-red-50 border-red-200">
                             <AlertCircle size={10} />
@@ -1870,6 +1900,7 @@ Rules:
     { id: 'board', icon: Layout, label: t('tabs.board', 'Board') },
     { id: 'list', icon: List, label: t('tabs.list', 'List & Edit') },
     { id: 'priority', icon: Zap, label: t('tabs.priority', 'Priority') },
+    { id: 'type', icon: Tag, label: t('tabs.type', 'By Type') },
     { id: 'timeline', icon: Activity, label: t('tabs.timeline', 'Timeline') },
     { id: 'calendar', icon: Calendar, label: t('tabs.calendar', 'Calendar') },
     { id: 'stats', icon: BarChart2, label: t('tabs.stats', 'Statistics') },
@@ -2155,6 +2186,17 @@ Rules:
               labels={labels}
               tiers={effortTiers}
               onTiersChange={handleEffortTiersChange}
+              onOpenTask={(id) => navigateTo('list', id)}
+              isRTL={isRTL}
+            />
+          </Suspense>
+        )}
+        {activeTab === 'type' && (
+          <Suspense fallback={<div className="p-8 text-center text-sm text-gray-400">…</div>}>
+            <TypeView
+              tasks={tasks}
+              labels={labels}
+              tiers={effortTiers}
               onOpenTask={(id) => navigateTo('list', id)}
               isRTL={isRTL}
             />

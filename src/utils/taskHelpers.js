@@ -29,6 +29,7 @@ export const makeInitialTask = () => ({
   priority: 'medium',
   impact: 'medium',
   urgency: '',
+  type: '',
   effort: makeInitialEffort(),
   dueDate: '',
   dueTime: '',

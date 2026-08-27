@@ -58,7 +58,8 @@
     "timeline": "Chronologie",
     "calendar": "Calendrier",
     "stats": "Statistiques",
-    "priority": "Priorité"
+    "priority": "Priorité",
+    "type": "Par type"
   },
   "calendar": {
     "today": "Aujourd'hui",
@@ -431,10 +432,12 @@
       "selectTask": "Sélectionnez une tâche dans la liste",
       "noTasks": "Aucune tâche pour l'instant.",
       "allLabels": "Toutes les étiquettes",
+      "allTypes": "Tous les types",
       "sortBy": "Trier par",
       "sortManual": "Tri : Ordre manuel",
       "sortScore": "Tri : Score de priorité",
-      "sortDue": "Tri : Date d'échéance"
+      "sortDue": "Tri : Date d'échéance",
+      "sortType": "Tri : Type"
     },
     "form": {
       "editTitle": "Modifier la tâche",
@@ -482,6 +485,7 @@
       "reminderHint": "Notifications navigateur lorsque KanDOne est ouvert (ou installé en PWA).",
       "impact": "Impact",
       "impactHint": "Dans quelle mesure terminer ceci fait-il vraiment avancer les choses ?",
+      "type": "Type",
       "effort": "Effort",
       "stepEffort": "Taille de l'étape",
       "when": "Quand",
@@ -584,6 +588,20 @@
       "someday": "Un jour",
       "overdue": "En retard"
     },
+    "type": {
+      "fix": "Réparer",
+      "buy": "Acheter",
+      "order": "Commander",
+      "arrange": "Organiser",
+      "throw": "Jeter",
+      "call": "Appeler",
+      "email": "Envoyer un e-mail",
+      "clean": "Nettoyer",
+      "research": "Rechercher",
+      "other": "Autre",
+      "untyped": "Aucun type",
+      "none": "Aucun type"
+    },
     "effort": {
       "none": "Sans estimation",
       "unitGroup": "Unité d'effort",
@@ -612,6 +630,11 @@
         "fillIn": "Petits riens",
         "later": "Plus tard"
       }
+    },
+    "typeView": {
+      "title": "Par type",
+      "subtitle": "Toutes les tâches regroupées par type d'action.",
+      "empty": "Aucune tâche pour l'instant."
     }
   },
   "recruiter": {

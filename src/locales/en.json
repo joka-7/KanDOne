@@ -58,7 +58,8 @@
     "timeline": "Timeline",
     "calendar": "Calendar",
     "stats": "Statistics",
-    "priority": "Priority"
+    "priority": "Priority",
+    "type": "By Type"
   },
   "calendar": {
     "today": "Today",
@@ -431,10 +432,12 @@
       "selectTask": "Select a task from the list",
       "noTasks": "No tasks yet.",
       "allLabels": "All Labels",
+      "allTypes": "All Types",
       "sortBy": "Sort by",
       "sortManual": "Sort: Manual order",
       "sortScore": "Sort: Priority score",
-      "sortDue": "Sort: Due date"
+      "sortDue": "Sort: Due date",
+      "sortType": "Sort: Type"
     },
     "form": {
       "editTitle": "Edit Task",
@@ -482,6 +485,7 @@
       "reminderHint": "Browser notifications while KanDOne is open (or installed as a PWA).",
       "impact": "Impact",
       "impactHint": "How much does finishing this actually move things?",
+      "type": "Type",
       "effort": "Effort",
       "stepEffort": "Step size",
       "when": "When",
@@ -584,6 +588,20 @@
       "someday": "Someday",
       "overdue": "Overdue"
     },
+    "type": {
+      "fix": "Fix",
+      "buy": "Buy",
+      "order": "Order",
+      "arrange": "Arrange",
+      "throw": "Throw Away",
+      "call": "Call",
+      "email": "Email",
+      "clean": "Clean",
+      "research": "Research",
+      "other": "Other",
+      "untyped": "No type",
+      "none": "No type"
+    },
     "effort": {
       "none": "No estimate",
       "unitGroup": "Effort unit",
@@ -612,6 +630,11 @@
         "fillIn": "Fill-ins",
         "later": "Later"
       }
+    },
+    "typeView": {
+      "title": "By Type",
+      "subtitle": "Every task grouped by what kind of action it is.",
+      "empty": "No tasks yet."
     }
   },
   "recruiter": {

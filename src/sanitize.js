@@ -4,6 +4,7 @@ import { sanitizeDueTime, sanitizeReminder } from './utils/reminders.js';
 import { sanitizeBoardOrder } from './utils/boardOrder.js';
 import { snapToTick } from './utils/effortScale.js';
 import { IMPACT_LEVELS, URGENCY_CHOICES } from './utils/taskPriority.js';
+import { TASK_TYPES } from './utils/taskTypes.js';
 
 /** Generate a cryptographically random ID (fallback to timestamp if crypto unavailable) */
 export function generateId() {
@@ -31,6 +32,7 @@ const TASK_STATUS_IDS = new Set(STATUSES_TASKS.map(s => s.id));
 const TASK_PRIORITIES = new Set(['high', 'medium', 'low']);
 const TASK_IMPACTS = new Set(IMPACT_LEVELS);
 const TASK_URGENCIES = new Set(URGENCY_CHOICES);
+const TASK_TYPE_IDS = new Set(TASK_TYPES);
 const STEP_STATUSES = new Set(['todo', 'in_progress', 'done', 'blocked']);
 const DURATION_UNITS = new Set(['minute', 'hour', 'day', 'month']);
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
@@ -109,6 +111,7 @@ export function sanitizeTaskRecords(rows) {
     priority: TASK_PRIORITIES.has(t.priority) ? t.priority : 'medium',
     impact: TASK_IMPACTS.has(t.impact) ? t.impact : 'medium',
     urgency: TASK_URGENCIES.has(t.urgency) ? t.urgency : '',
+    type: TASK_TYPE_IDS.has(t.type) ? t.type : '',
     dueDate: safeStr(t.dueDate || ''),
     dueTime: sanitizeDueTime(t.dueTime),
     duration: sanitizeDuration(t.duration),
