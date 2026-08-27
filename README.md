@@ -72,27 +72,39 @@ npm run lint          # eslint (also runs in CI)
 - [High Level Design (HLD)](docs/hld/hld.md) — architecture, flows, integrations, audit A–I summary
 - [Low Level Design (LLD)](docs/lld/lld.md) — modules, data shapes, function map
 
-## Project layout (high level)
+## Project layout
 
+<!-- BEGIN GENERATED TREE (depth=1 entries=all) -->
+```text
+kandone/
+├── .github/
+├── docs/
+├── e2e/       # Playwright end-to-end tests
+├── public/
+├── src/       # App source — single entry point (TasksApp.jsx), no mode gate (unlike…
+├── .gitignore
+├── .npmrc
+├── .trivyignore
+├── LICENSE
+├── README.md  # KanDOne
+├── eslint.config.js
+├── firestore.rules
+├── index.html
+├── package-lock.json
+├── package.json
+├── playwright.config.js
+├── postcss.config.js
+├── tailwind.config.js
+├── vercel.json
+└── vite.config.js
 ```
-src/
-├── TasksApp.jsx              # main UI + state
-├── components/
-│   ├── AppErrorBoundary.jsx  # root crash: reload + export data
-│   ├── LabelPicker.jsx
-│   ├── CardColorPicker.jsx
-│   └── RoutineReminderFields.jsx
-├── hooks/
-│   └── useModalA11y.js       # dialog a11y helpers
-├── utils/
-│   ├── taskHelpers.js        # pure task/display logic
-│   ├── recurrence.js
-│   ├── reminders.js
-│   ├── labelSync.js
-│   └── promptSafety.js
-├── sanitize.js               # import/localStorage whitelisting
-├── firebase.js               # lazy-loaded Firebase SDK
-└── locales/                  # en / he / fr
+<!-- END GENERATED TREE -->
+
+Full annotated tree, every file: [`docs/STRUCTURE.md`](docs/STRUCTURE.md). Generated —
+regenerate after adding/renaming a file with:
+```bash
+python <ogen-ai>/skills/repo_tree/gen_tree.py --project . --output docs/STRUCTURE.md
+python <ogen-ai>/skills/repo_tree/gen_tree.py --project . --output README.md --max-depth 1
 ```
 
 ## What was carried over
