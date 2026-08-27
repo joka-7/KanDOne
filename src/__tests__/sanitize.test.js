@@ -52,6 +52,7 @@ describe('sanitizeTaskRecords', () => {
       name: null,
       status: 'hacker_status',
       priority: 'urgent',
+      type: 'hacker_type',
       description: { nested: true },
       steps: 'not-an-array',
       labelIds: [1, 2, 'ok'],
@@ -64,6 +65,7 @@ describe('sanitizeTaskRecords', () => {
     expect(task.name).toBe('Unnamed');
     expect(task.status).toBe('active');
     expect(task.priority).toBe('medium');
+    expect(task.type).toBe('');
     expect(task.description).toContain('nested');
     expect(task.steps).toEqual([]);
     expect(task.labelIds).toEqual(['1', '2', 'ok']);
@@ -71,6 +73,11 @@ describe('sanitizeTaskRecords', () => {
     expect(task.dueTime).toBe('');
     expect(task).not.toHaveProperty('evil');
     expect(task.id.length).toBeLessThanOrEqual(64);
+  });
+
+  it('keeps a valid task type through the round trip', () => {
+    const [task] = sanitizeTaskRecords([{ name: 'Buy milk', type: 'buy' }]);
+    expect(task.type).toBe('buy');
   });
 
   it('keeps valid step statuses and drops unknown ones to todo', () => {

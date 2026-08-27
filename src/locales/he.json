@@ -58,7 +58,8 @@
     "timeline": "ציר זמן",
     "calendar": "לוח שנה",
     "stats": "סטטיסטיקות",
-    "priority": "עדיפות"
+    "priority": "עדיפות",
+    "type": "לפי סוג"
   },
   "calendar": {
     "today": "היום",
@@ -431,10 +432,12 @@
       "selectTask": "בחר משימה מהרשימה",
       "noTasks": "אין משימות עדיין.",
       "allLabels": "כל התוויות",
+      "allTypes": "כל הסוגים",
       "sortBy": "מיין לפי",
       "sortManual": "מיון: סדר ידני",
       "sortScore": "מיון: ציון עדיפות",
-      "sortDue": "מיון: תאריך יעד"
+      "sortDue": "מיון: תאריך יעד",
+      "sortType": "מיון: סוג"
     },
     "form": {
       "editTitle": "עריכת משימה",
@@ -482,6 +485,7 @@
       "reminderHint": "התראות דפדפן כש-KanDOne פתוח (או מותקן כ-PWA).",
       "impact": "השפעה",
       "impactHint": "כמה סיום המשימה הזו באמת מקדם אותך?",
+      "type": "סוג",
       "effort": "מאמץ",
       "stepEffort": "גודל הצעד",
       "when": "מתי",
@@ -584,6 +588,20 @@
       "someday": "מתישהו",
       "overdue": "באיחור"
     },
+    "type": {
+      "fix": "תיקון",
+      "buy": "קנייה",
+      "order": "הזמנה",
+      "arrange": "סידור",
+      "throw": "השלכה",
+      "call": "שיחה",
+      "email": "אימייל",
+      "clean": "ניקיון",
+      "research": "מחקר",
+      "other": "אחר",
+      "untyped": "ללא סוג",
+      "none": "ללא סוג"
+    },
     "effort": {
       "none": "ללא הערכה",
       "unitGroup": "יחידת מאמץ",
@@ -612,6 +630,11 @@
         "fillIn": "משימות מילוי",
         "later": "אחר כך"
       }
+    },
+    "typeView": {
+      "title": "לפי סוג",
+      "subtitle": "כל המשימות מקובצות לפי סוג הפעולה.",
+      "empty": "אין עדיין משימות."
     }
   },
   "recruiter": {
