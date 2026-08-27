@@ -1,0 +1,33 @@
+# Hand-written notes for docs/STRUCTURE.md's generated tree.
+# Carried forward from README.md's former hand-written "Project layout"
+# section (verified against the real code) rather than lost when that
+# section was replaced by the generated, drift-checked tree below.
+
+[notes]
+"src" = "App source — single entry point (TasksApp.jsx), no mode gate (unlike JobFlowTracker)"
+"src/TasksApp.jsx" = "Main UI + state — board/list/timeline/calendar/stats views"
+"src/components/AppErrorBoundary.jsx" = "Root crash handler: reload + export data"
+"src/components/LabelPicker.jsx" = "Label picker"
+"src/components/CardColorPicker.jsx" = "Card color picker"
+"src/components/RoutineReminderFields.jsx" = "Recurring-schedule + reminder form fields"
+"src/components/ChatModal.jsx" = "AI coach chat UI"
+"src/components/CalendarView.jsx" = "Calendar view"
+"src/components/TemplateLibrary.jsx" = "Task template library"
+"src/components/APIKeySettings.jsx" = "User-supplied LLM provider API key settings"
+"src/components/Onboarding.jsx" = "First-run onboarding flow"
+"src/components/AppBrandMark.jsx" = "App logo/brand mark"
+"src/hooks/useModalA11y.js" = "Dialog accessibility helpers"
+"src/utils/taskHelpers.js" = "Pure task/display logic"
+"src/utils/recurrence.js" = "Recurring-schedule (routine) logic"
+"src/utils/reminders.js" = "Reminder scheduling logic"
+"src/utils/labelSync.js" = "Label sync logic"
+"src/utils/promptSafety.js" = "AI prompt input sanitization"
+"src/services" = "AI coach integration (aiAssistant.js)"
+"src/sanitize.js" = "Import/localStorage data whitelisting"
+"src/firebase.js" = "Lazy-loaded Firebase SDK (auth + Firestore sync)"
+"src/locales" = "i18n translation files: English, Hebrew, French"
+"src/__tests__" = "Vitest unit + integration tests"
+"e2e" = "Playwright end-to-end tests"
+"docs/hld" = "High Level Design — architecture, flows, integrations"
+"docs/lld" = "Low Level Design — modules, data shapes, function map"
+"docs/images" = "Screenshots referenced from README.md"
