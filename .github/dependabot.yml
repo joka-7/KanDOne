@@ -9,6 +9,10 @@ updates:
       - dependencies
     # jsdom/undici advisories are currently suppressed in .trivyignore pending
     # upstream fixes — Dependabot keeps those upgrades visible automatically.
+    groups:
+      npm-deps:
+        patterns:
+          - "*"
 
   - package-ecosystem: github-actions
     directory: /
@@ -17,3 +21,7 @@ updates:
     open-pull-requests-limit: 3
     labels:
       - dependencies
+    groups:
+      github-actions:
+        patterns:
+          - "*"
