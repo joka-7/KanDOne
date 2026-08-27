@@ -68,7 +68,7 @@ test.describe('Accessibility (WCAG AA)', () => {
     await page.getByRole('heading', { name: 'KanDOne', exact: true }).waitFor();
 
     await expect(page.getByRole('button', { name: 'Goals & Tasks AI', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'View welcome', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Quick Tour', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeVisible();
   });
 });

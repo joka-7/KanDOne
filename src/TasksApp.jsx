@@ -123,6 +123,14 @@ export default function TasksApp() {
   const [isSaved, setIsSaved] = useState(true);
   const [localStorageError, setLocalStorageError] = useState(false);
   const [user, setUser] = useState(null);
+  // Firebase's SDK bootstrap + persisted-session check is async (see
+  // onAuthChange), so `user` stays null for a beat even for someone who is
+  // already signed in. Without this flag the header can't tell "definitely
+  // signed out" from "haven't heard back yet" and shows a false "disconnected"
+  // Connect button, which is exactly what invited the reported bug: a user
+  // works assuming they're offline, then the real session resolves seconds
+  // later and pulls cloud data on top of what they just typed.
+  const [authResolved, setAuthResolved] = useState(false);
   const [syncing, setSyncing] = useState(false);
   // True once a cloud write/read has failed and not yet succeeded since —
   // drives the header's error state and blocks the focus-triggered pull
@@ -239,6 +247,11 @@ export default function TasksApp() {
 
   useEffect(() => {
     const unsub = onAuthChange(async (firebaseUser) => {
+      // Firebase always calls back at least once with the definitive state
+      // (signed in or genuinely signed out) — that first call is the signal
+      // the header needs to stop showing a "checking…" placeholder instead
+      // of a false "disconnected" Connect button.
+      setAuthResolved(true);
       setUser(firebaseUser);
       if (firebaseUser) {
         setSyncing(true);
@@ -271,7 +284,12 @@ export default function TasksApp() {
         setSyncing(false);
       }
     });
-    return unsub;
+    // Belt-and-suspenders: if Firebase's dynamic-import bootstrap never
+    // completes (blocked network, ad blocker, offline), don't leave the
+    // header stuck on "checking…" forever — fall back to showing the
+    // (accurate, in that case) disconnected state so the user can still act.
+    const fallbackTimer = setTimeout(() => setAuthResolved(true), 4000);
+    return () => { unsub(); clearTimeout(fallbackTimer); };
   }, [clearSyncError, markSyncError, showToast, tt]);
 
   useEffect(() => {
@@ -285,7 +303,17 @@ export default function TasksApp() {
         setSyncing(true);
         try {
           const data = await loadAllItems(firebaseUser.uid, MODE);
-          if (data && data.length > 0) setTasks(ensureBoardOrders(filterItemsForMode(data, MODE)));
+          if (data && data.length > 0) {
+            // Union-merge rather than overwrite: anything typed into this
+            // tab since the last pull (e.g. while it was backgrounded) must
+            // survive, even though its id isn't in the snapshot we just read.
+            const { tasks: mergedTasks, pushToCloud } =
+              resolveTasksOnSignIn(tasksRef.current, filterItemsForMode(data, MODE));
+            setTasks(ensureBoardOrders(mergedTasks));
+            if (pushToCloud && mergedTasks.length > 0) {
+              await batchSaveItems(firebaseUser.uid, MODE, ensureBoardOrders(mergedTasks));
+            }
+          }
           clearSyncError();
         } catch (e) { markSyncError(e); }
         setSyncing(false);
@@ -333,9 +361,23 @@ export default function TasksApp() {
         loadAllItems(user.uid, MODE),
         loadTaskLabels(user.uid),
       ]);
-      if (data && data.length > 0) setTasks(ensureBoardOrders(filterItemsForMode(data, MODE)));
+      // Union-merge, not overwrite — a manual sync must not delete work typed
+      // locally since the last pull just because it isn't in this snapshot yet.
+      if (data && data.length > 0) {
+        const { tasks: mergedTasks, pushToCloud } =
+          resolveTasksOnSignIn(tasksRef.current, filterItemsForMode(data, MODE));
+        setTasks(ensureBoardOrders(mergedTasks));
+        if (pushToCloud && mergedTasks.length > 0) {
+          await batchSaveItems(user.uid, MODE, ensureBoardOrders(mergedTasks));
+        }
+      }
       if (Array.isArray(cloudLabels)) {
-        setLabels(sanitizeTaskLabels(cloudLabels));
+        const localLabels = parseTaskLabelsStoragePayload(localStorage.getItem(TASKS_LABELS_KEY));
+        const { labels: mergedLabels, pushToCloud: pushLabels } = resolveLabelsOnSignIn(localLabels, cloudLabels);
+        setLabels(mergedLabels);
+        if (pushLabels && mergedLabels.length > 0) {
+          await saveTaskLabels(user.uid, mergedLabels);
+        }
       }
       clearSyncError();
     } catch (e) { markSyncError(e); }
@@ -892,7 +934,7 @@ Rules:
                 onClick={() => setShowTasksWelcome(true)}
                 className="text-sm text-emerald-700 hover:text-emerald-900 font-medium"
               >
-                💡 {tt('board.viewTutorial', 'View welcome')}
+                💡 {tt('board.viewTutorial', 'Quick Tour')}
               </button>
             </div>
           </div>
@@ -1876,7 +1918,19 @@ Rules:
               <span className="shrink-0">{tt('header.addTask', 'Add Task')}</span>
             </button>
 
-            {user ? (
+            {!authResolved ? (
+              // Firebase hasn't confirmed the session yet — a returning
+              // signed-in user is briefly indistinguishable from a signed-out
+              // one. Show a neutral placeholder rather than "Connect Drive",
+              // which would wrongly invite them to work as if offline.
+              <span
+                className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-bold bg-white/10 border border-white/20 text-green-100/70 min-h-[44px]"
+                aria-live="polite"
+              >
+                <Cloud size={16} className="shrink-0 animate-pulse" />
+                <span className="hidden sm:inline shrink-0">{t('header.checkingSession', 'Checking…')}</span>
+              </span>
+            ) : user ? (
               <>
                 <button
                   onClick={() => signOut()}
@@ -1993,8 +2047,8 @@ Rules:
               <button
                 type="button"
                 onClick={() => setShowTasksWelcome(true)}
-                title={tt('board.viewTutorial', 'View welcome')}
-                aria-label={tt('board.viewTutorial', 'View welcome')}
+                title={tt('board.viewTutorial', 'Quick Tour')}
+                aria-label={tt('board.viewTutorial', 'Quick Tour')}
                 className="p-2 hover:bg-white/20 rounded text-white transition-colors"
               >
                 💡
@@ -2055,7 +2109,7 @@ Rules:
                       <Settings size={16} className="text-gray-500" /> {t('header.aiSettings', 'AI Settings')}
                     </button>
                     <button onClick={() => { setShowTasksWelcome(true); setMobileMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100">
-                      <span>💡</span> {tt('board.viewTutorial', 'View welcome')}
+                      <span>💡</span> {tt('board.viewTutorial', 'Quick Tour')}
                     </button>
                     {canInstall && (
                       <button
