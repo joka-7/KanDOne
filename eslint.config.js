@@ -32,6 +32,7 @@ export default defineConfig([
       'eslint.config.js',
       'src/__tests__/**/*.{js,jsx}',
       'src/services/aiAssistant.js',
+      'e2e/screenshots.spec.js',
     ],
     languageOptions: {
       globals: { ...globals.browser, ...globals.node },

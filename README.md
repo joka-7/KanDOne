@@ -2,9 +2,11 @@
 
 A standalone Kanban task-management app — ported from the **Tasks mode** of JobFlowTracker into its own repo.
 
-Plan work as tasks with sub-steps, track progress across a Kanban board, list, timeline,
-calendar and stats views, with optional AI coaching and Firebase cloud sync. Offline-first
-(localStorage), installable as a PWA, and localized in English, Hebrew (RTL) and French.
+Plan work as tasks with sub-steps, and see the same data seven ways: a Kanban
+board, a filterable list/edit view, a priority ranking, a by-type breakdown, a
+timeline, a calendar, and stats — with optional AI coaching and Firebase cloud
+sync. Offline-first (localStorage), installable as a PWA, and localized in
+English, Hebrew (RTL) and French.
 
 ## Screenshots
 
@@ -20,15 +22,52 @@ calendar and stats views, with optional AI coaching and Firebase cloud sync. Off
 
 ![Task detail view showing due datetime, Routine and Reminder badges, and Work label](docs/images/task-detail-routine-reminder.png)
 
+### List & Edit — search, filter, and sort every task
+
+![List & Edit view with a filterable, sortable task list](docs/images/list-view.png)
+
+### Priority — ranked by urgency, impact and effort
+
+Buckets tasks into **Do Now**, **Quick Wins** (high impact, low effort — the
+BISE badge), and **Later**, so the next thing to do is always at the top:
+
+![Priority view grouping tasks into Do Now, Quick Wins, and Later](docs/images/priority-view.png)
+
+### By Type — every task grouped by what kind of action it is
+
+![By Type view grouping tasks by fix/buy/order/call/etc.](docs/images/type-view.png)
+
+### Timeline — activity history in order
+
+![Timeline view listing due-date events in chronological order](docs/images/timeline-view.png)
+
+### Calendar — due dates and steps by day
+
+![Calendar view with tasks placed on their due dates](docs/images/calendar-view.png)
+
 ### Statistics — breakdown by label
 
 ![Statistics view with By Status and By Label charts](docs/images/stats-by-label.png)
+
+### AI Coaching — bring-your-own-key task planning help
+
+The coach reads the task you're planning and helps break it down — here,
+inside the Kanban board:
+
+![AI Coaching chat modal open over the Kanban board](docs/images/ai-coach.png)
+
+To regenerate these images locally:
+
+```bash
+npm run dev -- --host 127.0.0.1 --port 5199 --strictPort   # in another terminal
+npx playwright test e2e/screenshots.spec.js
+```
 
 ## Features
 
 | Area | Capabilities |
 | --- | --- |
-| **Core** | Kanban board, list/edit, timeline, calendar, statistics |
+| **Core** | Kanban board, list/edit, priority ranking, by-type grouping, timeline, calendar, statistics |
 | **Steps** | Sub-tasks with status cycling (`todo → in_progress → done → blocked`) |
 | **Phase A** | Custom labels & colors, per-task card color, estimated duration, label filter & stats |
 | **Phase B** | Optional due time, recurring routine tasks (daily/weekly/monthly), browser reminders |
