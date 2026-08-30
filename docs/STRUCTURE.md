@@ -15,8 +15,6 @@ KanDOne/
 │   ├── dependabot.yml
 │   └── pull_request_template.md       # Summary
 ├── docs/
-│   ├── hld/                           # High Level Design — architecture, flows, integrations
-│   │   └── hld.md                     # KanDOne — High Level Design (HLD)
 │   ├── images/                        # Screenshots referenced from README.md
 │   │   ├── ai-coach.png
 │   │   ├── board-with-routine-task.png
@@ -28,9 +26,9 @@ KanDOne/
 │   │   ├── task-detail-routine-reminder.png
 │   │   ├── timeline-view.png
 │   │   └── type-view.png
-│   ├── lld/                           # Low Level Design — modules, data shapes, function map
-│   │   └── lld.md                     # KanDOne — Low Level Design (LLD)
 │   ├── .structure-notes.toml
+│   ├── HLD.md                         # High Level Design — architecture, flows, integrations
+│   ├── LLD.md                         # Low Level Design — modules, data shapes, function map
 │   └── STRUCTURE.md                   # Repository structure
 ├── e2e/                               # Playwright end-to-end tests
 │   ├── README.md                      # E2E tests (Playwright)
