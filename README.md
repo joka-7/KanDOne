@@ -115,17 +115,23 @@ npm run lint          # eslint (also runs in CI)
 
 <!-- BEGIN GENERATED TREE (depth=1 entries=all) -->
 ```text
-kandone/
+KanDOne/
 ├── .github/
 ├── docs/
-├── e2e/       # Playwright end-to-end tests
+├── e2e/            # Playwright end-to-end tests
 ├── public/
-├── src/       # App source — single entry point (TasksApp.jsx), no mode gate (unlike…
+├── src/            # App source — single entry point (TasksApp.jsx), no mode gate (unlike…
+├── .ai             # Ogen-ai submodule — the shared source of rules, skills and the ai-sync…
 ├── .gitignore
+├── .gitmodules
 ├── .npmrc
 ├── .trivyignore
+├── AGENTS.md       # The compiled coding rules every AI assistant reads — generated, do not…
+├── CLAUDE.md       # Claude Code's copy of AGENTS.md (generated)
+├── GEMINI.md       # Gemini CLI's copy of AGENTS.md (generated)
 ├── LICENSE
-├── README.md  # KanDOne
+├── README.md       # KanDOne
+├── ai-config.toml  # Which rule fragments and target tools ai-sync compiles for this repo
 ├── eslint.config.js
 ├── firestore.rules
 ├── index.html
@@ -142,8 +148,8 @@ kandone/
 Full annotated tree, every file: [`docs/STRUCTURE.md`](docs/STRUCTURE.md). Generated —
 regenerate after adding/renaming a file with:
 ```bash
-python <ogen-ai>/skills/repo_tree/gen_tree.py --project . --output docs/STRUCTURE.md
-python <ogen-ai>/skills/repo_tree/gen_tree.py --project . --output README.md --max-depth 1
+python .ai/skills/repo_tree/gen_tree.py --project . --output docs/STRUCTURE.md
+python .ai/skills/repo_tree/gen_tree.py --project . --output README.md --max-depth 1
 ```
 
 ## What was carried over
