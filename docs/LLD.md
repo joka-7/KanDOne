@@ -5,11 +5,11 @@
 | Document | Low Level Design |
 | Product | KanDOne — standalone Kanban task manager |
 | Status | Living document |
-| Parent | [HLD](../hld/hld.md) |
+| Parent | [HLD](./HLD.md) |
 | Scope | Module, function, data-structure and flow detail |
 
 > This LLD explains **how** each module is implemented and how control/data flow
-> through them. Read the [HLD](../hld/hld.md) first for the big picture.
+> through them. Read the [HLD](./HLD.md) first for the big picture.
 
 ---
 
@@ -532,7 +532,7 @@ event builders) pure and tested; when changing the task/step schema, update
 ---
 
 ## 13. Cross-References
-- Architecture, flows, requirements, audit A–I → [HLD](../hld/hld.md)
+- Architecture, flows, requirements, audit A–I → [HLD](./HLD.md)
 - Status/collection/key rules → `src/statuses.js`
 - Data whitelisting → `src/sanitize.js`
 - Pure task helpers → `src/utils/taskHelpers.js`

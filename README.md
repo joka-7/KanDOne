@@ -108,8 +108,8 @@ npm run lint          # eslint (also runs in CI)
 
 ## Documentation
 
-- [High Level Design (HLD)](docs/hld/hld.md) — architecture, flows, integrations, audit A–I summary
-- [Low Level Design (LLD)](docs/lld/lld.md) — modules, data shapes, function map
+- [High Level Design (HLD)](docs/HLD.md) — architecture, flows, integrations, audit A–I summary
+- [Low Level Design (LLD)](docs/LLD.md) — modules, data shapes, function map
 
 ## Project layout
 
