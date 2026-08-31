@@ -1,13 +1,32 @@
 import { getCollectionName } from './statuses';
 
+// Firebase web config is a public client identifier, not a secret — it ships in
+// the client bundle by design. Access is controlled by firestore.rules and by
+// Authentication → Authorized domains, not by hiding these values.
+//
+// It comes ONLY from env vars, with deliberately no hardcoded fallback. A
+// fallback would mean every fork, preview deploy, and local `npm run dev`
+// without a .env silently authenticates against — and writes real user data
+// into — whichever project happened to be baked into this file.
 const firebaseConfig = {
-  apiKey: "AIzaSyAX1AeSD3InSEqZ_bGEyYDfqADssDr1TuQ",
-  authDomain: "kandone-a6c91.firebaseapp.com",
-  projectId: "kandone-a6c91",
-  storageBucket: "kandone-a6c91.firebasestorage.app",
-  messagingSenderId: "1072442648740",
-  appId: "1:1072442648740:web:dc65116f6cf04a9aca9e31"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? '',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ?? '',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ?? '',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ?? '',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID ?? '',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID ?? '',
 };
+
+/**
+ * True when every Firebase value needed to sign in and sync is present.
+ *
+ * Cloud sync is opt-in: this app is offline-first and fully usable on
+ * localStorage alone. When false, the SDK is never loaded and the UI omits
+ * "Connect Drive" rather than offering a button that cannot work.
+ */
+export function isCloudConfigured() {
+  return Object.values(firebaseConfig).every((value) => value !== '');
+}
 
 /**
  * Firebase Auth/Firestore are optional (offline-first app). Keep them out of the
@@ -16,6 +35,11 @@ const firebaseConfig = {
 let firebaseReady = null;
 
 async function ensureFirebase() {
+  if (!isCloudConfigured()) {
+    throw new Error(
+      'Firebase is not configured. Set the VITE_FIREBASE_* variables (see .env.example).',
+    );
+  }
   if (!firebaseReady) {
     firebaseReady = (async () => {
       const { initializeApp } = await import('firebase/app');
@@ -85,6 +109,7 @@ export function formatSignInError(err) {
 
 /** Call once on app load after Google redirect sign-in. No-ops if nothing pending. */
 export async function completeRedirectSignIn() {
+  if (!isCloudConfigured()) return null;
   if (!hasPendingAuthRedirect()) return null;
   const fb = await ensureFirebase();
   const result = await fb.getRedirectResult(fb.auth);
@@ -125,6 +150,12 @@ export async function signOut() {
  * the SDK has finished loading (no-op until the real listener is attached).
  */
 export function onAuthChange(callback) {
+  if (!isCloudConfigured()) {
+    // Report "signed out" so callers stop waiting on a session that can never
+    // arrive — otherwise the header sits on "Checking…" forever.
+    callback(null);
+    return () => {};
+  }
   let unsub = () => {};
   let cancelled = false;
   ensureFirebase().then((fb) => {

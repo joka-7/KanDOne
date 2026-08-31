@@ -168,9 +168,13 @@ interview-template assets were removed in a later cleanup.
 
 ## Notes
 
-- `src/firebase.js` points at the `kandone-a6c91` Firebase project (the config is a public
-  web API key, not a secret). The app works fully offline without it; the Firebase SDK
-  loads only when a cloud API is first used.
+- Cloud sync is configured through the `VITE_FIREBASE_*` variables — see `.env.example`.
+  There is no hardcoded fallback project, so a build without them runs in local-only mode:
+  `isCloudConfigured()` is false, the Firebase SDK never loads, and the header omits
+  "Connect Drive". **Deployments must set all six**, or signed-in users lose sync.
+  The values are public web client identifiers, not secrets — they ship in the bundle by
+  design, and access is controlled by `firestore.rules` and Authentication → Authorized
+  domains. The SDK still loads lazily, only when a cloud API is first used.
 - Labels are stored in `localStorage` (`tasksLabelsV1`) and synced to the user
   profile in Firestore (`tasksLabels` field) when signed in; also included in JSON export v2.
 - Reminders require the app to be open (or running as an installed PWA); background
