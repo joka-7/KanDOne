@@ -5,12 +5,12 @@
 | Document | High Level Design |
 | Product | KanDOne — standalone Kanban task manager |
 | Status | Living document |
-| Related | [LLD](./LLD.md), `README.md` |
+| Related | [LLD](../lld/lld.md), `README.md` |
 | Owners | KanDOne maintainers |
 
 > This HLD describes **what** the system is, its architecture, external
 > integrations and the main runtime flows. For class/function-level detail
-> (**how**), see the companion [Low Level Design](./LLD.md).
+> (**how**), see the companion [Low Level Design](../lld/lld.md).
 
 ---
 
@@ -241,7 +241,7 @@ erDiagram
 - **Task statuses** (`STATUSES_TASKS`): `active`, `on_hold`, `completed`,
   `cancelled`. Terminal statuses: `completed`, `cancelled`.
 - **Step statuses**: `todo`, `in_progress`, `done`, `blocked` (cycled on click).
-- Field-level schemas, size caps and defaults live in the [LLD](./LLD.md#4-data-structures).
+- Field-level schemas, size caps and defaults live in the [LLD](../lld/lld.md#4-data-structures).
 
 ---
 
@@ -456,7 +456,7 @@ secret). Default project is `kandone-a6c91`; users can swap in their own config.
 | FR15 overdue | `taskHelpers.isTaskOverdue`, board/list/detail UI |
 | FR16 undo | `TasksApp` toast action for delete/import |
 
-See the [LLD](./LLD.md) for the function-by-function realisation of each item.
+See the [LLD](../lld/lld.md) for the function-by-function realisation of each item.
 
 ---
 

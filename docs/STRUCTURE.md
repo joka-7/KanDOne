@@ -1,34 +1,29 @@
 # Repository structure
 
 Every file in this repo and what is inside it. The tree below is **generated** —
-run `python .ai/skills/repo_tree/gen_tree.py --project . --output docs/STRUCTURE.md`
+run `python <ogen-ai>/skills/repo_tree/gen_tree.py --project . --output docs/STRUCTURE.md`
 to refresh it, and never edit between the markers by hand.
 
 <!-- BEGIN GENERATED TREE (depth=all entries=all) -->
 ```text
-KanDOne/
+kandone/
 ├── .github/
 │   ├── workflows/
 │   │   ├── ci.yml
 │   │   └── security.yml
-│   ├── copilot-instructions.md        # Copilot's copy of AGENTS.md (generated)
 │   ├── dependabot.yml
 │   └── pull_request_template.md       # Summary
 ├── docs/
+│   ├── hld/                           # High Level Design — architecture, flows, integrations
+│   │   └── hld.md                     # KanDOne — High Level Design (HLD)
 │   ├── images/                        # Screenshots referenced from README.md
-│   │   ├── ai-coach.png
 │   │   ├── board-with-routine-task.png
-│   │   ├── calendar-view.png
-│   │   ├── list-view.png
 │   │   ├── phase-b-task-form.png
-│   │   ├── priority-view.png
 │   │   ├── stats-by-label.png
-│   │   ├── task-detail-routine-reminder.png
-│   │   ├── timeline-view.png
-│   │   └── type-view.png
+│   │   └── task-detail-routine-reminder.png
+│   ├── lld/                           # Low Level Design — modules, data shapes, function map
+│   │   └── lld.md                     # KanDOne — Low Level Design (LLD)
 │   ├── .structure-notes.toml
-│   ├── HLD.md                         # High Level Design — architecture, flows, integrations
-│   ├── LLD.md                         # Low Level Design — modules, data shapes, function map
 │   └── STRUCTURE.md                   # Repository structure
 ├── e2e/                               # Playwright end-to-end tests
 │   ├── README.md                      # E2E tests (Playwright)
@@ -37,7 +32,6 @@ KanDOne/
 │   ├── dark-mode.spec.js
 │   ├── helpers.js
 │   ├── onboarding.spec.js
-│   ├── screenshots.spec.js
 │   └── tasks-flow.spec.js
 ├── public/
 │   ├── apple-touch-icon-180x180.png
@@ -64,8 +58,7 @@ KanDOne/
 │   │   ├── sanitize.test.js
 │   │   ├── storageKeys.e2eParity.test.js
 │   │   ├── taskHelpers.test.js
-│   │   ├── taskPriority.test.js
-│   │   └── taskTypes.test.js
+│   │   └── taskPriority.test.js
 │   ├── components/
 │   │   ├── APIKeySettings.jsx         # User-supplied LLM provider API key settings
 │   │   ├── AppBrandMark.jsx           # App logo/brand mark
@@ -80,10 +73,7 @@ KanDOne/
 │   │   ├── PriorityBadge.jsx
 │   │   ├── PriorityView.jsx
 │   │   ├── RoutineReminderFields.jsx  # Recurring-schedule + reminder form fields
-│   │   ├── TemplateLibrary.jsx        # Task template library
-│   │   ├── TypeBadge.jsx
-│   │   ├── TypePicker.jsx
-│   │   └── TypeView.jsx
+│   │   └── TemplateLibrary.jsx        # Task template library
 │   ├── data/
 │   │   └── taskTemplates.js
 │   ├── hooks/
@@ -109,7 +99,6 @@ KanDOne/
 │   │   ├── saveFile.js
 │   │   ├── taskHelpers.js             # Pure task/display logic
 │   │   ├── taskPriority.js
-│   │   ├── taskTypes.js
 │   │   └── templateQuestions.js
 │   ├── App.jsx
 │   ├── TasksApp.jsx                   # Main UI + state — board/list/timeline/calendar/stats views
@@ -121,17 +110,11 @@ KanDOne/
 │   ├── statuses.js
 │   ├── storageKeys.js
 │   └── usePwaInstall.js
-├── .ai                                # Ogen-ai submodule — the shared source of rules, skills and the ai-sync…
 ├── .gitignore
-├── .gitmodules
 ├── .npmrc
 ├── .trivyignore
-├── AGENTS.md                          # The compiled coding rules every AI assistant reads — generated, do not…
-├── CLAUDE.md                          # Claude Code's copy of AGENTS.md (generated)
-├── GEMINI.md                          # Gemini CLI's copy of AGENTS.md (generated)
 ├── LICENSE
 ├── README.md                          # KanDOne
-├── ai-config.toml                     # Which rule fragments and target tools ai-sync compiles for this repo
 ├── eslint.config.js
 ├── firestore.rules
 ├── index.html

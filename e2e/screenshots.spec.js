@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { STORAGE_KEYS, TASKS_LABELS_KEY, E2E_AI_STORAGE } from '../src/storageKeys.js';
 import { getStorageKey } from '../src/statuses.js';
-import { openTemplateLibrary, mockGeminiChatStream, selectListTask } from './helpers.js';
+import { openTemplateLibrary, mockGeminiChatStream } from './helpers.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = path.resolve(__dirname, '../docs/images');
@@ -33,7 +33,7 @@ function task(overrides) {
     urgency: overrides.urgency || '',
     type: overrides.type || '',
     dueDate: overrides.dueDate || '',
-    dueTime: overrides.dueTime || '',
+    dueTime: '',
     duration: { value: '', unit: 'hour' },
     effort: overrides.effort || { value: '', unit: 'hour' },
     labelIds: overrides.labelIds || [],
@@ -90,12 +90,6 @@ const TASKS = [
   task({
     id: 't-research', name: 'Research summer vacation options', type: 'research', status: 'active',
     impact: 'medium', urgency: 'month', dueDate: daysFromNow(10), labelIds: ['lbl-errands'],
-  }),
-  task({
-    id: 't-standup', name: 'Morning standup', type: 'other', status: 'active',
-    impact: 'medium', dueDate: daysFromNow(0), dueTime: '09:00', labelIds: ['lbl-work'],
-    routine: { enabled: true, frequency: 'daily', interval: 1, weekdays: [1, 2, 3, 4, 5], endDate: '' },
-    reminder: { enabled: true, minutesBefore: 15, snoozedUntil: '' },
   }),
 ];
 
@@ -190,43 +184,5 @@ test.describe('capture README screenshots', () => {
     await page.getByText(reply).waitFor({ timeout: 15_000 });
 
     await snap(page, 'ai-coach.png');
-  });
-
-  test('board with routine task', async ({ page }) => {
-    await seedTasks(page);
-    await page.goto('/');
-    await page.getByText('Morning standup').waitFor();
-
-    await snap(page, 'board-with-routine-task.png');
-  });
-
-  test('task detail with routine and reminder', async ({ page }) => {
-    await seedTasks(page);
-    await page.goto('/');
-    await page.getByRole('button', { name: /List & Edit/i }).click();
-    await selectListTask(page, 'Morning standup');
-    await page.getByRole('heading', { name: 'Steps (0)' }).waitFor();
-
-    await snap(page, 'task-detail-routine-reminder.png');
-  });
-
-  test('phase B task form — routine, due time, reminder', async ({ page }) => {
-    await seedTasks(page);
-    await page.goto('/');
-    await page.getByRole('button', { name: /List & Edit/i }).click();
-    await selectListTask(page, 'Morning standup');
-    await page.getByRole('button', { name: /Edit Details/i }).click();
-    await page.getByText('Routine task').waitFor();
-
-    await snap(page, 'phase-b-task-form.png');
-  });
-
-  test('stats by label', async ({ page }) => {
-    await seedTasks(page);
-    await page.goto('/');
-    await page.getByRole('button', { name: /^Statistics$/i }).click();
-    await page.getByText('By Label').waitFor();
-
-    await snap(page, 'stats-by-label.png');
   });
 });
