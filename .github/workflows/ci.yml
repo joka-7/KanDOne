@@ -30,8 +30,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Run unit tests
-        run: npm test
+      - name: Run unit tests with a coverage gate
+        # Thresholds live in vite.config.js; --coverage makes them enforced.
+        run: npm test -- --coverage
 
       - name: Verify E2E storage key parity
         run: npm test -- src/__tests__/storageKeys.e2eParity.test.js

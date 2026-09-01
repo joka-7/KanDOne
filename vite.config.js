@@ -56,5 +56,19 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     exclude: ['**/node_modules/**', '**/e2e/**'],
+    coverage: {
+      // istanbul, not v8: v8 parses uncovered files with rolldown to report
+      // them at 0%, and rolldown cannot parse JSX — so any component without a
+      // test crashes the run. istanbul instruments through Vite's own
+      // pipeline, which already handles JSX.
+      provider: 'istanbul',
+      reporter: ['text-summary', 'lcov'],
+      include: ['src/**'],
+      exclude: ['src/**/__tests__/**', 'src/main.jsx'],
+      // Floors just under the measured 30.6/30.5/22.7/23.4, to ratchet up.
+      // Unit coverage only: the UI paths are covered by the Playwright suite,
+      // which does not report here, so this number understates what is tested.
+      thresholds: { lines: 28, statements: 28, functions: 20, branches: 20 },
+    },
   },
 })
