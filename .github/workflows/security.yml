@@ -14,16 +14,22 @@ permissions:
 
 jobs:
   gitleaks:
-    name: Gitleaks
+    name: Gitleaks (full history)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          # Full history: a secret removed in a later commit is still in the
+          # pack, and still valid until it's rotated.
           fetch-depth: 0
-
-      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: gitleaks
+        # The gitleaks CLI directly rather than gitleaks-action: the action
+        # lists the PR's commits via the GitHub API, which 403s under the
+        # default CI token permissions. A CLI scan needs no API access, and it
+        # reads .gitleaksignore so reviewed findings stay suppressed.
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/repo" \
+            ghcr.io/gitleaks/gitleaks:v8.18.4 detect --source=/repo --redact --verbose
 
   dependency-audit:
     name: npm audit
