@@ -1,0 +1,22 @@
+# Reviewed findings that are not secrets. A scan that always reports the same
+# thing stops being read, so each entry names what it is and why it is safe.
+#
+# Both hits are the Firebase *web* config that src/firebase.js carried inline
+# before it became env-only. That config (apiKey, authDomain, projectId,
+# storageBucket, messagingSenderId, appId) is a public client identifier, not a
+# credential: it is compiled into the browser bundle by design and is visible to
+# anyone who loads the app. Access is controlled by firestore.rules and by
+# Authentication → Authorized domains, not by keeping these values private.
+# gitleaks' gcp-api-key rule matches the AIza… shape and cannot distinguish a
+# Firebase web key from a genuinely secret server-side GCP key.
+#
+# The two hits are different projects, not duplicates:
+#   ed5608d0 (2026-07-08) — jobflowtracker-7733e, left over from the code this
+#                           repo started from
+#   a7c7305b (2026-07-16) — kandone-a6c91, this app's own project
+#
+# Neither can be removed from the pack by rotating, and neither protects
+# anything. Suppressed by fingerprint rather than by loosening the rule, so a
+# genuine server-side key would still fail this job.
+ed5608d0b6bd49671a5164a846ed852093b67ce9:src/firebase.js:gcp-api-key:10
+a7c7305b12eea6fa5e4af967c0f7425b76235c3b:src/firebase.js:gcp-api-key:10

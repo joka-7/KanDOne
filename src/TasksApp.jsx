@@ -16,7 +16,7 @@ import { delimUserField } from './utils/promptSafety';
 import {
   signInWithGoogle, signOut, onAuthChange, loadAllItems, formatSignInError,
   updateItem, deleteItem, batchSaveItems, saveUserProfile,
-  loadTaskLabels, saveTaskLabels,
+  loadTaskLabels, saveTaskLabels, isCloudConfigured,
 } from './firebase';
 import { getStorageKey, STATUSES_TASKS, filterItemsForMode } from './statuses';
 import { usePwaInstall } from './usePwaInstall';
@@ -1999,6 +1999,11 @@ Rules:
                   <span className="shrink-0">{syncError ? t('header.syncNowRetry', 'Retry sync') : t('header.syncNow')}</span>
                 </button>
               </>
+            ) : !isCloudConfigured() ? (
+              // No Firebase project configured — the app still works fully on
+              // localStorage, so offer nothing rather than a button that
+              // cannot succeed.
+              null
             ) : (
               <button
                 onClick={() => signInWithGoogle()

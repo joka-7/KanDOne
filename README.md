@@ -108,24 +108,30 @@ npm run lint          # eslint (also runs in CI)
 
 ## Documentation
 
-- [High Level Design (HLD)](docs/hld/hld.md) — architecture, flows, integrations, audit A–I summary
-- [Low Level Design (LLD)](docs/lld/lld.md) — modules, data shapes, function map
+- [High Level Design (HLD)](docs/HLD.md) — architecture, flows, integrations, audit A–I summary
+- [Low Level Design (LLD)](docs/LLD.md) — modules, data shapes, function map
 
 ## Project layout
 
 <!-- BEGIN GENERATED TREE (depth=1 entries=all) -->
 ```text
-kandone/
+KanDOne/
 ├── .github/
 ├── docs/
-├── e2e/       # Playwright end-to-end tests
+├── e2e/            # Playwright end-to-end tests
 ├── public/
-├── src/       # App source — single entry point (TasksApp.jsx), no mode gate (unlike…
+├── src/            # App source — single entry point (TasksApp.jsx), no mode gate (unlike…
+├── .ai             # Ogen-ai submodule — the shared source of rules, skills and the ai-sync…
 ├── .gitignore
+├── .gitmodules
 ├── .npmrc
 ├── .trivyignore
+├── AGENTS.md       # The compiled coding rules every AI assistant reads — generated, do not…
+├── CLAUDE.md       # Claude Code's copy of AGENTS.md (generated)
+├── GEMINI.md       # Gemini CLI's copy of AGENTS.md (generated)
 ├── LICENSE
-├── README.md  # KanDOne
+├── README.md       # KanDOne
+├── ai-config.toml  # Which rule fragments and target tools ai-sync compiles for this repo
 ├── eslint.config.js
 ├── firestore.rules
 ├── index.html
@@ -142,8 +148,8 @@ kandone/
 Full annotated tree, every file: [`docs/STRUCTURE.md`](docs/STRUCTURE.md). Generated —
 regenerate after adding/renaming a file with:
 ```bash
-python <ogen-ai>/skills/repo_tree/gen_tree.py --project . --output docs/STRUCTURE.md
-python <ogen-ai>/skills/repo_tree/gen_tree.py --project . --output README.md --max-depth 1
+python .ai/skills/repo_tree/gen_tree.py --project . --output docs/STRUCTURE.md
+python .ai/skills/repo_tree/gen_tree.py --project . --output README.md --max-depth 1
 ```
 
 ## What was carried over
@@ -162,9 +168,13 @@ interview-template assets were removed in a later cleanup.
 
 ## Notes
 
-- `src/firebase.js` points at the `kandone-a6c91` Firebase project (the config is a public
-  web API key, not a secret). The app works fully offline without it; the Firebase SDK
-  loads only when a cloud API is first used.
+- Cloud sync is configured through the `VITE_FIREBASE_*` variables — see `.env.example`.
+  There is no hardcoded fallback project, so a build without them runs in local-only mode:
+  `isCloudConfigured()` is false, the Firebase SDK never loads, and the header omits
+  "Connect Drive". **Deployments must set all six**, or signed-in users lose sync.
+  The values are public web client identifiers, not secrets — they ship in the bundle by
+  design, and access is controlled by `firestore.rules` and Authentication → Authorized
+  domains. The SDK still loads lazily, only when a cloud API is first used.
 - Labels are stored in `localStorage` (`tasksLabelsV1`) and synced to the user
   profile in Firestore (`tasksLabels` field) when signed in; also included in JSON export v2.
 - Reminders require the app to be open (or running as an installed PWA); background
