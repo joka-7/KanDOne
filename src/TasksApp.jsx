@@ -5,7 +5,7 @@ import {
   Trash2, Edit2, ArrowLeft, ArrowRight, CheckCircle2, CheckCircle, Circle,
   Clock, AlertCircle, Calendar, Cloud, CloudOff, RefreshCw,
   ClipboardList, X, Languages, MoreVertical, Settings, Smartphone, Sparkles,
-  Timer, Repeat, Bell, Zap, Tag,
+  Repeat, Bell, Zap, Tag,
 } from 'lucide-react';
 import { initAI, getGoalsTasksSystemPrompt } from './services/aiAssistant';
 import { TASK_TEMPLATES } from './data/taskTemplates';
@@ -44,8 +44,8 @@ import {
 } from './utils/boardOrder';
 import {
   safeStr, cycleStepStatus, makeInitialDuration, makeInitialEffort, makeInitialTask,
-  getProgress, formatDate, formatDuration, isTaskOverdue,
-  buildCalendarEvents, buildTimelineEvents, mergeTaskIntoList, DURATION_UNITS,
+  getProgress, formatDate, isTaskOverdue,
+  buildCalendarEvents, buildTimelineEvents, mergeTaskIntoList,
 } from './utils/taskHelpers';
 import EffortPicker, { EffortChip } from './components/EffortPicker';
 import PriorityBadge from './components/PriorityBadge';
@@ -1047,38 +1047,6 @@ Rules:
             </div>
           )}
           {editable && (
-            <div className="flex items-center gap-1 mt-1.5">
-              <Timer size={10} className="text-gray-400 shrink-0" />
-              <input
-                type="number"
-                min="0"
-                value={safeStr(step.duration?.value)}
-                onChange={e => setFormData(prev => ({
-                  ...prev,
-                  steps: prev.steps.map(s => s.id === step.id
-                    ? { ...s, duration: { value: e.target.value, unit: s.duration?.unit || 'hour' } }
-                    : s),
-                }))}
-                placeholder={tt('form.durationValuePlaceholder', 'Duration')}
-                className="w-16 text-xs bg-transparent border-0 outline-none text-gray-500"
-              />
-              <select
-                value={step.duration?.unit || 'hour'}
-                onChange={e => setFormData(prev => ({
-                  ...prev,
-                  steps: prev.steps.map(s => s.id === step.id
-                    ? { ...s, duration: { value: s.duration?.value || '', unit: e.target.value } }
-                    : s),
-                }))}
-                className="text-xs bg-transparent border-0 outline-none text-gray-500 cursor-pointer"
-              >
-                {DURATION_UNITS.map(u => (
-                  <option key={u} value={u}>{tt(`duration.${u}`, u)}</option>
-                ))}
-              </select>
-            </div>
-          )}
-          {editable && (
             <div className="mt-1.5">
               <EffortPicker
                 label={tt('form.stepEffort', 'Step size')}
@@ -1096,13 +1064,7 @@ Rules:
           )}
           {!editable && (
             <div className="mt-0.5">
-              <EffortChip effort={step.effort} tt={tt} tiers={effortTiers} />
-            </div>
-          )}
-          {!editable && formatDuration(step.duration, tt) && (
-            <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
-              <Timer size={10} />
-              {formatDuration(step.duration, tt)}
+              <EffortChip effort={step.effort?.value ? step.effort : step.duration} tt={tt} tiers={effortTiers} />
             </div>
           )}
           {editable && (
@@ -1287,10 +1249,11 @@ Rules:
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                <label htmlFor="task-form-due-date" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
                   {tt('form.dueDate', 'Due Date')}
                 </label>
                 <input
+                  id="task-form-due-date"
                   type="date"
                   value={safeStr(formData.dueDate)}
                   onChange={e => setFormData(prev => ({ ...prev, dueDate: e.target.value }))}
@@ -1298,32 +1261,16 @@ Rules:
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-                  {tt('form.duration', 'Duration')}
+                <label htmlFor="task-form-due-time" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                  {tt('form.dueTime', 'Due Time')}
                 </label>
-                <div className="flex gap-1.5">
-                  <input
-                    type="number"
-                    min="0"
-                    value={safeStr(formData.duration?.value)}
-                    onChange={e => setFormData(prev => ({
-                      ...prev, duration: { value: e.target.value, unit: prev.duration?.unit || 'hour' },
-                    }))}
-                    placeholder={tt('form.durationValuePlaceholder', 'Duration')}
-                    className="w-1/2 border border-gray-200 rounded-xl px-3 py-2.5 text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 text-sm"
-                  />
-                  <select
-                    value={formData.duration?.unit || 'hour'}
-                    onChange={e => setFormData(prev => ({
-                      ...prev, duration: { value: prev.duration?.value || '', unit: e.target.value },
-                    }))}
-                    className="w-1/2 border border-gray-200 rounded-xl px-2 py-2.5 text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 text-sm"
-                  >
-                    {DURATION_UNITS.map(u => (
-                      <option key={u} value={u}>{tt(`duration.${u}`, u)}</option>
-                    ))}
-                  </select>
-                </div>
+                <input
+                  id="task-form-due-time"
+                  type="time"
+                  value={formData.dueTime || ''}
+                  onChange={e => setFormData(prev => ({ ...prev, dueTime: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 text-sm"
+                />
               </div>
             </div>
 
@@ -1516,12 +1463,6 @@ Rules:
                 <span className="flex items-center gap-1 text-xs text-violet-500">
                   <Repeat size={11} />
                   {tt('routine.until', 'Until')} {formatDate(task.routine.endDate, lang)}
-                </span>
-              )}
-              {formatDuration(task.duration, tt) && (
-                <span className="flex items-center gap-1 text-xs text-gray-500">
-                  <Timer size={11} />
-                  {formatDuration(task.duration, tt)}
                 </span>
               )}
             </div>

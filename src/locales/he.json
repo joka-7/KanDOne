@@ -275,7 +275,9 @@
     "tasksShortcutsSubtitle": "עבוד מהר יותר עם קיצורים",
     "tasksShortcutN": "הוסף משימה חדשה",
     "tasksShortcutEsc": "סגור פרטי משימה / בטל עריכה",
-    "tasksFinalTip": "אתה מוכן! התחל בהוספת המשימה הראשונה שלך ופרק אותה לשלבים."
+    "tasksFinalTip": "אתה מוכן! התחל בהוספת המשימה הראשונה שלך ופרק אותה לשלבים.",
+    "tasksFeaturePriority": "דירוג עדיפות — מה לעשות עכשיו",
+    "tasksFeatureType": "קיבוץ לפי סוג: תיקון, קנייה, שיחה ועוד"
   },
   "ai": {
     "title": "עוזר AI",

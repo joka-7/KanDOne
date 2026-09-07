@@ -31,19 +31,6 @@ export default function RoutineReminderFields({ formData, setFormData, tt, onRem
 
   return (
     <div className="space-y-4">
-      <div>
-        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-          {tt('form.dueTime', 'Due Time')}
-        </label>
-        <input
-          type="time"
-          value={formData.dueTime || ''}
-          onChange={e => setFormData(prev => ({ ...prev, dueTime: e.target.value }))}
-          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 text-sm"
-        />
-        <p className="text-xs text-gray-400 mt-1">{tt('form.dueTimeHint', 'Optional time for due dates and reminders')}</p>
-      </div>
-
       <div className="rounded-xl border border-violet-100 bg-violet-50/50 p-3 space-y-3">
         <label className="flex items-center gap-2 cursor-pointer">
           <input

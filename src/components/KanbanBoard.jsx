@@ -16,12 +16,12 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-  Calendar, GripVertical, AlertCircle, Repeat, Bell, Timer,
+  Calendar, GripVertical, AlertCircle, Repeat, Bell,
 } from 'lucide-react';
 import { STATUSES_TASKS } from '../statuses';
 import { LabelChipsReadOnly } from './LabelPicker';
 import {
-  safeStr, getNextPendingStep, formatDate, formatDuration, isTaskOverdue,
+  safeStr, getNextPendingStep, formatDate, isTaskOverdue,
 } from '../utils/taskHelpers';
 import { formatDueDateTime } from '../utils/reminders';
 import { sortByBoardOrder } from '../utils/boardOrder';
@@ -153,12 +153,6 @@ function SortableTaskCard({
           {task.reminder?.enabled && (
             <Bell size={10} className="text-amber-500" aria-label={tt('reminder.badge', 'Reminder')} />
           )}
-        </div>
-      )}
-      {formatDuration(task.duration, tt) && (
-        <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
-          <Timer size={10} />
-          {formatDuration(task.duration, tt)}
         </div>
       )}
       {(task.labelIds || []).length > 0 && (

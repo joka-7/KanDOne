@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { X, Layout, List, BarChart2, Lightbulb, ChevronRight, ChevronLeft, CheckCircle2, Clock, Calendar, Cloud, Timer, Tag, Palette, Repeat, Bell } from 'lucide-react';
+import { X, Layout, List, BarChart2, Lightbulb, ChevronRight, ChevronLeft, CheckCircle2, Clock, Cloud, Timer, Tag, Palette, Repeat, Bell, Zap } from 'lucide-react';
 import AppBrandMark from './AppBrandMark';
 import { STORAGE_KEYS } from '../storageKeys.js';
 import { useModalA11y } from '../hooks/useModalA11y';
@@ -57,12 +57,12 @@ const tasksStepContent = {
         {[
           { icon: <Layout size={20} className="text-emerald-500" />, text: t('onboarding.tasksFeatureBoard', 'Kanban board with drag & drop') },
           { icon: <CheckCircle2 size={20} className="text-blue-500" />, text: t('onboarding.tasksFeatureSteps', 'Steps with status tracking') },
-          { icon: <Calendar size={20} className="text-orange-500" />, text: t('onboarding.tasksFeatureTimeline', 'Timeline & due dates') },
+          { icon: <Zap size={20} className="text-amber-500" />, text: t('onboarding.tasksFeaturePriority', 'Priority ranking — what to do next') },
+          { icon: <Tag size={20} className="text-orange-500" />, text: t('onboarding.tasksFeatureType', 'Group by type: fix, buy, call, and more') },
           { icon: <BarChart2 size={20} className="text-purple-500" />, text: t('onboarding.tasksFeatureStats', 'Progress statistics') },
-          { icon: <Tag size={20} className="text-pink-500" />, text: t('onboarding.tasksFeatureLabels', 'Custom labels with your own colors') },
-          { icon: <Timer size={20} className="text-cyan-500" />, text: t('onboarding.tasksFeatureDuration', 'Track estimated duration') },
+          { icon: <Palette size={20} className="text-pink-500" />, text: t('onboarding.tasksFeatureLabels', 'Custom labels with your own colors') },
           { icon: <Repeat size={20} className="text-violet-500" />, text: t('onboarding.tasksFeatureRoutine', 'Recurring routine tasks') },
-          { icon: <Bell size={20} className="text-amber-500" />, text: t('onboarding.tasksFeatureReminder', 'Due-date reminders with snooze') },
+          { icon: <Bell size={20} className="text-amber-600" />, text: t('onboarding.tasksFeatureReminder', 'Due-date reminders with snooze') },
         ].map(({ icon, text }, i) => (
           <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
             {icon}
@@ -246,9 +246,9 @@ export default function Onboarding({ t, i18n, isRTL, onClose, openNewForm, openA
         aria-modal="true"
         aria-labelledby="onboarding-title"
         tabIndex={-1}
-        className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden outline-none"
+        className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden outline-none"
       >
-        <div className="bg-gradient-to-r from-green-600 to-emerald-700 p-6 text-white">
+        <div className="bg-gradient-to-r from-green-600 to-emerald-700 p-6 text-white shrink-0">
           <div className="flex justify-between items-start mb-4">
             <div className="flex gap-1.5">
               {steps.map((_, i) => (
@@ -294,11 +294,11 @@ export default function Onboarding({ t, i18n, isRTL, onClose, openNewForm, openA
           <p className="text-blue-200 text-sm mt-1">{t(`onboarding.${current.titleKey}Subtitle`, current.defaults.subtitle)}</p>
         </div>
 
-        <div className="p-6">
+        <div className="p-6 overflow-y-auto flex-1 min-h-0">
           {content}
         </div>
 
-        <div className={`px-6 pb-6 gap-2 items-center ${isFirst ? 'grid grid-cols-3' : 'flex justify-between'}`}>
+        <div className={`px-6 pb-6 pt-4 gap-2 items-center shrink-0 border-t border-gray-100 ${isFirst ? 'grid grid-cols-3' : 'flex justify-between'}`}>
           <button
             onClick={() => setStep(s => s - 1)}
             disabled={isFirst}
