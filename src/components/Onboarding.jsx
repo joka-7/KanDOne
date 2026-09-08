@@ -294,7 +294,7 @@ export default function Onboarding({ t, i18n, isRTL, onClose, openNewForm, openA
           <p className="text-blue-200 text-sm mt-1">{t(`onboarding.${current.titleKey}Subtitle`, current.defaults.subtitle)}</p>
         </div>
 
-        <div className="p-6 overflow-y-auto flex-1 min-h-0">
+        <div className="p-6 overflow-y-auto flex-1 min-h-0" tabIndex={0}>
           {content}
         </div>
 
