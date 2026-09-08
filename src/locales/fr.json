@@ -268,7 +268,9 @@
     "tasksShortcutsSubtitle": "Travaillez plus vite avec des raccourcis",
     "tasksShortcutN": "Ajouter une nouvelle tâche",
     "tasksShortcutEsc": "Fermer les détails de la tâche / annuler l'édition",
-    "tasksFinalTip": "Vous êtes prêt ! Commencez par ajouter votre première tâche et décomposez-la en étapes."
+    "tasksFinalTip": "Vous êtes prêt ! Commencez par ajouter votre première tâche et décomposez-la en étapes.",
+    "tasksFeaturePriority": "Classement par priorité — que faire ensuite",
+    "tasksFeatureType": "Regrouper par type : réparer, acheter, appeler, etc."
   },
   "ai": {
     "title": "Assistant IA",

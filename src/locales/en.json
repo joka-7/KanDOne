@@ -275,7 +275,9 @@
     "tasksShortcutsSubtitle": "Work faster with shortcuts",
     "tasksShortcutN": "Add a new task",
     "tasksShortcutEsc": "Close task detail / cancel edit",
-    "tasksFinalTip": "You're all set! Start by adding your first task and breaking it into steps."
+    "tasksFinalTip": "You're all set! Start by adding your first task and breaking it into steps.",
+    "tasksFeaturePriority": "Priority ranking — what to do next",
+    "tasksFeatureType": "Group by type: fix, buy, call, and more"
   },
   "ai": {
     "title": "AI Assistant",
