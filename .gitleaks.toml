@@ -1,0 +1,26 @@
+title = "KanDOne"
+
+# The Firebase *web* config in src/firebase.js is a public client identifier,
+# not a credential: it is compiled into the browser bundle by design and is
+# visible to anyone who loads the app. Access is controlled by firestore.rules
+# and by Authentication → Authorized domains, not by keeping these values
+# private.
+#
+# gitleaks' gcp-api-key rule matches the AIza… shape and cannot distinguish a
+# Firebase web key from a genuinely secret server-side GCP key. This allowlist
+# names the one value rather than exempting the file or relaxing the rule, so
+# any other AIza… key — including one pasted into src/firebase.js — still fails
+# the job.
+#
+# This replaces the .gitleaksignore entry for this key: that file suppresses by
+# commit fingerprint, so every commit that reintroduces the value needs a new
+# entry, which cannot be written before the commit exists. The fingerprint for
+# the unrelated jobflowtracker project key stays in .gitleaksignore.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "kandone-a6c91 Firebase web API key (public client identifier)"
+regexes = [
+  '''AIzaSyAX1AeSD3InSEqZ_bGEyYDfqADssDr1TuQ''',
+]

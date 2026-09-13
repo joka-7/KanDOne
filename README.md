@@ -169,12 +169,17 @@ interview-template assets were removed in a later cleanup.
 ## Notes
 
 - Cloud sync is configured through the `VITE_FIREBASE_*` variables — see `.env.example`.
-  There is no hardcoded fallback project, so a build without them runs in local-only mode:
-  `isCloudConfigured()` is false, the Firebase SDK never loads, and the header omits
-  "Connect Drive". **Deployments must set all six**, or signed-in users lose sync.
-  The values are public web client identifiers, not secrets — they ship in the bundle by
-  design, and access is controlled by `firestore.rules` and Authentication → Authorized
-  domains. The SDK still loads lazily, only when a cloud API is first used.
+  Each is optional and overrides one value of the app's own project, which
+  `resolveFirebaseConfig()` in `src/firebase.js` falls back to; set them to point a fork
+  or preview deploy at its own Firebase project. A build with none of them set still has
+  working sync. The values are public web client identifiers, not secrets — they ship in
+  the bundle by design, and access is controlled by `firestore.rules` and Authentication →
+  Authorized domains. The SDK still loads lazily, only when a cloud API is first used.
+- Local changes that have not reached Firestore are tracked per record id in
+  `src/utils/pendingSync.js`, and `resolveTasksOnSignIn` uses that set to decide a shared
+  id: a pending local edit wins over the pulled copy and is pushed up, a pending local
+  delete is not resurrected, and everything else takes cloud. Without it a pull overwrote
+  every id it shared, discarding edits made before a returning session finished resolving.
 - Labels are stored in `localStorage` (`tasksLabelsV1`) and synced to the user
   profile in Firestore (`tasksLabels` field) when signed in; also included in JSON export v2.
 - Reminders require the app to be open (or running as an installed PWA); background

@@ -60,6 +60,7 @@ KanDOne/
 │   │   ├── labelSync.test.js
 │   │   ├── localeParity.test.js
 │   │   ├── phaseB.test.js
+│   │   ├── pendingSync.test.js
 │   │   ├── promptSafety.test.js
 │   │   ├── sanitize.test.js
 │   │   ├── storageKeys.e2eParity.test.js
@@ -103,6 +104,7 @@ KanDOne/
 │   │   ├── effortScale.js
 │   │   ├── labelColors.js
 │   │   ├── labelSync.js               # Label sync logic
+│   │   ├── pendingSync.js             # Records which local changes have not reached the cloud
 │   │   ├── promptSafety.js            # AI prompt input sanitization
 │   │   ├── recurrence.js              # Recurring-schedule (routine) logic
 │   │   ├── reminders.js               # Reminder scheduling logic

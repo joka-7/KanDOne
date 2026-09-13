@@ -1,28 +1,45 @@
 import { getCollectionName } from './statuses';
+import { clearPendingIds } from './utils/pendingSync';
 
 // Firebase web config is a public client identifier, not a secret — it ships in
 // the client bundle by design. Access is controlled by firestore.rules and by
 // Authentication → Authorized domains, not by hiding these values.
 //
-// It comes ONLY from env vars, with deliberately no hardcoded fallback. A
-// fallback would mean every fork, preview deploy, and local `npm run dev`
-// without a .env silently authenticates against — and writes real user data
-// into — whichever project happened to be baked into this file.
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? '',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ?? '',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ?? '',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ?? '',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID ?? '',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID ?? '',
+// VITE_FIREBASE_* wins where it is set, so a fork or preview deploy can point
+// at its own project. The app's own project is the fallback: making config
+// env-only meant a deploy that had not set the six variables silently shipped
+// with cloud sync switched off and no "Connect Drive" button at all, which is
+// indistinguishable from the feature having been removed.
+const DEFAULT_FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyAX1AeSD3InSEqZ_bGEyYDfqADssDr1TuQ',
+  authDomain: 'kandone-a6c91.firebaseapp.com',
+  projectId: 'kandone-a6c91',
+  storageBucket: 'kandone-a6c91.firebasestorage.app',
+  messagingSenderId: '1072442648740',
+  appId: '1:1072442648740:web:dc65116f6cf04a9aca9e31',
 };
+
+/** Per-value precedence: a set VITE_FIREBASE_* variable, else the app's project. */
+export function resolveFirebaseConfig(env = import.meta.env) {
+  return {
+    apiKey: env.VITE_FIREBASE_API_KEY || DEFAULT_FIREBASE_CONFIG.apiKey,
+    authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || DEFAULT_FIREBASE_CONFIG.authDomain,
+    projectId: env.VITE_FIREBASE_PROJECT_ID || DEFAULT_FIREBASE_CONFIG.projectId,
+    storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || DEFAULT_FIREBASE_CONFIG.storageBucket,
+    messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || DEFAULT_FIREBASE_CONFIG.messagingSenderId,
+    appId: env.VITE_FIREBASE_APP_ID || DEFAULT_FIREBASE_CONFIG.appId,
+  };
+}
+
+const firebaseConfig = resolveFirebaseConfig();
 
 /**
  * True when every Firebase value needed to sign in and sync is present.
  *
- * Cloud sync is opt-in: this app is offline-first and fully usable on
- * localStorage alone. When false, the SDK is never loaded and the UI omits
- * "Connect Drive" rather than offering a button that cannot work.
+ * With the fallback above this only goes false if someone strips the defaults
+ * or overrides a variable with an empty string, but the checks that depend on
+ * it stay — an unconfigured build must still degrade to local-only rather than
+ * boot an SDK that cannot authenticate.
  */
 export function isCloudConfigured() {
   return Object.values(firebaseConfig).every((value) => value !== '');
@@ -70,6 +87,64 @@ async function ensureFirebase() {
     })();
   }
   return firebaseReady;
+}
+
+// Firebase Auth persists the signed-in user in this IndexedDB store. Detecting
+// it without loading the SDK is what lets the header tell "returning user whose
+// session is still being confirmed" apart from "signed out", so a slow or
+// blocked SDK bootstrap never shows a false "Connect Drive" that invites the
+// user to start working as if their data were local-only.
+const FIREBASE_AUTH_DB = 'firebaseLocalStorageDb';
+const FIREBASE_AUTH_STORE = 'firebaseLocalStorage';
+
+// Opens the auth DB and resolves true iff it holds a persisted firebase:authUser
+// entry. If the DB didn't exist (oldVersion 0), opening creates an empty one —
+// we detect that and delete it so fresh visitors aren't left with a phantom DB.
+function probePersistedAuthUser() {
+  return new Promise((resolve) => {
+    let req;
+    try { req = window.indexedDB.open(FIREBASE_AUTH_DB); }
+    catch { return resolve(false); }
+    let created = false;
+    req.onupgradeneeded = (e) => { if (e.oldVersion === 0) created = true; };
+    req.onerror = () => resolve(false);
+    req.onsuccess = () => {
+      const db = req.result;
+      if (created || !db.objectStoreNames.contains(FIREBASE_AUTH_STORE)) {
+        db.close();
+        if (created) { try { window.indexedDB.deleteDatabase(FIREBASE_AUTH_DB); } catch { /* ignore */ } }
+        return resolve(false);
+      }
+      try {
+        const keysReq = db.transaction(FIREBASE_AUTH_STORE, 'readonly')
+          .objectStore(FIREBASE_AUTH_STORE).getAllKeys();
+        keysReq.onsuccess = () => {
+          const has = (keysReq.result || []).some((k) => String(k).startsWith('firebase:authUser:'));
+          db.close();
+          resolve(has);
+        };
+        keysReq.onerror = () => { db.close(); resolve(false); };
+      } catch { db.close(); resolve(false); }
+    };
+  });
+}
+
+/**
+ * True when a previously signed-in session should be restored on load. Where
+ * indexedDB.databases() exists (Chromium/WebKit) we use it to skip the probe for
+ * fresh visitors; where it doesn't (Firefox) we probe directly, which self-cleans
+ * any empty DB it has to create. Either way the Firebase SDK is never loaded here.
+ */
+export async function hasRestorableSession() {
+  if (!isCloudConfigured()) return false;
+  try {
+    if (typeof window === 'undefined' || typeof window.indexedDB === 'undefined') return false;
+    if (window.indexedDB.databases) {
+      const dbs = await window.indexedDB.databases();
+      if (!dbs.some((d) => d.name === FIREBASE_AUTH_DB)) return false;
+    }
+    return await probePersistedAuthUser();
+  } catch { return false; }
 }
 
 /** True when Firebase Auth may have a redirect result waiting to be consumed. */
@@ -204,12 +279,16 @@ export async function updateItem(uid, mode, item) {
   const fb = await ensureFirebase();
   const ref = fb.doc(fb.db, 'users', uid, getCollectionName(mode), String(item.id));
   await fb.setDoc(ref, item);
+  // Only once the write has actually landed does this record stop needing to
+  // win over a cloud pull (see ./utils/pendingSync).
+  clearPendingIds(mode, [item.id]);
 }
 
 export async function deleteItem(uid, mode, id) {
   const fb = await ensureFirebase();
   const ref = fb.doc(fb.db, 'users', uid, getCollectionName(mode), String(id));
   await fb.deleteDoc(ref);
+  clearPendingIds(mode, [id]);
 }
 
 export async function batchSaveItems(uid, mode, items) {
@@ -218,10 +297,12 @@ export async function batchSaveItems(uid, mode, items) {
   const CHUNK = 490;
   for (let i = 0; i < items.length; i += CHUNK) {
     const batch = fb.writeBatch(fb.db);
-    items.slice(i, i + CHUNK).forEach(item => {
+    const chunk = items.slice(i, i + CHUNK);
+    chunk.forEach(item => {
       const ref = fb.doc(fb.db, 'users', uid, getCollectionName(mode), String(item.id));
       batch.set(ref, item);
     });
     await batch.commit();
+    clearPendingIds(mode, chunk.map(item => item.id));
   }
 }

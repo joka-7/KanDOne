@@ -41,6 +41,8 @@
     "checkingSession": "Vérification…",
     "connectDrive": "Connecter Drive",
     "driveOnTooltip": "Drive synchronisé — cliquer pour déconnecter",
+    "reconnecting": "Reconnexion…",
+    "reconnectingTooltip": "Restauration de votre session — cliquez pour vous reconnecter",
     "connectDriveTooltip": "Connecter Google Drive pour synchroniser sur tous les appareils",
     "aiSettings": "Paramètres",
     "installApp": "Installer l'app",

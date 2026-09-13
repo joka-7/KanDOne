@@ -41,6 +41,8 @@
     "checkingSession": "Checking…",
     "connectDrive": "Connect Drive",
     "driveOnTooltip": "Drive syncing — click to disconnect",
+    "reconnecting": "Reconnecting…",
+    "reconnectingTooltip": "Restoring your session — click to sign in again",
     "connectDriveTooltip": "Connect Google Drive for cross-device sync",
     "aiSettings": "Settings",
     "installApp": "Install App",
