@@ -140,6 +140,7 @@ graph TD
             SK[storageKeys.js]
             PS[promptSafety.js]
             LSNC[labelSync.js]
+            PSNC[pendingSync.js]
         end
         subgraph SVC["Services"]
             AI[services/aiAssistant.js<br/>provider streaming]
@@ -183,7 +184,8 @@ graph TD
   modals are `React.lazy`-loaded. Views and modals are (mostly) presentational.
 - **Domain / utilities** — pure modules with no React dependency: status
   definitions (`statuses.js`), input whitelisting (`sanitize.js`), pure task
-  helpers (`taskHelpers.js`), label cloud merge (`labelSync.js`), storage keys,
+  helpers (`taskHelpers.js`), local/cloud merge (`labelSync.js`) and the record
+  ids still awaiting a cloud write (`pendingSync.js`), storage keys,
   recurrence/reminders, and prompt-injection hardening (`promptSafety.js`).
 - **Services** — side-effecting integrations: `aiAssistant.js` (multi-provider
   streaming; Anthropic SDK imported only when that provider is used),
@@ -316,11 +318,27 @@ sequenceDiagram
     FB->>FS: getDocs(users/{uid}/tasks)
     FS-->>FB: task docs
     FB-->>T: tasks[]
-    T->>T: setTasks(filterItemsForMode(...)) + toast
+    T->>T: resolveTasksOnSignIn(local, cloud, readPending("tasks"))
+    T->>T: setTasks(merged) + toast
+    T->>FB: batchSaveItems(...) for records local won
 ```
 
 Writes are **local-first and best-effort to cloud**: the UI never blocks on a
 Firestore write, and failures are swallowed so offline editing keeps working.
+
+Because a write can therefore fail — or never be attempted, because the session
+had not resolved yet — a pull cannot treat cloud as authoritative for every id.
+`src/utils/pendingSync.js` records which record ids changed locally without a
+confirmed cloud write (`firebase.js` clears an id once its write lands), and
+`resolveTasksOnSignIn` consults that set: a pending local edit keeps the local
+copy and is pushed up, a pending local delete is not resurrected, and every
+other shared id takes the cloud copy so a stale device still converges.
+
+The header distinguishes three pre-sign-in states so it never invites the user
+to work as though their data were local-only: "Checking…" while
+`hasRestorableSession()` runs, "Reconnecting…" when a persisted session exists
+but the SDK has not confirmed it, and "Connect Drive" only once Firebase has
+actually reported no session.
 
 ### 8.4 AI chat / coaching
 
@@ -446,7 +464,7 @@ secret). Default project is `kandone-a6c91`; users can swap in their own config.
 | FR3 drag-and-drop | `TasksApp.jsx` (`handleDragStart/Over/Drop`) |
 | FR4 local persistence | `TasksApp.jsx` effect, `storageKeys.js` |
 | FR5 import/export | `TasksApp.jsx`, `sanitize.js`, undo toast |
-| FR6 cloud sync | `firebase.js` (`ensureFirebase`), `firestore.rules`, `labelSync.js` |
+| FR6 cloud sync | `firebase.js` (`ensureFirebase`, `hasRestorableSession`), `firestore.rules`, `labelSync.js`, `pendingSync.js` |
 | FR7 views | Board/List/Timeline/Stats in `TasksApp.jsx`, lazy `CalendarView.jsx` |
 | FR8 AI | `services/aiAssistant.js`, `ChatModal.jsx`, `promptSafety.js` |
 | FR9 i18n | `i18n.js`, `locales/*`, locale parity tests |

@@ -64,6 +64,40 @@ describe('resolveTasksOnSignIn', () => {
     expect(result.pushToCloud).toBe(true);
   });
 
+  it('keeps a task edited while unsynced instead of letting the cloud pull overwrite it', () => {
+    // The subtler half of the same bug: a brand-new task survived a reconnect,
+    // but an *edit* to an existing one did not — cloud won every shared id, so
+    // text typed into a task during the disconnected window reverted. The edit
+    // is protected because no cloud write ever confirmed it (see pendingSync).
+    const local = [{ id: '1', name: 'Typed while offline', status: 'active', steps: [] }];
+    const cloud = [{ id: '1', name: 'Stale cloud copy', status: 'active', steps: [] }];
+    const pending = { edited: new Set(['1']), deleted: new Set() };
+    const result = resolveTasksOnSignIn(local, cloud, pending);
+    expect(result.tasks.map(t => t.name)).toEqual(['Typed while offline']);
+    expect(result.pushToCloud).toBe(true);
+  });
+
+  it('still takes the cloud copy on a stale device with no pending edit', () => {
+    const local = [{ id: '1', name: 'Week-old copy', status: 'active', steps: [] }];
+    const cloud = [{ id: '1', name: 'Edited on another device', status: 'active', steps: [] }];
+    const pending = { edited: new Set(['someone-else']), deleted: new Set() };
+    const result = resolveTasksOnSignIn(local, cloud, pending);
+    expect(result.tasks.map(t => t.name)).toEqual(['Edited on another device']);
+    expect(result.pushToCloud).toBe(false);
+  });
+
+  it('does not resurrect a task deleted while unsynced, and reports the delete', () => {
+    const local = [{ id: '1', name: 'Kept', status: 'active', steps: [] }];
+    const cloud = [
+      { id: '1', name: 'Kept', status: 'active', steps: [] },
+      { id: '2', name: 'Deleted offline', status: 'active', steps: [] },
+    ];
+    const pending = { edited: new Set(), deleted: new Set(['2']) };
+    const result = resolveTasksOnSignIn(local, cloud, pending);
+    expect(result.tasks.map(t => t.id)).toEqual(['1']);
+    expect(result.deleteFromCloud).toEqual(['2']);
+  });
+
   it('keeps local tasks and flags push when cloud is empty', () => {
     const local = [{ id: '1', name: 'Only local', status: 'active', steps: [] }];
     const result = resolveTasksOnSignIn(local, []);

@@ -43,7 +43,8 @@ src/
 │   └── AppBrandMark.jsx        # logo SVG
 ├── utils/
 │   ├── taskHelpers.js          # pure task/display helpers (tested)
-│   ├── labelSync.js            # merge local/cloud label libraries
+│   ├── labelSync.js            # merge local/cloud label & task libraries
+│   ├── pendingSync.js          # record ids changed locally but not yet in the cloud
 │   ├── promptSafety.js         # delimUserField() prompt hardening
 │   ├── recurrence.js           # routine schedule logic
 │   ├── reminders.js            # notification timing
@@ -297,8 +298,39 @@ Pure helpers extracted from `TasksApp` (unit-tested):
 - `buildCalendarEvents`, `buildTimelineEvents`
 
 ### 5.6 `utils/labelSync.js`
-Merges local and cloud label libraries on sign-in / save so label IDs stay
-consistent across devices.
+Merges local and cloud label and task libraries on sign-in / refocus / manual
+sync so ids stay consistent across devices.
+
+`resolveTasksOnSignIn(localTasks, cloudTasks, pending)` returns
+`{ tasks, pushToCloud, deleteFromCloud }`. Cloud wins on a shared id *unless*
+`pending` (from `pendingSync.js`) says the local copy is still waiting to reach
+the cloud:
+
+| Case | Winner |
+| --- | --- |
+| Id only in local state | Local, pushed to cloud |
+| Shared id, pending local edit | Local, pushed to cloud |
+| Shared id, no pending local change | Cloud |
+| Id only in cloud, pending local delete | Dropped, listed in `deleteFromCloud` |
+
+Omitting `pending` reproduces the old cloud-wins-on-every-shared-id rule, which
+is the degraded behaviour when localStorage is unavailable.
+
+### 5.6a `utils/pendingSync.js`
+Which record ids changed locally without a confirmed cloud write, keyed per
+collection in localStorage (`kandone_pending_sync_v1:{mode}`).
+
+- `fingerprintItems(items)` / `diffFingerprints(before, after)` — content diff
+  between two saves, so one effect on `tasks` catches every mutation instead of
+  each call site having to report itself.
+- `recordLocalChanges(mode, { edited, deleted })` — folds a save into the set;
+  an id is only ever in one of the two halves.
+- `clearPendingIds(mode, ids)` — called from `firebase.js` after `updateItem`,
+  `deleteItem` and each `batchSaveItems` chunk actually commits.
+- `readPending(mode)` — the set `resolveTasksOnSignIn` consults.
+
+All four take an optional storage argument so unit tests never touch real
+localStorage.
 
 ### 5.7 `utils/templateQuestions.js`
 - `getLocalizedQuestions(t, isTasks, categoryKey, fallback)` — reads a translated
@@ -514,7 +546,9 @@ Unit tests under `src/__tests__/` import real modules (not re-implemented copies
 | `taskHelpers.test.js` / `TasksApp.logic.test.js` | `cycleStepStatus`, progress, merge/save, calendar/timeline builders, `isTaskOverdue`, date formatting |
 | `sanitize.test.js` | Hostile/malformed import & label payloads |
 | `phaseB.test.js` | Routines + reminder timing |
-| `labelSync.test.js` | Local/cloud label merge |
+| `labelSync.test.js` | Local/cloud label & task merge, including offline edits and deletes |
+| `pendingSync.test.js` | Change detection and the pending-write bookkeeping |
+| `firebase.test.js` | `VITE_FIREBASE_*` override precedence over the app's project |
 | `localeParity.test.js` | en/he/fr key-set parity |
 | `AppErrorBoundary.test.jsx` | Crash UI / export path |
 | `storageKeys.e2eParity.test.js` | E2E seed fixtures match production keys |

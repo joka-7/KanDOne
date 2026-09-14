@@ -41,6 +41,8 @@
     "checkingSession": "בודק חיבור…",
     "connectDrive": "חבר Drive",
     "driveOnTooltip": "Drive מסנכרן — לחץ לניתוק",
+    "reconnecting": "מתחבר מחדש…",
+    "reconnectingTooltip": "משחזר את החיבור שלך — לחץ כדי להתחבר שוב",
     "connectDriveTooltip": "חבר Google Drive לסנכרון בין מכשירים",
     "aiSettings": "הגדרות",
     "installApp": "התקנת אפליקציה",

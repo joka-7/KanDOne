@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { isCloudConfigured, resolveFirebaseConfig } from '../firebase.js';
 
 const ENV_KEYS = [
   'VITE_FIREBASE_API_KEY',
@@ -11,68 +12,37 @@ const ENV_KEYS = [
 
 const FULL_ENV = Object.fromEntries(ENV_KEYS.map((key) => [key, `value-for-${key}`]));
 
-/**
- * Import a fresh copy of firebase.js with `env` stubbed into import.meta.env.
- * The config object is built at module scope, so the module must be re-imported
- * after every env change rather than reused.
- */
-async function importWithEnv(env) {
-  vi.resetModules();
-  for (const key of ENV_KEYS) vi.stubEnv(key, env[key] ?? '');
-  return import('../firebase.js');
-}
-
-afterEach(() => {
-  vi.unstubAllEnvs();
-  vi.resetModules();
-});
-
 describe('firebase.js', () => {
-  describe('isCloudConfigured', () => {
-    it('is true only when every Firebase variable is set', async () => {
+  describe('resolveFirebaseConfig', () => {
+    it('takes each value from the environment when set and the app default otherwise', () => {
       const cases = [
-        ['all six set', FULL_ENV, true],
-        ['none set', {}, false],
-        ...ENV_KEYS.map((missing) => [
-          `${missing} missing`,
-          { ...FULL_ENV, [missing]: '' },
-          false,
-        ]),
+        ['no env at all falls back to the app project', {}, 'kandone-a6c91'],
+        ['an empty override is not a value', { VITE_FIREBASE_PROJECT_ID: '' }, 'kandone-a6c91'],
+        ['a set variable wins', { VITE_FIREBASE_PROJECT_ID: 'fork-project' }, 'fork-project'],
       ];
 
       for (const [name, env, expected] of cases) {
-        const { isCloudConfigured } = await importWithEnv(env);
-
-        expect(isCloudConfigured(), name).toBe(expected);
+        expect(resolveFirebaseConfig(env).projectId, name).toBe(expected);
       }
     });
-  });
 
-  describe('onAuthChange', () => {
-    it('reports signed-out immediately when unconfigured, so callers stop waiting', async () => {
-      const { onAuthChange } = await importWithEnv({});
-      const callback = vi.fn();
+    it('overrides each variable independently', () => {
+      const resolved = resolveFirebaseConfig(FULL_ENV);
 
-      const unsubscribe = onAuthChange(callback);
+      expect(Object.values(resolved).every((v) => v.startsWith('value-for-VITE_FIREBASE_'))).toBe(true);
+    });
 
-      expect(callback).toHaveBeenCalledWith(null);
-      expect(() => unsubscribe()).not.toThrow();
+    it('leaves no value empty when the environment is empty', () => {
+      // Regression: config became env-only, so a deploy that had not set the
+      // six variables shipped with isCloudConfigured() false — the header then
+      // rendered no "Connect Drive" at all and sync looked deleted.
+      expect(Object.values(resolveFirebaseConfig({})).every((v) => v !== '')).toBe(true);
     });
   });
 
-  describe('completeRedirectSignIn', () => {
-    it('resolves to null when unconfigured rather than loading the SDK', async () => {
-      const { completeRedirectSignIn } = await importWithEnv({});
-
-      await expect(completeRedirectSignIn()).resolves.toBeNull();
-    });
-  });
-
-  describe('signInWithGoogle', () => {
-    it('fails with an actionable message when unconfigured', async () => {
-      const { signInWithGoogle } = await importWithEnv({});
-
-      await expect(signInWithGoogle()).rejects.toThrow(/VITE_FIREBASE_\*/);
+  describe('isCloudConfigured', () => {
+    it('is true for a build with no VITE_FIREBASE_* variables set', () => {
+      expect(isCloudConfigured()).toBe(true);
     });
   });
 });
