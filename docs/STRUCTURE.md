@@ -10,6 +10,7 @@ KanDOne/
 ├── .github/
 │   ├── workflows/
 │   │   ├── ci.yml
+│   │   ├── docs.yml
 │   │   └── security.yml
 │   ├── copilot-instructions.md        # Copilot's copy of AGENTS.md (generated)
 │   ├── dependabot.yml
@@ -57,6 +58,7 @@ KanDOne/
 │   │   ├── TasksApp.logic.test.js
 │   │   ├── boardOrder.test.js
 │   │   ├── effortScale.test.js
+│   │   ├── firebase.test.js
 │   │   ├── labelSync.test.js
 │   │   ├── localeParity.test.js
 │   │   ├── phaseB.test.js
@@ -124,7 +126,9 @@ KanDOne/
 │   ├── storageKeys.js
 │   └── usePwaInstall.js
 ├── .ai                                # Ogen-ai submodule — the shared source of rules, skills and the ai-sync…
+├── .env.example
 ├── .gitignore
+├── .gitleaksignore
 ├── .gitmodules
 ├── .npmrc
 ├── .trivyignore
