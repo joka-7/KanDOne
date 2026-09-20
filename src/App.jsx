@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import TasksApp from './TasksApp';
-import FooterLinks from './components/FooterLinks';
 import { completeRedirectSignIn } from './firebase';
 
 export default function App() {
@@ -11,10 +10,5 @@ export default function App() {
     completeRedirectSignIn().catch(() => {});
   }, []);
 
-  return (
-    <>
-      <TasksApp />
-      <FooterLinks />
-    </>
-  );
+  return <TasksApp />;
 }
