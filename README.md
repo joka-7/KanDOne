@@ -122,7 +122,10 @@ KanDOne/
 ├── public/
 ├── src/            # App source — single entry point (TasksApp.jsx), no mode gate (unlike…
 ├── .ai             # Ogen-ai submodule — the shared source of rules, skills and the ai-sync…
+├── .env.example
 ├── .gitignore
+├── .gitleaks.toml
+├── .gitleaksignore
 ├── .gitmodules
 ├── .npmrc
 ├── .trivyignore
@@ -131,6 +134,7 @@ KanDOne/
 ├── GEMINI.md       # Gemini CLI's copy of AGENTS.md (generated)
 ├── LICENSE
 ├── README.md       # KanDOne
+├── SECURITY.md     # Security Policy
 ├── ai-config.toml  # Which rule fragments and target tools ai-sync compiles for this repo
 ├── eslint.config.js
 ├── firestore.rules

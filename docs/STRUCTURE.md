@@ -10,6 +10,7 @@ KanDOne/
 ├── .github/
 │   ├── workflows/
 │   │   ├── ci.yml
+│   │   ├── docs.yml
 │   │   └── security.yml
 │   ├── copilot-instructions.md        # Copilot's copy of AGENTS.md (generated)
 │   ├── dependabot.yml
@@ -57,10 +58,11 @@ KanDOne/
 │   │   ├── TasksApp.logic.test.js
 │   │   ├── boardOrder.test.js
 │   │   ├── effortScale.test.js
+│   │   ├── firebase.test.js
 │   │   ├── labelSync.test.js
 │   │   ├── localeParity.test.js
-│   │   ├── phaseB.test.js
 │   │   ├── pendingSync.test.js
+│   │   ├── phaseB.test.js
 │   │   ├── promptSafety.test.js
 │   │   ├── sanitize.test.js
 │   │   ├── storageKeys.e2eParity.test.js
@@ -75,6 +77,7 @@ KanDOne/
 │   │   ├── CardColorPicker.jsx        # Card color picker
 │   │   ├── ChatModal.jsx              # AI coach chat UI
 │   │   ├── EffortPicker.jsx
+│   │   ├── GithubIcon.jsx
 │   │   ├── KanbanBoard.jsx
 │   │   ├── LabelPicker.jsx            # Label picker
 │   │   ├── Onboarding.jsx             # First-run onboarding flow
@@ -104,7 +107,7 @@ KanDOne/
 │   │   ├── effortScale.js
 │   │   ├── labelColors.js
 │   │   ├── labelSync.js               # Label sync logic
-│   │   ├── pendingSync.js             # Records which local changes have not reached the cloud
+│   │   ├── pendingSync.js
 │   │   ├── promptSafety.js            # AI prompt input sanitization
 │   │   ├── recurrence.js              # Recurring-schedule (routine) logic
 │   │   ├── reminders.js               # Reminder scheduling logic
@@ -124,7 +127,10 @@ KanDOne/
 │   ├── storageKeys.js
 │   └── usePwaInstall.js
 ├── .ai                                # Ogen-ai submodule — the shared source of rules, skills and the ai-sync…
+├── .env.example
 ├── .gitignore
+├── .gitleaks.toml
+├── .gitleaksignore
 ├── .gitmodules
 ├── .npmrc
 ├── .trivyignore
@@ -133,6 +139,7 @@ KanDOne/
 ├── GEMINI.md                          # Gemini CLI's copy of AGENTS.md (generated)
 ├── LICENSE
 ├── README.md                          # KanDOne
+├── SECURITY.md                        # Security Policy
 ├── ai-config.toml                     # Which rule fragments and target tools ai-sync compiles for this repo
 ├── eslint.config.js
 ├── firestore.rules
