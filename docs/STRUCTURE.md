@@ -6,7 +6,7 @@ to refresh it, and never edit between the markers by hand.
 
 <!-- BEGIN GENERATED TREE (depth=all entries=all) -->
 ```text
-KanDOne/
+kandone/
 ├── .github/
 │   ├── workflows/
 │   │   ├── ci.yml
@@ -53,6 +53,7 @@ KanDOne/
 │   └── pwa-64x64.png
 ├── src/                               # App source — single entry point (TasksApp.jsx), no mode gate (unlike…
 │   ├── __tests__/                     # Vitest unit + integration tests
+│   │   ├── APIKeySettings.test.jsx
 │   │   ├── AppErrorBoundary.test.jsx
 │   │   ├── ChatModal.test.jsx
 │   │   ├── TasksApp.logic.test.js
@@ -122,6 +123,7 @@ KanDOne/
 │   ├── i18n.js
 │   ├── index.css
 │   ├── main.jsx
+│   ├── modeldispatcher.config.js
 │   ├── sanitize.js                    # Import/localStorage data whitelisting
 │   ├── statuses.js
 │   ├── storageKeys.js
@@ -132,7 +134,6 @@ KanDOne/
 ├── .gitleaks.toml
 ├── .gitleaksignore
 ├── .gitmodules
-├── .npmrc
 ├── .trivyignore
 ├── AGENTS.md                          # The compiled coding rules every AI assistant reads — generated, do not…
 ├── CLAUDE.md                          # Claude Code's copy of AGENTS.md (generated)

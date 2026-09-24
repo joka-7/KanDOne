@@ -115,7 +115,7 @@ npm run lint          # eslint (also runs in CI)
 
 <!-- BEGIN GENERATED TREE (depth=1 entries=all) -->
 ```text
-KanDOne/
+kandone/
 ├── .github/
 ├── docs/
 ├── e2e/            # Playwright end-to-end tests
@@ -127,7 +127,6 @@ KanDOne/
 ├── .gitleaks.toml
 ├── .gitleaksignore
 ├── .gitmodules
-├── .npmrc
 ├── .trivyignore
 ├── AGENTS.md       # The compiled coding rules every AI assistant reads — generated, do not…
 ├── CLAUDE.md       # Claude Code's copy of AGENTS.md (generated)
