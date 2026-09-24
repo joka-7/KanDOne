@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
-import { X, Eye, EyeOff, ExternalLink, CheckCircle, Trash2, Settings } from 'lucide-react';
+import { X, Eye, EyeOff, ExternalLink, CheckCircle, Trash2, Settings, Globe } from 'lucide-react';
+import GithubIcon from './GithubIcon';
 import { ModelPicker } from 'modeldispatcher-react-ui';
 import 'modeldispatcher-react-ui/styles.css';
 import {
@@ -266,6 +267,15 @@ function LegacyApiKeySettings({ t, onClose }) {
                 <Trash2 size={16} />
               </button>
             )}
+          </div>
+
+          <div className="flex items-center justify-center gap-4 pt-2 border-t border-gray-100">
+            <a href="https://github.com/joka-7" target="_blank" rel="noreferrer" aria-label="GitHub" className="text-gray-400 hover:text-gray-600 transition-colors">
+              <GithubIcon size={16} />
+            </a>
+            <a href="https://jk-dev-7.vercel.app" target="_blank" rel="noreferrer" aria-label="jk.dev portfolio" className="text-gray-400 hover:text-gray-600 transition-colors">
+              <Globe size={16} />
+            </a>
           </div>
         </div>
       </div>
