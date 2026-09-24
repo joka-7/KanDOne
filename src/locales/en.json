@@ -283,7 +283,6 @@
   },
   "ai": {
     "title": "AI Assistant",
-    "noKey": "Set API key to enable AI →",
     "prepNoCompany": "Select a company first",
     "prepButton": "Prep for interview",
     "debriefButton": "Analyze interview notes",

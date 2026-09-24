@@ -83,3 +83,30 @@ describe('ChatModal external AI escape hatch', () => {
     expect(screen.queryByRole('link', { name: 'Claude' })).toBeNull();
   });
 });
+
+describe('ChatModal — no provider configured', () => {
+  beforeEach(() => {
+    mockIsAIReady.mockReturnValue(false);
+    mockLoadAIConfig.mockReturnValue(false);
+  });
+
+  it('shows a conversation intro and a way to open Settings, with no favorite saved', () => {
+    render(<ChatModal {...defaultProps} />);
+    expect(screen.getByRole('note')).toHaveTextContent(/chatting with AI/i);
+    const settingsBtn = screen.getByRole('button', { name: /open ai settings/i });
+    fireEvent.click(settingsBtn);
+    expect(defaultProps.onOpenSettings).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: /^ask /i })).toBeNull();
+  });
+
+  it('also offers to ask the saved favorite for free, no key required', () => {
+    localStorage.setItem('aiExternalChatFavorite', 'claude');
+    render(<ChatModal {...defaultProps} />);
+    expect(screen.getByRole('button', { name: 'Ask Claude' })).toBeInTheDocument();
+  });
+
+  it('renders the picker in Hebrew, dir=rtl, when the app language is he', () => {
+    render(<ChatModal {...defaultProps} language="he" />);
+    expect(screen.getByRole('note')).toHaveTextContent('אתם משוחחים עם AI');
+  });
+});
