@@ -115,7 +115,7 @@ npm run lint          # eslint (also runs in CI)
 
 <!-- BEGIN GENERATED TREE (depth=1 entries=all) -->
 ```text
-kandone/
+KanDOne/
 ├── .github/
 ├── docs/
 ├── e2e/            # Playwright end-to-end tests
