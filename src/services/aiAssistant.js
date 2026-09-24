@@ -4,7 +4,7 @@ import {
   buildMessages as agentBuildMessages,
   loadConfig as loadPackageConfig,
   isConfigReady,
-} from '@joka-7/modeldispatcher-browser-agent';
+} from 'modeldispatcher-browser-agent';
 
 export const PROVIDERS = {
   gemini: {
@@ -56,7 +56,7 @@ export const PROVIDERS = {
 };
 
 // `providers` is a fallback list ({ provider, model, apiKeys[] }[]) — see
-// @joka-7/modeldispatcher-browser-agent's AgentConfig. Still populated by
+// modeldispatcher-browser-agent's AgentConfig. Still populated by
 // the single-provider initAI() below for the legacy settings UI and every
 // existing test; the new <ModelPicker> UI (see APIKeySettings.jsx) writes
 // this same shape directly via the package's own saveConfig()/loadConfig().
@@ -145,7 +145,7 @@ export function getCurrentProvider() {
 }
 
 // Request/response translation, SSE parsing, and Ollama URL validation for
-// every provider now live in @joka-7/modeldispatcher-browser-agent (the
+// every provider now live in modeldispatcher-browser-agent (the
 // shared core extracted from this file — and JobFlowTracker/HighFive/
 // StepByLearn, which had each independently built the same thing). This
 // file keeps only what's genuinely app-specific: the PROVIDERS table's own

@@ -1,5 +1,5 @@
 /**
- * Developer-set feature flags for @joka-7/modeldispatcher-* — never a
+ * Developer-set feature flags for modeldispatcher-* — never a
  * switch the end user sees or controls. See ModelDispatcher's own
  * docs/USAGE.md § "No-backend browser apps" for the full pattern.
  *
@@ -10,7 +10,7 @@
  * hand-built fields.
  */
 
-import { resolveDispatcherFeatures } from '@joka-7/modeldispatcher-browser-agent';
+import { resolveDispatcherFeatures } from 'modeldispatcher-browser-agent';
 
 export const dispatcherFeatures = resolveDispatcherFeatures({
   ui: import.meta.env.VITE_MODEL_DISPATCHER_UI !== 'false',

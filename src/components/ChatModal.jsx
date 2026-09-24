@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, Component } from 'react';
 import { X, Send, Loader2, Save, MessageSquare, ExternalLink } from 'lucide-react';
-import { EXTERNAL_CHAT_PROVIDERS } from '@joka-7/modeldispatcher-browser-agent';
+import { EXTERNAL_CHAT_PROVIDERS } from 'modeldispatcher-browser-agent';
 import {
   streamChat, buildApiMessages, loadAIConfigFromStorage, isAIReady, getCurrentProvider,
   PROVIDERS, AI_CONFIG_UPDATED,
