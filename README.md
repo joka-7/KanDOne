@@ -127,7 +127,6 @@ KanDOne/
 ├── .gitleaks.toml
 ├── .gitleaksignore
 ├── .gitmodules
-├── .npmrc
 ├── .trivyignore
 ├── AGENTS.md       # The compiled coding rules every AI assistant reads — generated, do not…
 ├── CLAUDE.md       # Claude Code's copy of AGENTS.md (generated)

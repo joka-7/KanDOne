@@ -1,12 +1,88 @@
 import { useState, useRef, useCallback } from 'react';
 import { X, Eye, EyeOff, ExternalLink, CheckCircle, Trash2, Settings, Globe } from 'lucide-react';
 import GithubIcon from './GithubIcon';
+import { ModelPicker } from 'modeldispatcher-react-ui';
+import 'modeldispatcher-react-ui/styles.css';
+import {
+  loadConfig,
+  saveConfig,
+  loadExternalChatFavorite,
+  saveExternalChatFavorite,
+} from 'modeldispatcher-browser-agent';
 import { loadAIConfigFromStorage, isAIReady, PROVIDERS } from '../services/aiAssistant';
+import { dispatcherFeatures } from '../modeldispatcher.config';
 import { useModalA11y } from '../hooks/useModalA11y';
 
 const PROVIDER_ORDER = ['gemini', 'groq', 'ollama', 'anthropic', 'openai'];
 
-export default function APIKeySettings({ t, onClose }) {
+/** The shared <ModelPicker> settings screen — add one or more providers
+ * with pooled keys, pick a favorite free AI app. Live-saves on every
+ * change (ModelPicker's own convention), so a single Close is enough. */
+function NewApiKeySettings({ t, onClose }) {
+  const [pickerConfig, setPickerConfig] = useState(loadConfig);
+  const [favorite, setFavorite] = useState(loadExternalChatFavorite);
+
+  const dialogRef = useRef(null);
+  const handleClose = useCallback(() => onClose(), [onClose]);
+  useModalA11y(dialogRef, handleClose);
+
+  function handleConfigChange(next) {
+    setPickerConfig(next);
+    saveConfig(next);
+    loadAIConfigFromStorage(); // re-sync aiAssistant's in-memory config + fire AI_CONFIG_UPDATED
+  }
+
+  function handleFavoriteChange(next) {
+    setFavorite(next);
+    saveExternalChatFavorite(next);
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="api-key-settings-title"
+        tabIndex={-1}
+        className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden outline-none"
+      >
+        <div className="bg-gradient-to-r from-purple-600 to-indigo-700 p-5 text-white flex items-center justify-between">
+          <div id="api-key-settings-title" className="flex items-center gap-2 font-bold text-lg">
+            <Settings size={20} /> {t('settings.title', 'Settings')}
+          </div>
+          <button type="button" onClick={handleClose} aria-label={t('chat.close', 'Close')} className="text-white/70 hover:text-white"><X size={20} /></button>
+        </div>
+
+        <div className="p-6 space-y-5 overflow-y-auto flex-1 min-h-0">
+          <div className="flex gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-sm">
+            <span className="flex-shrink-0" aria-hidden>⚠️</span>
+            <p>{t('settings.securityNotice', 'API keys are stored in this browser only. Anyone with access to this device, or a malicious extension, could read them. Job and chat data you send is transmitted to your chosen AI provider under your account.')}</p>
+          </div>
+
+          <ModelPicker
+            config={pickerConfig}
+            onConfigChange={handleConfigChange}
+            externalChatFavorite={favorite}
+            onExternalChatFavoriteChange={handleFavoriteChange}
+          />
+
+          <button
+            onClick={handleClose}
+            className="w-full py-2.5 rounded-lg font-bold text-white bg-purple-600 hover:bg-purple-700 transition-colors"
+          >
+            {t('settings.done', 'Done')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The app's original hand-built AI settings — single provider/key/model.
+ * Kept byte-for-byte in behavior as the fallback when
+ * `dispatcherFeatures.ui` is off (see modeldispatcher.config.js). */
+function LegacyApiKeySettings({ t, onClose }) {
   const saved = {
     provider: localStorage.getItem('aiProvider') || 'gemini',
     apiKey: localStorage.getItem('aiApiKey') || '',
@@ -205,4 +281,8 @@ export default function APIKeySettings({ t, onClose }) {
       </div>
     </div>
   );
+}
+
+export default function APIKeySettings(props) {
+  return dispatcherFeatures.ui ? <NewApiKeySettings {...props} /> : <LegacyApiKeySettings {...props} />;
 }
