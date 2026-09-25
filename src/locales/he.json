@@ -283,7 +283,6 @@
   },
   "ai": {
     "title": "עוזר AI",
-    "noKey": "הגדר מפתח API להפעלת AI →",
     "prepNoCompany": "בחר חברה קודם",
     "prepButton": "הכנה לראיון",
     "debriefButton": "נתח הערות ראיון",
