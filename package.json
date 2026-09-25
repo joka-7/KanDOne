@@ -21,7 +21,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "modeldispatcher-browser-agent": "^0.6.7",
     "modeldispatcher-react-ui": "^0.6.7",
-    "firebase": "^12.17.0",
+    "firebase": "^12.19.0",
     "i18next": "^26.3.6",
     "lucide-react": "^1.27.0",
     "react": "^19.2.8",
