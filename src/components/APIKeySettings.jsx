@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { X, Eye, EyeOff, ExternalLink, CheckCircle, Trash2, Settings, Globe } from 'lucide-react';
+import { X, Eye, EyeOff, ExternalLink, CheckCircle, Trash2, Settings, Globe, FolderGit2 } from 'lucide-react';
 import GithubIcon from './GithubIcon';
 import { ModelPicker } from 'modeldispatcher-react-ui';
 import 'modeldispatcher-react-ui/styles.css';
@@ -275,6 +275,9 @@ function LegacyApiKeySettings({ t, onClose }) {
             </a>
             <a href="https://jk-dev-7.vercel.app" target="_blank" rel="noreferrer" aria-label="jk.dev portfolio" className="text-gray-400 hover:text-gray-600 transition-colors">
               <Globe size={16} />
+            </a>
+            <a href="https://github.com/joka-7/KanDOne" target="_blank" rel="noreferrer" aria-label="View repository" className="text-gray-400 hover:text-gray-600 transition-colors">
+              <FolderGit2 size={16} />
             </a>
           </div>
         </div>
