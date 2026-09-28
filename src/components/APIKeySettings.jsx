@@ -269,16 +269,19 @@ function LegacyApiKeySettings({ t, onClose }) {
             )}
           </div>
 
-          <div className="flex items-center justify-center gap-4 pt-2 border-t border-gray-100">
-            <a href="https://github.com/joka-7" target="_blank" rel="noreferrer" aria-label="GitHub" className="text-gray-400 hover:text-gray-600 transition-colors">
-              <GithubIcon size={16} />
-            </a>
-            <a href="https://jk-dev-7.vercel.app" target="_blank" rel="noreferrer" aria-label="jk.dev portfolio" className="text-gray-400 hover:text-gray-600 transition-colors">
-              <Globe size={16} />
-            </a>
-            <a href="https://github.com/joka-7/KanDOne" target="_blank" rel="noreferrer" aria-label="View repository" className="text-gray-400 hover:text-gray-600 transition-colors">
-              <FolderGit2 size={16} />
-            </a>
+          <div className="flex flex-col items-center gap-1.5 pt-2 border-t border-gray-100">
+            <span className="text-[11px] text-gray-400">{t('settings.credit', 'Built by joka-7')}</span>
+            <div className="flex items-center justify-center gap-4">
+              <a href="https://github.com/joka-7" target="_blank" rel="noreferrer" aria-label="GitHub" className="text-gray-400 hover:text-gray-600 transition-colors">
+                <GithubIcon size={16} />
+              </a>
+              <a href="https://jk-dev-7.vercel.app" target="_blank" rel="noreferrer" aria-label="jk.dev portfolio" className="text-gray-400 hover:text-gray-600 transition-colors">
+                <Globe size={16} />
+              </a>
+              <a href="https://github.com/joka-7/KanDOne" target="_blank" rel="noreferrer" aria-label="View repository" className="text-gray-400 hover:text-gray-600 transition-colors">
+                <FolderGit2 size={16} />
+              </a>
+            </div>
           </div>
         </div>
       </div>
