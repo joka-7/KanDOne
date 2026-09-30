@@ -2368,7 +2368,7 @@ Rules:
         </button>
       )}
 
-      <div className="flex flex-col items-center gap-1.5 py-6 text-gray-400">
+      <div className="flex flex-col items-center gap-1.5 py-6 text-gray-600">
         <span className="text-[11px]">{t('settings.credit', 'Built by joka-7')}</span>
         <div className="flex items-center justify-center gap-4">
           <a href="https://github.com/joka-7" target="_blank" rel="noreferrer" aria-label="GitHub" className="hover:text-gray-600 transition-colors">
