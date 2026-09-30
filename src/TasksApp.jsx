@@ -5,8 +5,9 @@ import {
   Trash2, Edit2, ArrowLeft, ArrowRight, CheckCircle2, CheckCircle, Circle,
   Clock, AlertCircle, Calendar, Cloud, CloudOff, RefreshCw,
   ClipboardList, X, Languages, MoreVertical, Settings, Smartphone, Sparkles,
-  Repeat, Bell, Zap, Tag,
+  Repeat, Bell, Zap, Tag, Globe, FolderGit2, Mail, MessageSquare,
 } from 'lucide-react';
+import GithubIcon from './components/GithubIcon';
 import { initAI, getGoalsTasksSystemPrompt } from './services/aiAssistant';
 import { TASK_TEMPLATES } from './data/taskTemplates';
 import {
@@ -2366,6 +2367,27 @@ Rules:
           <Sparkles size={20} />
         </button>
       )}
+
+      <div className="flex flex-col items-center gap-1.5 py-6 text-gray-400">
+        <span className="text-[11px]">{t('settings.credit', 'Built by joka-7')}</span>
+        <div className="flex items-center justify-center gap-4">
+          <a href="https://github.com/joka-7" target="_blank" rel="noreferrer" aria-label="GitHub" className="hover:text-gray-600 transition-colors">
+            <GithubIcon size={16} />
+          </a>
+          <a href="https://jk-dev-7.vercel.app" target="_blank" rel="noreferrer" aria-label="jk.dev portfolio" className="hover:text-gray-600 transition-colors">
+            <Globe size={16} />
+          </a>
+          <a href="https://github.com/joka-7/KanDOne" target="_blank" rel="noreferrer" aria-label="View repository" className="hover:text-gray-600 transition-colors">
+            <FolderGit2 size={16} />
+          </a>
+          <a href="mailto:joka.dev.7@gmail.com" rel="noreferrer" aria-label="Send feedback by email" className="hover:text-gray-600 transition-colors">
+            <Mail size={16} />
+          </a>
+          <a href="https://github.com/joka-7/KanDOne/issues/new" target="_blank" rel="noreferrer" aria-label="Report an issue" className="hover:text-gray-600 transition-colors">
+            <MessageSquare size={16} />
+          </a>
+        </div>
+      </div>
     </div>
   );
 }
