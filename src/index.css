@@ -65,3 +65,8 @@ body {
   background-color: #ffffff !important;
   border-color: #6b7280 !important;
 }
+
+.tap-fx {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(128, 128, 128, 0.35);
+}
