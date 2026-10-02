@@ -272,19 +272,19 @@ function LegacyApiKeySettings({ t, onClose }) {
           <div className="flex flex-col items-center gap-1.5 pt-2 border-t border-gray-100">
             <span className="text-[11px] text-gray-400">{t('settings.credit', 'Built by joka-7')}</span>
             <div className="flex items-center justify-center gap-1">
-              <a href="https://github.com/joka-7" target="_blank" rel="noreferrer" aria-label="GitHub" title="GitHub" className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 active:scale-90 transition-all">
+              <a href="https://github.com/joka-7" target="_blank" rel="noreferrer" aria-label="GitHub" title="GitHub" className="tap-fx text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 active:scale-90 transition-all">
                 <GithubIcon size={16} />
               </a>
-              <a href="https://jk-dev-7.vercel.app" target="_blank" rel="noreferrer" aria-label="jk.dev portfolio" title="jk.dev portfolio" className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 active:scale-90 transition-all">
+              <a href="https://jk-dev-7.vercel.app" target="_blank" rel="noreferrer" aria-label="jk.dev portfolio" title="jk.dev portfolio" className="tap-fx text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 active:scale-90 transition-all">
                 <Globe size={16} />
               </a>
-              <a href="https://github.com/joka-7/KanDOne" target="_blank" rel="noreferrer" aria-label="View repository" title="View repository" className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 active:scale-90 transition-all">
+              <a href="https://github.com/joka-7/KanDOne" target="_blank" rel="noreferrer" aria-label="View repository" title="View repository" className="tap-fx text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 active:scale-90 transition-all">
                 <FolderGit2 size={16} />
               </a>
-              <a href="mailto:joka.dev.7@gmail.com" rel="noreferrer" aria-label="Send feedback by email" title="Send feedback by email" className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 active:scale-90 transition-all">
+              <a href="mailto:joka.dev.7@gmail.com" rel="noreferrer" aria-label="Send feedback by email" title="Send feedback by email" className="tap-fx text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 active:scale-90 transition-all">
                 <Mail size={16} />
               </a>
-              <a href="https://github.com/joka-7/KanDOne/issues/new" target="_blank" rel="noreferrer" aria-label="Report an issue" title="Report an issue" className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 active:scale-90 transition-all">
+              <a href="https://github.com/joka-7/KanDOne/issues/new" target="_blank" rel="noreferrer" aria-label="Report an issue" title="Report an issue" className="tap-fx text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 active:scale-90 transition-all">
                 <MessageSquare size={16} />
               </a>
             </div>
