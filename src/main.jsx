@@ -10,6 +10,11 @@ if (import.meta.env.PROD) {
   registerSW({ immediate: true })
 }
 
+// Mobile browsers skip :active/tap-highlight rendering on pages with no
+// touch listeners (treated as passively scrollable) -- this one-time no-op
+// listener makes tap feedback on the footer icon links actually render.
+document.addEventListener('touchstart', () => {}, { passive: true })
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <AppErrorBoundary>
