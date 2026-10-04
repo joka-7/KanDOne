@@ -5,7 +5,7 @@ import {
   Trash2, Edit2, ArrowLeft, ArrowRight, CheckCircle2, CheckCircle, Circle,
   Clock, AlertCircle, Calendar, Cloud, CloudOff, RefreshCw,
   ClipboardList, X, Languages, MoreVertical, Settings, Smartphone, Sparkles,
-  Repeat, Bell, Zap, Tag,
+  Repeat, Bell, Zap, Tag, Globe,
 } from 'lucide-react';
 import { initAI, getGoalsTasksSystemPrompt } from './services/aiAssistant';
 import { TASK_TEMPLATES } from './data/taskTemplates';
@@ -2367,14 +2367,17 @@ Rules:
         </button>
       )}
 
-      <div className="py-6 text-center">
+      <div className="flex items-center justify-center gap-1.5 py-6">
+        <span className="text-[11px] text-gray-600">{t('settings.credit', 'Built by joka-7')}</span>
         <a
           href="https://jk-dev-7.vercel.app"
           target="_blank"
           rel="noreferrer"
-          className="tap-fx text-[11px] text-gray-600 underline-offset-2 hover:underline"
+          aria-label="jk.dev portfolio"
+          title="jk.dev portfolio"
+          className="tap-fx text-gray-400 hover:text-gray-600"
         >
-          {t('settings.credit', 'Built by joka-7')}
+          <Globe size={14} aria-hidden />
         </a>
       </div>
     </div>
