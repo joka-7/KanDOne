@@ -15,10 +15,18 @@ import { useModalA11y } from '../hooks/useModalA11y';
 
 const PROVIDER_ORDER = ['gemini', 'groq', 'ollama', 'anthropic', 'openai'];
 
+const MODEL_PICKER_LOCALES = ['en', 'fr', 'he'];
+
+/** Maps the app's i18n language to ModelPicker's Locale type, defaulting
+ * to English for any language ModelPicker doesn't itself support. */
+function toModelPickerLocale(language) {
+  return MODEL_PICKER_LOCALES.includes(language) ? language : 'en';
+}
+
 /** The shared <ModelPicker> settings screen — add one or more providers
  * with pooled keys, pick a favorite free AI app. Live-saves on every
  * change (ModelPicker's own convention), so a single Close is enough. */
-function NewApiKeySettings({ t, onClose }) {
+function NewApiKeySettings({ t, language, onClose }) {
   const [pickerConfig, setPickerConfig] = useState(loadConfig);
   const [favorite, setFavorite] = useState(loadExternalChatFavorite);
 
@@ -65,6 +73,7 @@ function NewApiKeySettings({ t, onClose }) {
             onConfigChange={handleConfigChange}
             externalChatFavorite={favorite}
             onExternalChatFavoriteChange={handleFavoriteChange}
+            locale={toModelPickerLocale(language)}
           />
 
           <button
