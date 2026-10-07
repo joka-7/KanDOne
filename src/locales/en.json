@@ -342,7 +342,19 @@
     "clearKey": "Remove",
     "modesTitle": "Enabled Modes",
     "modesNote": "Only selected modes appear in the mode switcher.",
-    "modesAtLeastOne": "At least one mode must remain enabled."
+    "modesAtLeastOne": "At least one mode must remain enabled.",
+    "done": "Done",
+    "linksHeading": "Links",
+    "credit": "Built by joka-7",
+    "links": {
+      "site": "Site",
+      "code": "Code",
+      "email": "Email",
+      "feedback": "Feedback",
+      "repoLabel": "View repository",
+      "emailLabel": "Send feedback by email",
+      "issueLabel": "Report an issue"
+    }
   },
   "rejection": {
     "analysisTitle": "Rejection Analysis",

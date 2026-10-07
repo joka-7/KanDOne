@@ -342,7 +342,19 @@
     "clearKey": "הסר",
     "modesTitle": "מצבים מופעלים",
     "modesNote": "רק המצבים הנבחרים יופיעו במחליף המצבים.",
-    "modesAtLeastOne": "לפחות מצב אחד חייב להישאר מופעל."
+    "modesAtLeastOne": "לפחות מצב אחד חייב להישאר מופעל.",
+    "done": "סיום",
+    "linksHeading": "קישורים",
+    "credit": "נבנה על ידי joka-7",
+    "links": {
+      "site": "אתר",
+      "code": "קוד",
+      "email": "אימייל",
+      "feedback": "משוב",
+      "repoLabel": "צפייה בקוד המקור",
+      "emailLabel": "שליחת משוב באימייל",
+      "issueLabel": "דיווח על בעיה"
+    }
   },
   "rejection": {
     "analysisTitle": "ניתוח דחייה",
