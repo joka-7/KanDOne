@@ -92,19 +92,19 @@ function NewApiKeySettings({ t, language, onClose }) {
               </a>
               <a href="https://jk-dev-7.vercel.app" target="_blank" rel="noreferrer" aria-label="jk.dev portfolio" title="jk.dev portfolio" className="tap-fx text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 active:scale-90 transition-all inline-flex flex-col items-center justify-center gap-0.5">
                 <Globe size={16} />
-                <span className="text-[9px] leading-none">Site</span>
+                <span className="text-[9px] leading-none">{t('settings.links.site', 'Site')}</span>
               </a>
-              <a href="https://github.com/joka-7/KanDOne" target="_blank" rel="noreferrer" aria-label="View repository" title="View repository" className="tap-fx text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 active:scale-90 transition-all inline-flex flex-col items-center justify-center gap-0.5">
+              <a href="https://github.com/joka-7/KanDOne" target="_blank" rel="noreferrer" aria-label={t('settings.links.repoLabel', 'View repository')} title={t('settings.links.repoLabel', 'View repository')} className="tap-fx text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 active:scale-90 transition-all inline-flex flex-col items-center justify-center gap-0.5">
                 <FolderGit2 size={16} />
-                <span className="text-[9px] leading-none">Code</span>
+                <span className="text-[9px] leading-none">{t('settings.links.code', 'Code')}</span>
               </a>
-              <a href="mailto:joka.dev.7@gmail.com" rel="noreferrer" aria-label="Send feedback by email" title="Send feedback by email" className="tap-fx text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 active:scale-90 transition-all inline-flex flex-col items-center justify-center gap-0.5">
+              <a href="mailto:joka.dev.7@gmail.com" rel="noreferrer" aria-label={t('settings.links.emailLabel', 'Send feedback by email')} title={t('settings.links.emailLabel', 'Send feedback by email')} className="tap-fx text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 active:scale-90 transition-all inline-flex flex-col items-center justify-center gap-0.5">
                 <Mail size={16} />
-                <span className="text-[9px] leading-none">Email</span>
+                <span className="text-[9px] leading-none">{t('settings.links.email', 'Email')}</span>
               </a>
-              <a href="https://github.com/joka-7/KanDOne/issues/new" target="_blank" rel="noreferrer" aria-label="Report an issue" title="Report an issue" className="tap-fx text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 active:scale-90 transition-all inline-flex flex-col items-center justify-center gap-0.5">
+              <a href="https://github.com/joka-7/KanDOne/issues/new" target="_blank" rel="noreferrer" aria-label={t('settings.links.issueLabel', 'Report an issue')} title={t('settings.links.issueLabel', 'Report an issue')} className="tap-fx text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 active:scale-90 transition-all inline-flex flex-col items-center justify-center gap-0.5">
                 <MessageSquare size={16} />
-                <span className="text-[9px] leading-none">Feedback</span>
+                <span className="text-[9px] leading-none">{t('settings.links.feedback', 'Feedback')}</span>
               </a>
             </div>
           </div>
@@ -313,19 +313,19 @@ function LegacyApiKeySettings({ t, onClose }) {
               </a>
               <a href="https://jk-dev-7.vercel.app" target="_blank" rel="noreferrer" aria-label="jk.dev portfolio" title="jk.dev portfolio" className="tap-fx text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 active:scale-90 transition-all inline-flex flex-col items-center justify-center gap-0.5">
                 <Globe size={16} />
-                <span className="text-[9px] leading-none">Site</span>
+                <span className="text-[9px] leading-none">{t('settings.links.site', 'Site')}</span>
               </a>
-              <a href="https://github.com/joka-7/KanDOne" target="_blank" rel="noreferrer" aria-label="View repository" title="View repository" className="tap-fx text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 active:scale-90 transition-all inline-flex flex-col items-center justify-center gap-0.5">
+              <a href="https://github.com/joka-7/KanDOne" target="_blank" rel="noreferrer" aria-label={t('settings.links.repoLabel', 'View repository')} title={t('settings.links.repoLabel', 'View repository')} className="tap-fx text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 active:scale-90 transition-all inline-flex flex-col items-center justify-center gap-0.5">
                 <FolderGit2 size={16} />
-                <span className="text-[9px] leading-none">Code</span>
+                <span className="text-[9px] leading-none">{t('settings.links.code', 'Code')}</span>
               </a>
-              <a href="mailto:joka.dev.7@gmail.com" rel="noreferrer" aria-label="Send feedback by email" title="Send feedback by email" className="tap-fx text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 active:scale-90 transition-all inline-flex flex-col items-center justify-center gap-0.5">
+              <a href="mailto:joka.dev.7@gmail.com" rel="noreferrer" aria-label={t('settings.links.emailLabel', 'Send feedback by email')} title={t('settings.links.emailLabel', 'Send feedback by email')} className="tap-fx text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 active:scale-90 transition-all inline-flex flex-col items-center justify-center gap-0.5">
                 <Mail size={16} />
-                <span className="text-[9px] leading-none">Email</span>
+                <span className="text-[9px] leading-none">{t('settings.links.email', 'Email')}</span>
               </a>
-              <a href="https://github.com/joka-7/KanDOne/issues/new" target="_blank" rel="noreferrer" aria-label="Report an issue" title="Report an issue" className="tap-fx text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 active:scale-90 transition-all inline-flex flex-col items-center justify-center gap-0.5">
+              <a href="https://github.com/joka-7/KanDOne/issues/new" target="_blank" rel="noreferrer" aria-label={t('settings.links.issueLabel', 'Report an issue')} title={t('settings.links.issueLabel', 'Report an issue')} className="tap-fx text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 active:scale-90 transition-all inline-flex flex-col items-center justify-center gap-0.5">
                 <MessageSquare size={16} />
-                <span className="text-[9px] leading-none">Feedback</span>
+                <span className="text-[9px] leading-none">{t('settings.links.feedback', 'Feedback')}</span>
               </a>
             </div>
           </div>

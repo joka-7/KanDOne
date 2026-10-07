@@ -335,7 +335,19 @@
     "clearKey": "Supprimer",
     "modesTitle": "Modes activés",
     "modesNote": "Seuls les modes sélectionnés apparaissent dans le sélecteur.",
-    "modesAtLeastOne": "Au moins un mode doit rester activé."
+    "modesAtLeastOne": "Au moins un mode doit rester activé.",
+    "done": "Terminé",
+    "linksHeading": "Liens",
+    "credit": "Créé par joka-7",
+    "links": {
+      "site": "Site",
+      "code": "Code",
+      "email": "E-mail",
+      "feedback": "Avis",
+      "repoLabel": "Voir le dépôt",
+      "emailLabel": "Envoyer un avis par e-mail",
+      "issueLabel": "Signaler un problème"
+    }
   },
   "rejection": {
     "analysisTitle": "Analyse du refus",
