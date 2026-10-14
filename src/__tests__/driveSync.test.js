@@ -21,7 +21,7 @@ function fakeGoogle({ files = {}, failWith = null, pageLimit = Infinity, failRea
 
   const fetchImpl = vi.fn(async (url, init = {}) => {
     if (failWith) return json({}, failWith);
-    if (url.startsWith('https://openidconnect.googleapis.com')) return json(USER);
+    if (url === 'https://openidconnect.googleapis.com/v1/userinfo') return json(USER);
     if (url.includes('/upload/drive/v3/files?uploadType=multipart')) {
       const parts = init.body.split('\r\n');
       const id = `new-${state.nextId++}`;
