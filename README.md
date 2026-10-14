@@ -4,8 +4,8 @@ A standalone Kanban task-management app — ported from the **Tasks mode** of Jo
 
 Plan work as tasks with sub-steps, and see the same data seven ways: a Kanban
 board, a filterable list/edit view, a priority ranking, a by-type breakdown, a
-timeline, a calendar, and stats — with optional AI coaching and Firebase cloud
-sync. Offline-first (localStorage), installable as a PWA, and localized in
+timeline, a calendar, and stats — with optional AI coaching and sync to
+your own Google Drive. Offline-first (localStorage), installable as a PWA, and localized in
 English, Hebrew (RTL) and French.
 
 ## Screenshots
@@ -72,7 +72,7 @@ npx playwright test e2e/screenshots.spec.js
 | **Phase A** | Custom labels & colors, per-task card color, estimated duration, label filter & stats |
 | **Phase B** | Optional due time, recurring routine tasks (daily/weekly/monthly), browser reminders |
 | **UX** | Overdue highlighting; Undo toast for delete task/step/label and import overwrite |
-| **Data** | Auto-save to `localStorage`, JSON backup (tasks + labels), optional Google/Firestore sync |
+| **Data** | Auto-save to `localStorage`, JSON backup (tasks + labels), optional sync to your own Google Drive |
 | **AI** | Task coach, template sessions, goals finder (bring-your-own API key) |
 | **PWA** | Installable, works offline once loaded |
 | **A11y / i18n** | `html` lang/dir sync, en/he/fr with locale parity tests, dialog focus trapping |
@@ -91,7 +91,7 @@ installed as a PWA.
 
 ## Stack
 
-React 19 · Vite · Tailwind CSS · i18next · Firebase (Auth + Firestore) · Vitest · Playwright
+React 19 · Vite · Tailwind CSS · i18next · Google Drive API (appDataFolder) · Vitest · Playwright
 
 ## Getting started
 
@@ -160,7 +160,7 @@ python .ai/skills/repo_tree/gen_tree.py --project . --output README.md --max-dep
 Everything the Tasks feature needs, standalone:
 
 - `TasksApp.jsx` — the full tasks UI (board / list / timeline / calendar / stats)
-- Task data model + persistence: `sanitize.js`, `storageKeys.js`, `statuses.js`, `firebase.js`
+- Task data model + persistence: `sanitize.js`, `storageKeys.js`, `statuses.js`, `driveSync.js`
 - AI coaching: `services/aiAssistant.js`, `components/ChatModal.jsx`, template prompts
 - Supporting UI: `CalendarView`, `TemplateLibrary`, `APIKeySettings`, `Onboarding`, `AppBrandMark`
 - i18n: `en` / `he` / `fr` locales
@@ -171,27 +171,27 @@ interview-template assets were removed in a later cleanup.
 
 ## Notes
 
-- Cloud sync is configured through the `VITE_FIREBASE_*` variables — see `.env.example`.
-  Each is optional and overrides one value of the app's own project, which
-  `resolveFirebaseConfig()` in `src/firebase.js` falls back to; set them to point a fork
-  or preview deploy at its own Firebase project. A build with none of them set still has
-  working sync. The values are public web client identifiers, not secrets — they ship in
-  the bundle by design, and access is controlled by `firestore.rules` and Authentication →
-  Authorized domains. The SDK still loads lazily, only when a cloud API is first used.
-- Local changes that have not reached Firestore are tracked per record id in
+- Cloud sync goes to hidden files (one per device) in each user's **own** Google Drive
+  (`appDataFolder`, scope `drive.appdata`) — straight from the browser, with no KanDOne
+  server or database in between, so the app's operator never holds anyone's tasks.
+  Enable it with `VITE_GOOGLE_CLIENT_ID` (a Web OAuth client ID — public, not a secret;
+  see `.env.example`). Without it the build is local-only and shows no Connect Drive.
+  Browser tokens last an hour; after that one click on Connect Drive reconnects, and
+  edits made meanwhile are kept and pushed up.
+- Local changes that have not reached Drive are tracked per record id in
   `src/utils/pendingSync.js`, and `resolveTasksOnSignIn` uses that set to decide a shared
   id: a pending local edit wins over the pulled copy and is pushed up, a pending local
   delete is not resurrected, and everything else takes cloud. Without it a pull overwrote
   every id it shared, discarding edits made before a returning session finished resolving.
-- Labels are stored in `localStorage` (`tasksLabelsV1`) and synced to the user
-  profile in Firestore (`tasksLabels` field) when signed in; also included in JSON export v2.
+- Labels are stored in `localStorage` (`tasksLabelsV1`) and synced to the
+  `profile.tasksLabels` field of the Drive files when signed in; also included in JSON export v2.
 - Reminders require the app to be open (or running as an installed PWA); background
   service-worker scheduling is not implemented in v1.
 - AI API keys are stored in plaintext `localStorage` by design (no backend proxy). The
   settings modal warns about this; treat it as an accepted privacy trade-off.
 - Calendar UI is forced light for readability; under OS dark mode it stays a light panel
   (stray Tailwind `dark:` classes were removed to avoid white-on-white text).
-- CSP uses `script-src 'self'` (plus Google/Firebase origins) — no `'unsafe-inline'` for
+- CSP uses `script-src 'self'` (plus Google origins) — no `'unsafe-inline'` for
   scripts. The same policy is set in `index.html` and as a Vercel response header.
 - Board card drag uses HTML5 DnD (desktop). Touch drag and manual within-column ordering
   are not implemented yet.

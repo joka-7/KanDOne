@@ -21,9 +21,10 @@ import { sanitizeTaskLabels, sanitizeTaskRecords } from '../sanitize.js';
  * `pending` empty the result matches that old cloud-wins rule exactly, so a
  * storage-blocked browser degrades to the previous behaviour.
  */
-function unionById(cloud, local, idOf, pending) {
+function unionById(cloud, local, idOf, pending, cloudDeleted = []) {
   const editedLocally = pending?.edited ?? new Set();
   const deletedLocally = pending?.deleted ?? new Set();
+  const deletedInCloud = new Set(cloudDeleted.map(String));
 
   const deleteFromCloud = [];
   const survivingCloud = [];
@@ -46,7 +47,11 @@ function unionById(cloud, local, idOf, pending) {
     return cloudItem;
   });
 
-  const localOnly = [...unmatchedLocal.values()];
+  // A record another device deleted is gone here too, unless this device has
+  // an unsynced edit to it — re-uploading a stale copy would undo the delete.
+  const localOnly = [...unmatchedLocal.entries()]
+    .filter(([id]) => !deletedInCloud.has(id) || editedLocally.has(id))
+    .map(([, item]) => item);
   return {
     merged: [...merged, ...localOnly],
     pushToCloud: keptLocalEdit || localOnly.length > 0,
@@ -64,11 +69,12 @@ export function resolveLabelsOnSignIn(localLabels, cloudLabels) {
 
 /**
  * Pick tasks after sign-in/reconnect. Cloud wins on a shared id unless `pending`
- * says the local copy is still waiting to reach the cloud.
+ * says the local copy is still waiting to reach the cloud. `cloudDeletedIds`
+ * are records the cloud holds a newer delete for; a local copy of one is dropped.
  */
-export function resolveTasksOnSignIn(localTasks, cloudTasks, pending) {
+export function resolveTasksOnSignIn(localTasks, cloudTasks, pending, cloudDeletedIds = []) {
   const cloud = sanitizeTaskRecords(Array.isArray(cloudTasks) ? cloudTasks : []);
   const local = sanitizeTaskRecords(Array.isArray(localTasks) ? localTasks : []);
-  const { merged, pushToCloud, deleteFromCloud } = unionById(cloud, local, (t) => t.id, pending);
+  const { merged, pushToCloud, deleteFromCloud } = unionById(cloud, local, (t) => t.id, pending, cloudDeletedIds);
   return { tasks: merged, pushToCloud, deleteFromCloud };
 }

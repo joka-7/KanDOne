@@ -1,13 +1,10 @@
 rules_version = '2';
+// Cloud sync moved to each user's own Google Drive (src/driveSync.js).
+// Firestore is no longer used; deny every client read and write.
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-
-      match /{document=**} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

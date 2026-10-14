@@ -32,16 +32,6 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         globIgnores: ['**/icon-master.png'],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/.*\.firebaseio\.com\/.*/i,
-            handler: 'NetworkFirst',
-          },
-          {
-            urlPattern: /^https:\/\/firestore\.googleapis\.com\/.*/i,
-            handler: 'NetworkFirst',
-          },
-        ],
       },
     }),
     // Opt-in: `npm run build:analyze` writes dist/stats.html (not run in CI).

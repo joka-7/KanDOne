@@ -58,8 +58,8 @@ KanDOne/
 │   │   ├── ChatModal.test.jsx
 │   │   ├── TasksApp.logic.test.js
 │   │   ├── boardOrder.test.js
+│   │   ├── driveSync.test.js
 │   │   ├── effortScale.test.js
-│   │   ├── firebase.test.js
 │   │   ├── labelSync.test.js
 │   │   ├── localeParity.test.js
 │   │   ├── pendingSync.test.js
@@ -119,7 +119,7 @@ KanDOne/
 │   │   └── templateQuestions.js
 │   ├── App.jsx
 │   ├── TasksApp.jsx                   # Main UI + state — board/list/timeline/calendar/stats views
-│   ├── firebase.js                    # Lazy-loaded Firebase SDK (auth + Firestore sync)
+│   ├── driveSync.js                   # Optional sync to the user's own Google Drive (appDataFolder)
 │   ├── i18n.js
 │   ├── index.css
 │   ├── main.jsx

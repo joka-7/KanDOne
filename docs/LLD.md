@@ -18,9 +18,9 @@
 ```
 src/
 ├── main.jsx                    # React root, AppErrorBoundary, SW, i18n
-├── App.jsx                     # resolves redirect sign-in, renders TasksApp
+├── App.jsx                     # renders TasksApp
 ├── TasksApp.jsx                # stateful container: tasks, views, handlers
-├── firebase.js                 # lazy ensureFirebase(); auth + Firestore CRUD
+├── driveSync.js                # Google token + Drive appDataFolder sync
 ├── statuses.js                 # status defs, collection/keys, mode filtering
 ├── sanitize.js                 # ID gen, whitelisting, import parsing
 ├── storageKeys.js              # localStorage key constants + helpers
@@ -72,9 +72,7 @@ labelSync, phaseB, AppErrorBoundary, storage key e2e parity, …).
 - Imports `./i18n` for its init side effect and `./index.css`.
 
 ### 2.2 `App.jsx`
-- On mount, calls `completeRedirectSignIn()` to resolve a pending Google
-  **redirect** sign-in (errors swallowed; Firebase SDK loaded lazily), then
-  renders `<TasksApp/>`.
+- Renders `<TasksApp/>`.
 - Deliberately thin — the multi-mode selector from the parent project is gone;
   the app boots straight into tasks.
 
@@ -94,7 +92,7 @@ labelSync, phaseB, AppErrorBoundary, storage key e2e parity, …).
 | `activeTab` | Current view: `board \| list \| timeline \| calendar \| stats`. |
 | `searchQuery` / `statusFilter` | List filters. |
 | `toast` / `isSaved` / `syncing` | Transient UI feedback; `toast` is `{ message, undo? }` for optional Undo. |
-| `user` | Firebase user (or `null`). |
+| `user` | `{ uid, email, displayName }` from `driveSync.js` (or `null`). |
 | `newStepTitle` | Buffer for the "add step" input. |
 | `visibleCount` | List pagination window (starts at 25). |
 | `mobileMenuOpen`, `showTemplates`, `showAISettings`, `chatOpen`, `showGoalsFinder`, `simulationData`, `showTasksWelcome` | Modal/menu toggles. |
@@ -252,7 +250,7 @@ Caps: ≤10,000 tasks per import, ≤200 steps per task, string coercion via
 - `STATUSES_TASKS` — `[active, on_hold, completed, cancelled]` with Tailwind color
   classes; `STEP_STATUSES`; `TASKS_TERMINAL_STATUSES = [completed, cancelled]`.
 - `getCollectionName(mode)` — `tasks → 'tasks'` (also `candidates`/`companies`
-  for legacy modes) → the Firestore subcollection name.
+  for legacy modes) → the collection key inside the Drive files.
 - `getStorageKey(mode)` — `jobTrackerAppV2Data_${mode}` (heritage key name).
 - `filterItemsForMode(items, mode)` — for `tasks`, keeps records that look like
   tasks (have a `steps` array or a task-only/blank status) and rejects records
@@ -325,8 +323,8 @@ collection in localStorage (`kandone_pending_sync_v1:{mode}`).
   each call site having to report itself.
 - `recordLocalChanges(mode, { edited, deleted })` — folds a save into the set;
   an id is only ever in one of the two halves.
-- `clearPendingIds(mode, ids)` — called from `firebase.js` after `updateItem`,
-  `deleteItem` and each `batchSaveItems` chunk actually commits.
+- `clearPendingIds(mode, ids)` — called from `driveSync.js` after `updateItem`,
+  `deleteItem` and `batchSaveItems` uploads actually land.
 - `readPending(mode)` — the set `resolveTasksOnSignIn` consults.
 
 All four take an optional storage argument so unit tests never touch real
@@ -366,28 +364,78 @@ set of reflective `questions` used to seed a guided AI session.
 
 ## 6. Services
 
-### 6.1 `firebase.js`
+### 6.1 `driveSync.js`
 
-Firebase Auth/Firestore are **optional**. The SDK is not loaded until the first
-cloud API call (`ensureFirebase()`). Exports remain sync wrappers that await the
-lazy init.
+Optional sync to the signed-in user's own Google Drive `appDataFolder`. The
+browser calls Google directly (Google Identity Services for the token, Drive
+REST v3 via `fetch`); no KanDOne server sits in the path. The exported functions
+keep the signatures the Firestore module had, so `TasksApp.jsx` and its merge
+logic did not change; the `uid` argument is accepted and ignored (the token
+already identifies the Drive).
+
+**One file per device.** Each browser gets a random device id
+(`localStorage` `kandone_drive_device_v1`) and writes only
+`kandone-<deviceId>.json`; reads list and merge every `kandone-*.json`. Drive v3
+has no conditional write, so with one shared file two devices uploading at once
+would silently drop one device's edits; with one writer per file nothing is
+overwritten. Tabs of one browser share the device id, so uploads take the Web
+Locks API lock `kandone-drive-write` and re-read the file inside it.
+
+`createDriveSync({ clientId, fetchImpl, loadGis, storage, now, newDeviceId, withLock, flushDelayMs })`
+builds the client; the module exports one instance built from
+`VITE_GOOGLE_CLIENT_ID` and the global `fetch`. Tests inject fakes instead.
 
 | Function | Responsibility |
 | --- | --- |
-| `ensureFirebase()` | Dynamic-import `firebase/app|auth|firestore`, init app/auth/db once. |
-| `signInWithGoogle()` | Popup sign-in; on popup/internal errors falls back to `signInWithRedirect`. |
-| `completeRedirectSignIn()` | Resolves a pending redirect result on load (triggers lazy init). |
-| `signOut()` / `onAuthChange(cb)` | Sign out / subscribe to auth state. |
-| `formatSignInError(err)` | Maps Firebase error codes/messages to friendly guidance (popup blocked, unauthorized domain, API-key referrer, …). |
-| `loadUserProfile/saveUserProfile(uid[,data])` | Read/merge the `users/{uid}` root doc. |
-| `loadTaskLabels/saveTaskLabels(uid, labels)` | Read/write `tasksLabels` on the user profile for cross-device label sync. |
-| `loadAllItems(uid, mode)` | `getDocs(users/{uid}/{collection})`; for jobseeker only, migrates a legacy root-doc `companies` array into the subcollection. |
-| `updateItem/deleteItem(uid, mode, ...)` | `setDoc`/`deleteDoc` a single item doc. |
-| `batchSaveItems(uid, mode, items)` | Chunked `writeBatch` commits (490 per batch — under Firestore's 500 op limit). |
-| `loadAll*/update*/batchSave*` (companies) | Thin jobseeker-mode aliases (legacy). |
+| `isCloudConfigured()` | True when a client ID is set; false → local-only, no Connect Drive. |
+| `hasRestorableSession()` | True only when a stored, unexpired token exists. |
+| `onAuthChange(cb)` | Calls `cb` now and on every change (sign-in, sign-out, token expiry, 401). Preloads Google's script so a Connect Drive click opens the popup synchronously (otherwise Safari blocks it). |
+| `signInWithGoogle()` | Token popup (`drive.appdata openid email profile`, `login_hint` = last email), then userinfo → `{ uid, email, displayName }`; stores the session. |
+| `signOut()` | Rejects queued writes and forgets the session (does not revoke the grant). |
+| `formatSignInError(err)` | Maps GIS error codes (popup blocked, cancelled, script load failed) to friendly text. |
+| `loadUserProfile()` / `saveUserProfile(uid, data)` | Merged `profile` / queue profile fields. |
+| `loadTaskLabels()` / `saveTaskLabels(uid, labels)` | `profile.tasksLabels` for cross-device label sync. |
+| `loadAllItems(uid, mode)` | `{ items, deletedIds }` for `getCollectionName(mode)` — merged live records plus ids whose newest entry is a delete — or `null` when Drive has never held one. `resolveTasksOnSignIn` drops a local copy of a deleted id unless it has an unsynced edit. Files that can never be read (404, `corrupt-file`, `unsupported-version`) are skipped; any other read failure (network, 429, 5xx, 401) rejects the whole load. The listing follows `nextPageToken`. |
+| `updateItem` / `deleteItem` / `batchSaveItems` | Queue upsert/delete operations; resolve once the upload holding them lands, then `clearPendingIds` for ids with no newer write still queued. |
+| `parseDeviceDocument(raw)` | Pure: validate a device file; throws `corrupt-file` / `unsupported-version` rather than returning empty, so a bad file is never overwritten. An unreadable *own* file is left in place and this device continues under a new device id. |
+| `applyOperations(doc, ops, at)` / `mergeDeviceDocuments(docs)` | Pure: stamp queued ops into this device's file; keep the newest entry per record/field across files (tie → higher device id) and list deleted ids. |
+| `nextStamp(now, latestSeen)` | Pure: `max(now, latestSeen + 1)`, so a write is never stamped before anything already read. |
 
-Firestore layout used by tasks: `users/{uid}/tasks/{taskId}` → the task object;
-`users/{uid}` root doc stores `{ appMode, tasksLabels }` profile data.
+Errors are `DriveSyncError { status, code }` (`signed-out`, `not-configured`,
+`gis-load-failed`, `corrupt-file`, `unsupported-version`, or a GIS code);
+callers flag the header's sync-error state.
+
+**Write path (pseudocode):**
+
+```
+enqueue(op):  if no session → reject signed-out
+              push op; start one timer (flushDelayMs, default 1.5 s)
+flush():      batch = queue; queue = []
+              with lock "kandone-drive-write":
+                own = GET kandone-<device>.json   (empty if missing; 404 → recreate;
+                                                    corrupt → new device id, new file)
+                at  = nextStamp(now, newest stamp seen in any read)
+                upload(applyOperations(own, batch, at))    # PATCH, or multipart create
+              resolve every op in batch  (or reject all on any failure)
+```
+
+Flushes run one at a time on a promise chain. A background flush never opens
+the token popup (the browser would block it): an expired token reports
+"signed out" instead.
+
+**Device file** `appDataFolder/kandone-<deviceId>.json`:
+
+```json
+{ "version": 1, "device": "<deviceId>",
+  "profile": { "tasksLabels": { "value": [ { "id": "…", "text": "…", "color": "#…" } ], "at": 1700000000000 } },
+  "collections": { "tasks": {
+    "<taskId>": { "item": { "id": "<taskId>", "name": "…", "steps": [] }, "at": 1700000000000 },
+    "<deletedId>": { "item": null, "at": 1700000000000 } } } }
+```
+
+`item: null` is a delete tombstone, so it beats an older copy in another
+device's file. Session (`localStorage` `kandone_drive_session_v1`):
+`{ accessToken, expiresAt, user: { uid, email, displayName } }`.
 
 ### 6.2 `services/aiAssistant.js`
 
@@ -495,7 +543,7 @@ sequenceDiagram
     participant F as Edit Form (formData)
     participant T as TasksApp state (tasks)
     participant LS as localStorage
-    participant FS as Firestore (if signed in)
+    participant FS as Google Drive (if signed in)
 
     U->>F: type step title, press Enter / +
     F->>F: handleAddStep() → append {id,title,status:'todo'}
@@ -512,17 +560,12 @@ sequenceDiagram
 
 ---
 
-## 10. Firestore Structure & Security
+## 10. Cloud Storage & Security
 
-```
-users/{uid}                      # profile doc: { appMode: 'tasks', ... }
-users/{uid}/tasks/{taskId}       # one document per task (the Task object)
-```
-
-`firestore.rules` (v2): under `users/{userId}` (and every nested document),
-`allow read, write: if request.auth != null && request.auth.uid == userId;`.
-A signed-in user can only ever touch their own subtree; everything else is denied
-by default.
+Cloud data is the per-device Drive files described in §6.1, in each user's own
+`appDataFolder`. Only this OAuth client, holding that user's token, can read it;
+the app's operator has no store to read. `firestore.rules` denies every read and
+write — Firestore is no longer used.
 
 ---
 
@@ -530,8 +573,6 @@ by default.
 - React plugin + `VitePWA({ registerType:'autoUpdate' })`.
 - Manifest: name/short_name `KanDOne`, theme `#059669`, standalone display, icon
   set; precache globs cover `js,css,html,ico,png,svg`.
-- Runtime caching: `NetworkFirst` for `firebaseio.com` and
-  `firestore.googleapis.com` so cloud reads work then fall back to cache.
 - Vitest block: `jsdom` env, globals on, excludes `node_modules` and `e2e`.
 - Optional: `npm run build:analyze` enables `rollup-plugin-visualizer`.
 
@@ -546,9 +587,9 @@ Unit tests under `src/__tests__/` import real modules (not re-implemented copies
 | `taskHelpers.test.js` / `TasksApp.logic.test.js` | `cycleStepStatus`, progress, merge/save, calendar/timeline builders, `isTaskOverdue`, date formatting |
 | `sanitize.test.js` | Hostile/malformed import & label payloads |
 | `phaseB.test.js` | Routines + reminder timing |
-| `labelSync.test.js` | Local/cloud label & task merge, including offline edits and deletes |
+| `labelSync.test.js` | Local/cloud label & task merge, including offline edits and deletes, and dropping local copies of records deleted on another device |
 | `pendingSync.test.js` | Change detection and the pending-write bookkeeping |
-| `firebase.test.js` | `VITE_FIREBASE_*` override precedence over the app's project |
+| `driveSync.test.js` | Device-file parsing and newest-wins merge, sign-in (incl. popup opened inside the click) and token expiry, coalesced uploads to this device's own file only, pending-id clearing with a newer edit queued, 404 recovery, leaving an unreadable own file untouched, skipping another device's bad file, paginated listing, stamps after a clock running ahead, per-tab device ids without Web Locks, error paths (fake `fetch` and GIS) |
 | `localeParity.test.js` | en/he/fr key-set parity |
 | `AppErrorBoundary.test.jsx` | Crash UI / export path |
 | `storageKeys.e2eParity.test.js` | E2E seed fixtures match production keys |
@@ -571,5 +612,5 @@ event builders) pure and tested; when changing the task/step schema, update
 - Data whitelisting → `src/sanitize.js`
 - Pure task helpers → `src/utils/taskHelpers.js`
 - AI providers & streaming → `src/services/aiAssistant.js`
-- Cloud rules → `firestore.rules`
+- Cloud sync → `src/driveSync.js`
 - Security headers / CSP → `vercel.json`, `index.html`
