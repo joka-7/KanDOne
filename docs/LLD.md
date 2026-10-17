@@ -44,6 +44,7 @@ src/
 │   ├── RoutineReminderFields.jsx
 │   └── AppBrandMark.jsx        # logo SVG
 ├── utils/
+│   ├── androidApk.js           # latest-APK URL and the Android-browser check
 │   ├── taskHelpers.js          # pure task/display helpers (tested)
 │   ├── labelSync.js            # merge local/cloud label & task libraries
 │   ├── pendingSync.js          # record ids changed locally but not yet in the cloud
@@ -530,9 +531,12 @@ validation live in `modeldispatcher-browser-agent`; this file keeps app state.
 
 ### 6.3 `usePwaInstall.js`
 Captures `beforeinstallprompt`, detects iOS/standalone, exposes
-`{ canInstall, runInstall, isIOS, isStandalone, installPrompt }`. `canInstall`
-is false inside the Android app, which is already installed. `runInstall(t)`
-triggers the native prompt or shows an OS-specific hint.
+`{ canInstall, canOfferApk, runInstall, isIOS, isStandalone, installPrompt }`.
+`canInstall` is false inside the Android app, which is already installed.
+`canOfferApk` is `canInstall` on an Android browser (`isAndroidBrowser` in
+`utils/androidApk.js`): `TasksApp` then shows a link to `ANDROID_APK_URL`, the
+latest release's `KanDOne.apk`, beside Install App in the header and the menu.
+`runInstall(t)` triggers the native prompt or shows an OS-specific hint.
 
 ---
 

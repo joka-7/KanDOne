@@ -52,7 +52,9 @@
     "syncNow": "Sync Now",
     "syncNowRetry": "Retry sync",
     "syncErrorBadge": "Sync issue",
-    "syncErrorTooltip": "Last cloud sync failed — click \"Sync Now\" to retry. (This signs out.)"
+    "syncErrorTooltip": "Last cloud sync failed — click \"Sync Now\" to retry. (This signs out.)",
+    "androidApp": "Android app",
+    "androidAppTooltip": "Download the Android app (APK). Open the file on your phone to install it."
   },
   "tabs": {
     "board": "Status Board",

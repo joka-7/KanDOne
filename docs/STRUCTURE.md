@@ -119,6 +119,7 @@ KanDOne/
 ├── e2e/                               # Playwright end-to-end tests
 │   ├── README.md                      # E2E tests (Playwright)
 │   ├── accessibility.spec.js
+│   ├── android-apk.spec.js
 │   ├── chat-simulation.spec.js
 │   ├── dark-mode.spec.js
 │   ├── helpers.js
@@ -143,6 +144,7 @@ KanDOne/
 │   │   ├── ChatModal.test.jsx
 │   │   ├── TasksApp.logic.test.js
 │   │   ├── aiAssistant.test.js
+│   │   ├── androidApk.test.js
 │   │   ├── boardOrder.test.js
 │   │   ├── driveSync.test.js
 │   │   ├── effortScale.test.js
@@ -193,6 +195,7 @@ KanDOne/
 │   │   ├── aiAssistant.js
 │   │   └── coachPrompts.js
 │   ├── utils/
+│   │   ├── androidApk.js
 │   │   ├── boardOrder.js
 │   │   ├── effortScale.js
 │   │   ├── labelColors.js
