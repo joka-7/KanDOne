@@ -92,6 +92,19 @@ describe('sanitizeTaskRecords', () => {
     expect(task.steps[1].status).toBe('todo');
   });
 
+  it('caps free-text lengths so one task cannot bloat every sync', () => {
+    const long = 'x'.repeat(100_000);
+    const [task] = sanitizeTaskRecords([{
+      name: long, description: long, notes: long,
+      steps: [{ title: long, notes: long }],
+    }]);
+    expect(task.name).toHaveLength(500);
+    expect(task.description).toHaveLength(20_000);
+    expect(task.notes).toHaveLength(20_000);
+    expect(task.steps[0].title).toHaveLength(500);
+    expect(task.steps[0].notes).toHaveLength(2_000);
+  });
+
   it('caps the number of imported tasks', () => {
     const rows = Array.from({ length: 10005 }, (_, i) => ({ name: `T${i}` }));
     expect(sanitizeTaskRecords(rows)).toHaveLength(10000);

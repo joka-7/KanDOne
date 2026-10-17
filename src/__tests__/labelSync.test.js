@@ -125,6 +125,30 @@ describe('resolveTasksOnSignIn', () => {
     expect(result.tasks.map(t => t.id)).toEqual(expectedIds);
   });
 
+  it('reports only the ids that need pushing, not the whole list', () => {
+    // Every write is stamped newest, so re-sending a record the cloud already
+    // holds would let this stale copy beat another device's concurrent edit.
+    const local = [
+      { id: '1', name: 'Unchanged', status: 'active', steps: [] },
+      { id: '2', name: 'Edited offline', status: 'active', steps: [] },
+      { id: '3', name: 'Created offline', status: 'active', steps: [] },
+    ];
+    const cloud = [
+      { id: '1', name: 'Unchanged', status: 'active', steps: [] },
+      { id: '2', name: 'Old', status: 'active', steps: [] },
+    ];
+    const pending = { edited: new Set(['2']), deleted: new Set() };
+    const result = resolveTasksOnSignIn(local, cloud, pending);
+    expect(result.pushIds.sort()).toEqual(['2', '3']);
+  });
+
+  it('pushes nothing when the cloud already has everything', () => {
+    const task = { id: '1', name: 'Same', status: 'active', steps: [] };
+    const result = resolveTasksOnSignIn([task], [task]);
+    expect(result.pushIds).toEqual([]);
+    expect(result.pushToCloud).toBe(false);
+  });
+
   it('returns empty when neither side has tasks', () => {
     const result = resolveTasksOnSignIn([], null);
     expect(result.tasks).toEqual([]);

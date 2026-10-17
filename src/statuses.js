@@ -10,9 +10,8 @@ export const STEP_STATUSES = ['todo', 'in_progress', 'done', 'blocked'];
 export const TASKS_TERMINAL_STATUSES = ['completed', 'cancelled'];
 
 export const getCollectionName = (mode) => {
-  if (mode === 'recruiter') return 'candidates';
   if (mode === 'tasks') return 'tasks';
-  return 'companies';
+  throw new Error(`Unknown app mode: ${mode}`);
 };
 
 export const getStorageKey = (mode) =>

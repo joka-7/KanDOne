@@ -35,13 +35,16 @@ function unionById(cloud, local, idOf, pending, cloudDeleted = []) {
   }
 
   const unmatchedLocal = new Map(local.map((item) => [String(idOf(item)), item]));
-  let keptLocalEdit = false;
+  // Only these ids are written back: every write is stamped as the newest, so
+  // re-sending a record the cloud already has would let this device's copy
+  // beat an edit another device makes in the meantime.
+  const pushIds = [];
   const merged = survivingCloud.map((cloudItem) => {
     const id = String(idOf(cloudItem));
     const localItem = unmatchedLocal.get(id);
     unmatchedLocal.delete(id);
     if (localItem && editedLocally.has(id)) {
-      keptLocalEdit = true;
+      pushIds.push(id);
       return localItem;
     }
     return cloudItem;
@@ -51,10 +54,14 @@ function unionById(cloud, local, idOf, pending, cloudDeleted = []) {
   // an unsynced edit to it — re-uploading a stale copy would undo the delete.
   const localOnly = [...unmatchedLocal.entries()]
     .filter(([id]) => !deletedInCloud.has(id) || editedLocally.has(id))
-    .map(([, item]) => item);
+    .map(([id, item]) => {
+      pushIds.push(id);
+      return item;
+    });
   return {
     merged: [...merged, ...localOnly],
-    pushToCloud: keptLocalEdit || localOnly.length > 0,
+    pushToCloud: pushIds.length > 0,
+    pushIds,
     deleteFromCloud,
   };
 }
@@ -75,6 +82,7 @@ export function resolveLabelsOnSignIn(localLabels, cloudLabels) {
 export function resolveTasksOnSignIn(localTasks, cloudTasks, pending, cloudDeletedIds = []) {
   const cloud = sanitizeTaskRecords(Array.isArray(cloudTasks) ? cloudTasks : []);
   const local = sanitizeTaskRecords(Array.isArray(localTasks) ? localTasks : []);
-  const { merged, pushToCloud, deleteFromCloud } = unionById(cloud, local, (t) => t.id, pending, cloudDeletedIds);
-  return { tasks: merged, pushToCloud, deleteFromCloud };
+  const { merged, pushToCloud, pushIds, deleteFromCloud } =
+    unionById(cloud, local, (t) => t.id, pending, cloudDeletedIds);
+  return { tasks: merged, pushToCloud, pushIds, deleteFromCloud };
 }

@@ -325,7 +325,7 @@
     "providerLabel": "Fournisseur IA",
     "apiKeyLabel": "Clé API",
     "keyNote": "Stockée uniquement dans ce navigateur.",
-    "securityNotice": "Les clés API sont stockées uniquement dans ce navigateur. Toute personne ayant accès à cet appareil, ou une extension malveillante, pourrait les lire. Les données d'emploi et de chat sont envoyées au fournisseur d'IA choisi via votre compte.",
+    "securityNotice": "Les clés API sont stockées uniquement dans ce navigateur. Toute personne ayant accès à cet appareil, ou une extension malveillante, pourrait les lire. Les données de tâches et de chat sont envoyées au fournisseur d'IA choisi via votre compte.",
     "modelLabel": "Modèle",
     "ollamaUrl": "URL Ollama",
     "ollamaNote": "Assurez-vous qu'Ollama fonctionne localement avec CORS activé.",
@@ -405,7 +405,8 @@
       "notSavedTooltip": "Le stockage du navigateur est plein ou indisponible — les modifications ne sont pas enregistrées. Exportez une sauvegarde maintenant.",
       "addTask": "Ajouter une tâche",
       "moreMenu": "Plus d'options",
-      "language": "Langue"
+      "language": "Langue",
+      "deleteSyncedData": "Supprimer les données synchronisées et se déconnecter"
     },
     "status": {
       "active": "Actif",
@@ -537,7 +538,10 @@
     "alert": {
       "deleteConfirm": "Êtes-vous sûr de vouloir supprimer cette tâche ?",
       "noData": "Aucune donnée de tâche trouvée dans le fichier.",
-      "importError": "Erreur lors de l'importation. Assurez-vous que c'est un fichier JSON valide."
+      "importError": "Erreur lors de l'importation. Assurez-vous que c'est un fichier JSON valide.",
+      "unsyncedSignOut": "Certaines modifications n'ont pas encore été synchronisées et seront perdues. Se déconnecter quand même ?",
+      "deleteSyncedDataConfirm": "Supprimer définitivement toutes les données KanDOne de votre Google Drive et se déconnecter ? Les tâches de cet appareil sont aussi supprimées. Les appareils encore connectés renverront leurs copies : déconnectez-les d'abord. Cette action est irréversible — téléchargez d'abord une sauvegarde si vous voulez les conserver.",
+      "deleteSyncedDataFailed": "Impossible de supprimer les données synchronisées. Rien n'a été supprimé — veuillez réessayer."
     },
     "duration": {
       "minute": "Minutes",
