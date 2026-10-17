@@ -550,6 +550,23 @@ export function createDriveSync({
     clearPendingIds(mode, ids.filter((id) => !stillQueued.has(String(id))));
   }
 
+  /** Cancel every queued write, telling each caller it never reached Drive. */
+  function dropQueuedWrites() {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+    const dropped = queue;
+    queue = [];
+    for (const entry of dropped) entry.reject(new DriveSyncError('Signed out before sync.', { code: 'signed-out' }));
+  }
+
+  /** Drop queued writes and forget the session; local data is the caller's to clear. */
+  function endSession() {
+    dropQueuedWrites();
+    ownFileId = null;
+    latestSeenAt = 0;
+    setSession(null);
+  }
+
   return {
     isCloudConfigured: isConfigured,
 
@@ -573,15 +590,29 @@ export function createDriveSync({
 
     signInWithGoogle: signIn,
 
-    async signOut() {
-      clearTimeout(flushTimer);
-      flushTimer = null;
-      const dropped = queue;
-      queue = [];
-      for (const entry of dropped) entry.reject(new DriveSyncError('Signed out before sync.', { code: 'signed-out' }));
-      ownFileId = null;
-      latestSeenAt = 0;
-      setSession(null);
+    signOut: async () => endSession(),
+
+    /**
+     * Delete every KanDOne sync file from the user's Drive and revoke this
+     * app's access, then sign out. Google must be reachable *before* anything
+     * is deleted: losing the data but keeping the grant would be the worse half.
+     * A device that is still signed in uploads its local copy again on its next
+     * sync, so other devices need signing out first.
+     */
+    async deleteAllSyncedData() {
+      if (!session?.accessToken) throw new DriveSyncError('Not connected to Google Drive.', { code: 'signed-out' });
+      const loaded = await ensureGis();
+      dropQueuedWrites();
+      await flushChain;
+      const files = (await listFiles(`name contains '${FILE_PREFIX}'`))
+        .filter((file) => file.name.startsWith(FILE_PREFIX) && file.name.endsWith('.json'));
+      await Promise.all(files.map((file) => driveFetch(
+        `${DRIVE_API}/files/${encodeURIComponent(file.id)}`,
+        { method: 'DELETE' },
+      )));
+      const { accessToken: token } = session;
+      await new Promise((resolve) => loaded.accounts.oauth2.revoke(token, resolve));
+      endSession();
     },
 
     async loadUserProfile() {
@@ -644,7 +675,7 @@ const driveSync = createDriveSync({
 });
 
 export const {
-  isCloudConfigured, hasRestorableSession, onAuthChange, signInWithGoogle, signOut,
+  isCloudConfigured, hasRestorableSession, onAuthChange, signInWithGoogle, signOut, deleteAllSyncedData,
   loadUserProfile, saveUserProfile, loadTaskLabels, saveTaskLabels,
   loadAllItems, updateItem, deleteItem, batchSaveItems,
 } = driveSync;

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   fingerprintItems, diffFingerprints, readPending, recordLocalChanges,
   clearPendingIds, pendingStorageKey,
+  readDataOwner, writeDataOwner, clearLocalSyncState,
 } from '../utils/pendingSync';
 
 /** In-memory stand-in for localStorage — keeps these tests off real storage. */
@@ -93,5 +94,28 @@ describe('pending record bookkeeping', () => {
     expect(sorted(readPending(MODE, fakeStorage()).edited)).toEqual([]);
     expect(sorted(readPending(MODE, null).edited)).toEqual([]);
     expect(() => recordLocalChanges(MODE, { edited: ['1'] }, blockedStorage)).not.toThrow();
+  });
+});
+
+describe('local data ownership', () => {
+  it('remembers which account the local data belongs to', () => {
+    const storage = fakeStorage();
+    expect(readDataOwner(storage)).toBeNull();
+    writeDataOwner('uid-a', storage);
+    expect(readDataOwner(storage)).toBe('uid-a');
+  });
+
+  it('clears owner and pending state on sign-out', () => {
+    const storage = fakeStorage();
+    writeDataOwner('uid-a', storage);
+    recordLocalChanges(MODE, { edited: ['2'] }, storage);
+    clearLocalSyncState([MODE], storage);
+    expect(readDataOwner(storage)).toBeNull();
+    expect(readPending(MODE, storage).edited.size).toBe(0);
+  });
+
+  it('survives blocked storage', () => {
+    expect(() => writeDataOwner('uid-a', blockedStorage)).not.toThrow();
+    expect(() => clearLocalSyncState([MODE], blockedStorage)).not.toThrow();
   });
 });

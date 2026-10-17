@@ -15,7 +15,7 @@ const deviceFile = (device, collections = {}, profile = {}) => ({
 
 /** In-memory stand-in for the Drive v3 + userinfo endpoints this module calls. */
 function fakeGoogle({ files = {}, failWith = null, pageLimit = Infinity, failRead = {} } = {}) {
-  const state = { files: { ...files }, nextId: 1, patched: [] };
+  const state = { files: { ...files }, nextId: 1, patched: [], deleted: [] };
   const json = (body, status = 200) => ({ ok: status < 400, status, json: async () => body });
   const raw = (text) => ({ ok: true, status: 200, text: async () => text });
 
@@ -34,6 +34,13 @@ function fakeGoogle({ files = {}, failWith = null, pageLimit = Infinity, failRea
       state.files[patch[1]].body = init.body;
       state.patched.push(patch[1]);
       return json({});
+    }
+    const del = init.method === 'DELETE' && url.match(/\/drive\/v3\/files\/([^?]+)$/);
+    if (del) {
+      if (!state.files[del[1]]) return json({}, 404);
+      delete state.files[del[1]];
+      state.deleted.push(del[1]);
+      return json({}, 204);
     }
     if (url.startsWith('https://www.googleapis.com/drive/v3/files?')) {
       const params = new URL(url).searchParams;
@@ -59,13 +66,14 @@ function fakeGoogle({ files = {}, failWith = null, pageLimit = Infinity, failRea
 }
 
 function fakeGis({ error = null } = {}) {
+  const revoke = vi.fn((token, done) => done({ successful: true }));
   const client = {
     requestAccessToken: vi.fn(() => {
       if (error) client.callback({ error });
       else client.callback({ access_token: 'token-1', expires_in: 3600 });
     }),
   };
-  return { accounts: { oauth2: { initTokenClient: vi.fn(() => client) } }, client };
+  return { accounts: { oauth2: { initTokenClient: vi.fn(() => client), revoke } }, client, revoke };
 }
 
 function memoryStorage(initial = {}) {
@@ -468,6 +476,56 @@ describe('driveSync.js', () => {
         await expect(queued).rejects.toMatchObject({ code: 'signed-out' });
         expect(storage.getItem(SESSION_KEY)).toBeNull();
       });
+    });
+  });
+
+  describe('deleteAllSyncedData', () => {
+    it('deletes every device file, revokes the Google grant and signs out, leaving unrelated files alone', async () => {
+      const google = fakeGoogle({
+        files: {
+          a: deviceFile('this'),
+          b: deviceFile('other'),
+          c: { name: 'unrelated.json', body: '{}' },
+        },
+      });
+      const { sync, storage, gis } = build({ google, storage: signedIn() });
+      const queued = sync.updateItem('uid', 'tasks', { id: 1 });
+      queued.catch(() => {});
+
+      await sync.deleteAllSyncedData();
+
+      expect(google.state.deleted.sort()).toEqual(['a', 'b']);
+      expect(Object.keys(google.state.files)).toEqual(['c']);
+      expect(gis.revoke).toHaveBeenCalledWith('token-1', expect.any(Function));
+      expect(storage.getItem(SESSION_KEY)).toBeNull();
+      await expect(queued).rejects.toMatchObject({ code: 'signed-out' });
+    });
+
+    it('deletes nothing when Google cannot be reached to revoke access afterwards', async () => {
+      const google = fakeGoogle({ files: { a: deviceFile('this') } });
+      const failingLoad = createDriveSync({
+        clientId: 'client-id',
+        fetchImpl: google.fetchImpl,
+        loadGis: async () => { throw new Error('blocked'); },
+        storage: signedIn(),
+        tabStorage: memoryStorage(),
+        now: () => Date.now(),
+        newDeviceId: () => 'this',
+        withLock: (task) => task(),
+        flushDelayMs: 100,
+      });
+
+      await expect(failingLoad.deleteAllSyncedData()).rejects.toThrow('blocked');
+
+      expect(google.state.deleted).toEqual([]);
+    });
+
+    it('fails without deleting when not connected to Drive', async () => {
+      const { sync, google } = build({ google: fakeGoogle({ files: { a: deviceFile('this') } }) });
+
+      await expect(sync.deleteAllSyncedData()).rejects.toMatchObject({ code: 'signed-out' });
+
+      expect(google.state.deleted).toEqual([]);
     });
   });
 
