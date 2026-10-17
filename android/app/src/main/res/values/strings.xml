@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">KanDOne</string>
+    <string name="title_activity_main">KanDOne</string>
+    <string name="package_name">io.github.joka7.kandone</string>
+    <string name="custom_url_scheme">io.github.joka7.kandone</string>
+</resources>

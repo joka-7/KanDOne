@@ -75,6 +75,7 @@ npx playwright test e2e/screenshots.spec.js
 | **Data** | Auto-save to `localStorage`, JSON backup (tasks + labels), optional sync to your own Google Drive |
 | **AI** | Task coach, template sessions, goals finder (bring-your-own API key) |
 | **PWA** | Installable, works offline once loaded |
+| **Android** | Native app (Capacitor) with Android's own Google sign-in — [download the latest APK](https://github.com/joka-7/KanDOne/releases/latest/download/KanDOne.apk) |
 | **A11y / i18n** | `html` lang/dir sync, en/he/fr with locale parity tests, dialog focus trapping |
 
 ### Routine tasks
@@ -91,7 +92,7 @@ installed as a PWA.
 
 ## Stack
 
-React 19 · Vite · Tailwind CSS · i18next · Google Drive API (appDataFolder) · Vitest · Playwright
+React 19 · Vite · Tailwind CSS · i18next · Google Drive API (appDataFolder) · Capacitor (Android) · Vitest · Playwright
 
 ## Getting started
 
@@ -106,6 +107,18 @@ npm run test:all      # unit + e2e
 npm run lint          # eslint (also runs in CI)
 ```
 
+### Android app
+
+The same web build runs inside a Capacitor shell (`android/`). CI
+(`.github/workflows/android.yml`) builds and signs the APK on every pull request
+and publishes it as a release on every push to `main`. To build locally you need
+JDK 21 and the Android SDK:
+
+```bash
+npm run build && npx cap sync android
+cd android && ./gradlew assembleDebug   # debug build; Google sign-in needs the release key (see LLD)
+```
+
 ## Documentation
 
 - [High Level Design (HLD)](docs/HLD.md) — architecture, flows, integrations, audit A–I summary
@@ -117,24 +130,26 @@ npm run lint          # eslint (also runs in CI)
 ```text
 KanDOne/
 ├── .github/
+├── android/               # Capacitor Android project wrapping the web build (see LLD 6.1a)
 ├── docs/
-├── e2e/            # Playwright end-to-end tests
+├── e2e/                   # Playwright end-to-end tests
 ├── public/
-├── src/            # App source — single entry point (TasksApp.jsx), no mode gate (unlike…
-├── .ai             # Ogen-ai submodule — the shared source of rules, skills and the ai-sync…
+├── src/                   # App source — single entry point (TasksApp.jsx), no mode gate (unlike…
+├── .ai                    # Ogen-ai submodule — the shared source of rules, skills and the ai-sync…
 ├── .env.example
 ├── .gitignore
 ├── .gitleaks.toml
 ├── .gitleaksignore
 ├── .gitmodules
 ├── .trivyignore
-├── AGENTS.md       # The compiled coding rules every AI assistant reads — generated, do not…
-├── CLAUDE.md       # Claude Code's copy of AGENTS.md (generated)
-├── GEMINI.md       # Gemini CLI's copy of AGENTS.md (generated)
+├── AGENTS.md              # The compiled coding rules every AI assistant reads — generated, do not…
+├── CLAUDE.md              # Claude Code's copy of AGENTS.md (generated)
+├── GEMINI.md              # Gemini CLI's copy of AGENTS.md (generated)
 ├── LICENSE
-├── README.md       # KanDOne
-├── SECURITY.md     # Security Policy
-├── ai-config.toml  # Which rule fragments and target tools ai-sync compiles for this repo
+├── README.md              # KanDOne
+├── SECURITY.md            # Security Policy
+├── ai-config.toml         # Which rule fragments and target tools ai-sync compiles for this repo
+├── capacitor.config.json  # Capacitor app id, name and web build directory
 ├── eslint.config.js
 ├── firestore.rules
 ├── index.html

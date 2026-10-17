@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Capacitor } from '@capacitor/core';
 
 export function usePwaInstall() {
   const [installPrompt, setInstallPrompt] = useState(null);
@@ -43,7 +44,8 @@ export function usePwaInstall() {
     installPrompt,
     isIOS,
     isStandalone,
-    canInstall: !isStandalone,
+    // The Android app is already installed; it has nothing to offer here.
+    canInstall: !isStandalone && !Capacitor.isNativePlatform(),
     runInstall,
   };
 }

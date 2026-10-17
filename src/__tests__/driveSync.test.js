@@ -14,13 +14,18 @@ const deviceFile = (device, collections = {}, profile = {}) => ({
 });
 
 /** In-memory stand-in for the Drive v3 + userinfo endpoints this module calls. */
-function fakeGoogle({ files = {}, failWith = null, pageLimit = Infinity, failRead = {} } = {}) {
+function fakeGoogle({ files = {}, failWith = null, pageLimit = Infinity, failRead = {}, revokedTokens = [] } = {}) {
   const state = { files: { ...files }, nextId: 1, patched: [], deleted: [] };
   const json = (body, status = 200) => ({ ok: status < 400, status, json: async () => body });
   const raw = (text) => ({ ok: true, status: 200, text: async () => text });
 
   const fetchImpl = vi.fn(async (url, init = {}) => {
     if (failWith) return json({}, failWith);
+    if (revokedTokens.some((t) => init.headers?.Authorization === `Bearer ${t}`)) return json({}, 401);
+    if (url === 'https://oauth2.googleapis.com/revoke') {
+      state.revoked = new URLSearchParams(init.body).get('token');
+      return json({});
+    }
     if (url === 'https://openidconnect.googleapis.com/v1/userinfo') return json(USER);
     if (url.includes('/upload/drive/v3/files?uploadType=multipart')) {
       const parts = init.body.split('\r\n');
@@ -99,6 +104,7 @@ const signedIn = () => memoryStorage({ [SESSION_KEY]: validSession() });
 function build({
   google = fakeGoogle(), gis = fakeGis(), storage = memoryStorage(), clientId = 'client-id',
   withLock = (task) => task(), persistDeviceId = true, deviceIds = ['this', 'next'], tabStorage = memoryStorage(),
+  nativeAuth = null,
 } = {}) {
   const ids = [...deviceIds];
   const sync = createDriveSync({
@@ -112,9 +118,27 @@ function build({
     withLock,
     persistDeviceId,
     flushDelayMs: 100,
+    nativeAuth,
   });
   return { sync, google, gis, storage };
 }
+
+/** Stand-in for the Android sign-in: hands out `app-token-1`, `app-token-2`, … */
+function fakeNativeAuth({ silent = 'grant', interactive = 'grant' } = {}) {
+  let issued = 0;
+  const grant = (mode) => {
+    if (mode === 'fail') return Promise.reject(new Error('needs the user'));
+    if (mode === 'none') return Promise.resolve(null);
+    issued += 1;
+    return Promise.resolve({ access_token: `app-token-${issued}`, expires_in: 3600 });
+  };
+  return {
+    requestToken: vi.fn(({ interactive: isInteractive }) => grant(isInteractive ? interactive : silent)),
+    signOut: vi.fn(async () => {}),
+  };
+}
+
+const expiredSession = () => memoryStorage({ [SESSION_KEY]: validSession({ accessToken: null, expiresAt: 0 }) });
 
 /** Let the debounce fire and the queued Drive round-trips finish. */
 async function settle() {
@@ -475,6 +499,157 @@ describe('driveSync.js', () => {
 
         await expect(queued).rejects.toMatchObject({ code: 'signed-out' });
         expect(storage.getItem(SESSION_KEY)).toBeNull();
+      });
+    });
+  });
+
+  describe('createDriveSync in the Android app', () => {
+    describe('signInWithGoogle', () => {
+      it('signs in through Android, never loading Google\'s browser script', async () => {
+        const nativeAuth = fakeNativeAuth();
+        const loadGis = vi.fn();
+        const google = fakeGoogle();
+        const sync = createDriveSync({ clientId: 'client-id', fetchImpl: google.fetchImpl, loadGis, storage: memoryStorage(), tabStorage: memoryStorage(), nativeAuth });
+        sync.onAuthChange(() => {});
+
+        const user = await sync.signInWithGoogle();
+
+        expect([user.email, nativeAuth.requestToken.mock.calls[0][0], loadGis.mock.calls.length]).toEqual([USER.email, { interactive: true }, 0]);
+      });
+
+      it('rejects when Android returns no Drive token', async () => {
+        const { sync } = build({ nativeAuth: fakeNativeAuth({ interactive: 'none' }) });
+
+        await expect(sync.signInWithGoogle()).rejects.toMatchObject({ code: 'access_denied' });
+      });
+    });
+
+    describe('onAuthChange', () => {
+      it.each([
+        ['can be renewed', 'grant', [USER.email]],
+        ['cannot be renewed without the user', 'fail', [USER.email, null]],
+      ])('reports a stored session with a lapsed token as connected, and signed out only once it %s', async (_name, silent, expected) => {
+        const { sync } = build({ storage: expiredSession(), nativeAuth: fakeNativeAuth({ silent }) });
+        const seen = [];
+        sync.onAuthChange((u) => seen.push(u?.email ?? null));
+
+        await sync.loadAllItems('uid', 'tasks').catch(() => {});
+
+        expect(seen).toEqual(expected);
+      });
+
+      it('reports a sign-in to a subscriber whose first report was "signed out"', async () => {
+        const { sync } = build({ storage: memoryStorage({ [SESSION_KEY]: validSession({ expiresAt: NOW + 120_000 }) }) });
+        vi.setSystemTime(NOW + 120_000);
+        const seen = [];
+        sync.onAuthChange((u) => seen.push(u?.email ?? null));
+
+        await sync.signInWithGoogle();
+
+        expect(seen).toEqual([null, USER.email]);
+      });
+
+      it('reports the user once, through a lapsed token, a rejected token and their silent renewals', async () => {
+        const google = fakeGoogle({ revokedTokens: ['app-token-1'] });
+        const { sync } = build({ google, storage: signedIn(), nativeAuth: fakeNativeAuth() });
+        const seen = [];
+        sync.onAuthChange((u) => seen.push(u?.email ?? null));
+
+        await vi.advanceTimersByTimeAsync(3_600_000);
+        await sync.loadAllItems('uid', 'tasks');
+
+        expect(seen).toEqual([USER.email]);
+      });
+
+      it('keeps using a token in its last minute, because Android only renews one that has really expired', async () => {
+        const nativeAuth = fakeNativeAuth();
+        const storage = memoryStorage({ [SESSION_KEY]: validSession({ expiresAt: NOW + 30_000 }) });
+        const { sync } = build({ storage, nativeAuth });
+
+        const done = sync.updateItem('uid', 'tasks', { id: 1 });
+        await settle();
+        await done;
+
+        expect(nativeAuth.requestToken).not.toHaveBeenCalled();
+      });
+
+      it('reports signed out when renewal fails, and does not retry it on every save until the backoff ends', async () => {
+        const nativeAuth = fakeNativeAuth({ silent: 'fail' });
+        const { sync } = build({ storage: expiredSession(), nativeAuth });
+        const seen = [];
+        sync.onAuthChange((u) => seen.push(u?.email ?? null));
+
+        for (const id of [1, 2]) {
+          const done = sync.updateItem('uid', 'tasks', { id });
+          done.catch(() => {});
+          await settle();
+        }
+        const duringBackoff = nativeAuth.requestToken.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(5 * 60_000);
+        const late = sync.updateItem('uid', 'tasks', { id: 3 });
+        late.catch(() => {});
+        await settle();
+
+        expect([seen, duringBackoff, nativeAuth.requestToken.mock.calls.length]).toEqual([[USER.email, null], 1, 2]);
+      });
+    });
+
+    describe('hasRestorableSession', () => {
+      it('treats an expired stored session as restorable, since the app can renew it', async () => {
+        const { sync } = build({ storage: expiredSession(), nativeAuth: fakeNativeAuth() });
+
+        expect(await sync.hasRestorableSession()).toBe(true);
+      });
+    });
+
+    describe('updateItem', () => {
+      it.each([
+        ['the stored token has expired', expiredSession(), []],
+        ['Google rejects the stored token', signedIn(), ['token-1']],
+      ])('renews silently and lands the write when %s', async (_name, storage, revokedTokens) => {
+        const google = fakeGoogle({ revokedTokens });
+        const { sync } = build({ google, storage, nativeAuth: fakeNativeAuth() });
+
+        const done = sync.updateItem('uid', 'tasks', { id: 1 });
+        await settle();
+        await done;
+
+        expect(Object.keys(google.stored('new-1').collections.tasks)).toEqual(['1']);
+      });
+
+      it('rejects as signed out when silent renewal needs the user', async () => {
+        const { sync } = build({ storage: expiredSession(), nativeAuth: fakeNativeAuth({ silent: 'fail' }) });
+
+        const done = sync.updateItem('uid', 'tasks', { id: 1 });
+        done.catch(() => {});
+        await settle();
+
+        await expect(done).rejects.toMatchObject({ code: 'signed-out' });
+      });
+    });
+
+    describe('signOut', () => {
+      it('also signs the account out on the device', async () => {
+        const nativeAuth = fakeNativeAuth();
+        const { sync } = build({ storage: signedIn(), nativeAuth });
+
+        await sync.signOut();
+
+        expect(nativeAuth.signOut).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('deleteAllSyncedData', () => {
+      it('deletes the files, revokes over HTTP without Google\'s browser script and signs out on the device', async () => {
+        const nativeAuth = fakeNativeAuth();
+        const loadGis = vi.fn();
+        const google = fakeGoogle({ files: { a: deviceFile('this') } });
+        const sync = createDriveSync({ clientId: 'client-id', fetchImpl: google.fetchImpl, loadGis, storage: expiredSession(), tabStorage: memoryStorage(), nativeAuth });
+
+        await sync.deleteAllSyncedData();
+
+        expect([google.state.deleted, google.state.revoked, nativeAuth.signOut.mock.calls.length, loadGis.mock.calls.length])
+          .toEqual([['a'], 'app-token-1', 1, 0]);
       });
     });
   });

@@ -111,6 +111,7 @@ backward-compatible data cleansing, but the app boots straight into `tasks` mode
 | Cloud | Google Identity Services (OAuth token) + Google Drive API v3 (`appDataFolder`) |
 | AI | `modeldispatcher-browser-agent` (`fetch` + SSE) to Gemini / Groq / OpenAI / Anthropic / Ollama |
 | PWA | vite-plugin-pwa (Workbox) |
+| Android app | Capacitor 8 shell over the same build + `@capgo/capacitor-social-login` for native Google sign-in |
 | Tests | Vitest + Testing Library (jsdom) |
 | Hosting | Static hosting (Vercel; see `vercel.json`) |
 
@@ -415,7 +416,8 @@ Reminders only fire while the app is open or running as an installed PWA.
 
 | Integration | Purpose | Notes |
 | --- | --- | --- |
-| **Google Identity Services** | Google sign-in | Token client (`accounts.google.com/gsi/client`), popup only; client ID from `VITE_GOOGLE_CLIENT_ID`. |
+| **Google Identity Services** | Google sign-in (browser) | Token client (`accounts.google.com/gsi/client`), popup only; client ID from `VITE_GOOGLE_CLIENT_ID`. |
+| **Android Credential Manager + AuthorizationClient** | Google sign-in (Android app) | Via `@capgo/capacitor-social-login` (`src/nativeGoogleAuth.js`), because Google blocks OAuth inside a WebView. Same Web client ID; Google matches it to the Android OAuth client registered for package `io.github.joka7.kandone` and the release key's SHA-1. Renews the Drive token without UI. |
 | **Google Drive API v3** | Optional cloud mirror | One JSON file per device in the user's `appDataFolder`; queued writes coalesced into one upload of this device's file. |
 | **AI providers** | Coaching/chat | Gemini, Groq, OpenAI, Anthropic (SDK) and local Ollama. Streaming responses. Keys stored per-browser. |
 | **PWA / Workbox** | Offline + install | Precache app shell; Drive calls are not cached. |
@@ -468,6 +470,12 @@ The OAuth client ID is a **public identifier** (not a secret). With
   Optional: `npm run build:analyze` opens a rollup visualizer report.
 - **Dev:** `npm run dev` (Vite dev server on `:5173`).
 - **CI:** lint → unit tests → build; separate Playwright Chromium e2e job.
+- **Android:** `.github/workflows/android.yml` builds the web bundle into the
+  Capacitor project (`npx cap sync android`), runs Gradle `assembleRelease`, and
+  signs with the permanent key from the `ANDROID_KEYSTORE_B64`(`_2`) /
+  `ANDROID_KEY_PASSWORD` secrets. Pull requests get the APK as an artifact;
+  each push to `main` publishes release `android-1.0.<run>` with `KanDOne.apk`.
+  The app ships its files inside the APK, so it registers no service worker.
 - **Hosting:** static hosting (Vercel) with CSP and related security headers.
   No server runtime required.
 - **Config to enable cloud sync:** set `VITE_GOOGLE_CLIENT_ID` to a Web OAuth

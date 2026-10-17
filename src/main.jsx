@@ -1,12 +1,15 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
+import { Capacitor } from '@capacitor/core'
 import './index.css'
 import './i18n'
 import App from './App.jsx'
 import AppErrorBoundary from './components/AppErrorBoundary.jsx'
 
-if (import.meta.env.PROD) {
+// The Android app ships its files inside the APK; a service worker there would
+// only serve a cached copy of the previous version after an update.
+if (import.meta.env.PROD && !Capacitor.isNativePlatform()) {
   registerSW({ immediate: true })
 }
 
