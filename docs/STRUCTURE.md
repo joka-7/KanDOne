@@ -142,6 +142,7 @@ KanDOne/
 │   │   ├── AppErrorBoundary.test.jsx
 │   │   ├── ChatModal.test.jsx
 │   │   ├── TasksApp.logic.test.js
+│   │   ├── aiAssistant.test.js
 │   │   ├── boardOrder.test.js
 │   │   ├── driveSync.test.js
 │   │   ├── effortScale.test.js
@@ -151,6 +152,7 @@ KanDOne/
 │   │   ├── pendingSync.test.js
 │   │   ├── phaseB.test.js
 │   │   ├── promptSafety.test.js
+│   │   ├── reminders.test.js
 │   │   ├── sanitize.test.js
 │   │   ├── storageKeys.e2eParity.test.js
 │   │   ├── taskHelpers.test.js
@@ -188,7 +190,8 @@ KanDOne/
 │   │   ├── fr.json
 │   │   └── he.json
 │   ├── services/                      # AI coach integration (aiAssistant.js)
-│   │   └── aiAssistant.js
+│   │   ├── aiAssistant.js
+│   │   └── coachPrompts.js
 │   ├── utils/
 │   │   ├── boardOrder.js
 │   │   ├── effortScale.js

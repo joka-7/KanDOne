@@ -30,7 +30,8 @@ src/
 ├── hooks/
 │   └── useModalA11y.js         # dialog role, focus trap, Escape, restore focus
 ├── services/
-│   └── aiAssistant.js          # multi-provider streaming (lazy Anthropic SDK)
+│   ├── aiAssistant.js          # AI config state, rate limit, streaming via modeldispatcher-browser-agent
+│   └── coachPrompts.js         # goals-finder system prompt (no provider imports)
 ├── components/
 │   ├── AppErrorBoundary.jsx    # root crash UI: reload + export local data
 │   ├── ChatModal.jsx           # AI chat/coach UI + streaming state machine
@@ -302,8 +303,9 @@ Pure helpers extracted from `TasksApp` (unit-tested):
 Merges local and cloud label and task libraries on sign-in / refocus / manual
 sync so ids stay consistent across devices.
 
-`resolveTasksOnSignIn(localTasks, cloudTasks, pending)` returns
-`{ tasks, pushToCloud, deleteFromCloud }`. Cloud wins on a shared id *unless*
+`resolveTasksOnSignIn(localTasks, cloudTasks, pending, cloudDeletedIds)` returns
+`{ tasks, pushToCloud, pushIds, deleteFromCloud }`; callers write back only
+`pushIds`. Cloud wins on a shared id *unless*
 `pending` (from `pendingSync.js`) says the local copy is still waiting to reach
 the cloud:
 
@@ -329,8 +331,12 @@ collection in localStorage (`kandone_pending_sync_v1:{mode}`).
 - `clearPendingIds(mode, ids)` — called from `driveSync.js` after `updateItem`,
   `deleteItem` and `batchSaveItems` uploads actually land.
 - `readPending(mode)` — the set `resolveTasksOnSignIn` consults.
+- `readDataOwner` / `writeDataOwner` — the uid the local data belongs to
+  (`kandone_data_owner_v1`).
+- `clearLocalSyncState(modes)` — removes owner and pending state; used by
+  sign-out and by "Delete synced data".
 
-All four take an optional storage argument so unit tests never touch real
+All take an optional storage argument so unit tests never touch real
 localStorage.
 
 ### 5.7 `utils/templateQuestions.js`
@@ -395,6 +401,7 @@ builds the client; the module exports one instance built from
 | `onAuthChange(cb)` | Calls `cb` now and on every change (sign-in, sign-out, token expiry, 401). Preloads Google's script so a Connect Drive click opens the popup synchronously (otherwise Safari blocks it). |
 | `signInWithGoogle()` | Token popup (`drive.appdata openid email profile`, `login_hint` = last email), then userinfo → `{ uid, email, displayName }`; stores the session. |
 | `signOut()` | Rejects queued writes and forgets the session (does not revoke the grant). |
+| `deleteAllSyncedData()` | Loads Google's script (so a failure aborts before anything is deleted), drops queued writes, deletes every `kandone-*.json` in the app folder, revokes the access token, then signs out. Rejects with `signed-out` when not connected. |
 | `formatSignInError(err)` | Maps GIS error codes (popup blocked, cancelled, script load failed) to friendly text. |
 | `loadUserProfile()` / `saveUserProfile(uid, data)` | Merged `profile` / queue profile fields. |
 | `loadTaskLabels()` / `saveTaskLabels(uid, labels)` | `profile.tasksLabels` for cross-device label sync. |
@@ -452,6 +459,7 @@ everything else is identical:
 | `401` from Drive | session marked expired | renewed silently and the request retried once |
 | Stored session with a lapsed token at startup | not restorable | reported connected (`hasRestorableSession()` true); the first Drive call renews it, and only a failed renewal reports signed out |
 | `signOut()` | forget session | also signs the account out on the device |
+| `deleteAllSyncedData()` | revoke via Google's script | renews a lapsed token first, revokes with a `POST` to `oauth2.googleapis.com/revoke`, then also signs out on the device |
 
 `onAuthChange` listeners hear only a change of *who is connected* (user ↔
 signed out), never a token swap for the same user: TasksApp answers each report
@@ -496,7 +504,8 @@ rather than sign with any other key.
 
 ### 6.2 `services/aiAssistant.js`
 
-Provider-agnostic streaming AI client.
+Provider-agnostic AI client. Request translation, SSE parsing and Ollama URL
+validation live in `modeldispatcher-browser-agent`; this file keeps app state.
 
 - `PROVIDERS` — metadata for `gemini`, `groq`, `ollama`, `anthropic`, `openai`
   (default model, placeholder, info URL, `free`/`noKey` flags).
@@ -504,26 +513,18 @@ Provider-agnostic streaming AI client.
   and `loadAIConfigFromStorage()` (also dispatches the `ai-config-updated`
   window event and returns readiness). `isAIReady()` — true for Ollama or when a
   key is present. `getCurrentProvider()`.
-- **Rate limiting** — `checkRateLimit(key)` enforces a 3s throttle per action;
-  disabled in browser and Node test environments (`_setRateLimitingEnabled`,
-  `_resetRateLimitForTests` for tests).
+- **Rate limiting** — `checkRateLimit(key)` enforces a 3s throttle per action.
+  On by default for real users; `shouldRateLimitByDefault` turns it off under
+  unit tests and automated browsers (`navigator.webdriver`).
+  `_setRateLimitingEnabled` / `_resetRateLimitForTests` exist for tests.
 - **Message normalisation** — `buildApiMessages(uiMessages, {appendSimBegin})`
-  validates roles (`user`/`assistant`), caps content to 4000 chars, drops the
-  `__sim_start__` trigger, enforces user-first ordering and merges consecutive
-  same-role turns (required by Anthropic/Gemini).
-- **Streaming**
-  - `streamChat(messages, systemPrompt, onChunk)` — multi-turn chat; branches per
-    provider (Gemini SSE, Anthropic SDK via **dynamic `import()`**, Ollama NDJSON,
-    OpenAI/Groq SSE via `streamOpenAICompat`). Emits cumulative text through
-    `onChunk`. Non-Anthropic users never download the Anthropic SDK.
-  - `runStream(prompt, onChunk)` — single-prompt helper for the one-shot coaching
-    functions.
-  - `streamGemini`, `streamOpenAICompat`, `streamOllama`, `streamAnthropic` —
-    provider-specific parsers. `validateOllamaUrl` enforces HTTPS unless localhost.
-- **System-prompt builders** — `getGoalsTasksSystemPrompt(tasks, lang)` (used by
-  the tasks app) plus legacy job/recruiter builders and one-shot helpers
-  (`getInterviewPrep`, `analyzeRejection`, `analyzePatterns`, etc.) retained from
-  the parent project.
+  delegates to the agent's `buildMessages` (role validation, user-first
+  ordering, `__sim_start__` dropped).
+- **Streaming** — `streamChat(messages, systemPrompt, onChunk)` rate-limits, then
+  calls the agent's `streamComplete` with the configured provider list.
+- **System prompt** — `getGoalsTasksSystemPrompt(tasks, lang)` is in
+  `services/coachPrompts.js`; every user-controlled field goes through
+  `delimUserField`.
 
 ### 6.3 `usePwaInstall.js`
 Captures `beforeinstallprompt`, detects iOS/standalone, exposes

@@ -92,7 +92,7 @@ backward-compatible data cleansing, but the app boots straight into `tasks` mode
 - NFR1 — **Offline-first:** all core features work without a network.
 - NFR2 — **Privacy:** API keys and data stay client-side. Signed-in sync goes browser → the user's own Google Drive with no KanDOne server or database in the path, so the operator holds no copy of user data.
 - NFR3 — **Security:** the Drive token is scoped to `drive.appdata` (this app's hidden folder only); user text is delimited before being placed into AI prompts; CSP without `script-src 'unsafe-inline'` (meta + Vercel response header).
-- NFR4 — **Performance:** list rendering is paginated (25-at-a-time); derived data is memoised; Google's sign-in script, Anthropic SDK, and heavy UI (calendar/modals) load lazily.
+- NFR4 — **Performance:** list rendering is paginated (25-at-a-time); derived data is memoised; Google's sign-in script and heavy UI (calendar/modals) load lazily.
 - NFR5 — **Installability:** valid PWA manifest + service worker with auto-update.
 - NFR6 — **Resilience:** malformed imports/localStorage are sanitised, not fatal; root `AppErrorBoundary` can export local data after a render crash.
 - NFR7 — **Accessibility / i18n:** `<html lang/dir>` tracks i18n; locale key parity is tested; dialogs use `role="dialog"` / focus trapping via `useModalA11y`.
@@ -109,7 +109,7 @@ backward-compatible data cleansing, but the app boots straight into `tasks` mode
 | Icons | lucide-react |
 | i18n | i18next + react-i18next |
 | Cloud | Google Identity Services (OAuth token) + Google Drive API v3 (`appDataFolder`) |
-| AI | Anthropic SDK + `fetch` to Gemini / Groq / OpenAI / Ollama |
+| AI | `modeldispatcher-browser-agent` (`fetch` + SSE) to Gemini / Groq / OpenAI / Anthropic / Ollama |
 | PWA | vite-plugin-pwa (Workbox) |
 | Android app | Capacitor 8 shell over the same build + `@capgo/capacitor-social-login` for native Google sign-in |
 | Tests | Vitest + Testing Library (jsdom) |
@@ -189,7 +189,8 @@ graph TD
   ids still awaiting a cloud write (`pendingSync.js`), storage keys,
   recurrence/reminders, and prompt-injection hardening (`promptSafety.js`).
 - **Services** — side-effecting integrations: `aiAssistant.js` (multi-provider
-  streaming; Anthropic SDK imported only when that provider is used),
+  streaming via `modeldispatcher-browser-agent`; `coachPrompts.js` holds the prompt text
+  so the board can build a prompt without importing the provider client),
   `driveSync.js` (Google's sign-in script loaded on demand; Drive REST calls via `fetch`),
   `usePwaInstall.js`.
 - **Persistence** — `localStorage` is the always-on local store; the signed-in
@@ -325,7 +326,7 @@ sequenceDiagram
     FB-->>T: tasks[]
     T->>T: resolveTasksOnSignIn(local, cloud, readPending("tasks"))
     T->>T: setTasks(merged) + toast
-    T->>FB: batchSaveItems(...) for records local won
+    T->>FB: batchSaveItems(...) only the ids in pushIds
 ```
 
 Writes are **local-first and best-effort to cloud**: the UI never blocks on a
@@ -346,7 +347,21 @@ had not resolved yet — a pull cannot treat cloud as authoritative for every id
 confirmed cloud write (`driveSync.js` clears an id once its upload lands), and
 `resolveTasksOnSignIn` consults that set: a pending local edit keeps the local
 copy and is pushed up, a pending local delete is not resurrected, and every
-other shared id takes the cloud copy so a stale device still converges.
+other shared id takes the cloud copy so a stale device still converges. Only
+the records that need it (`pushIds`) are written back: every write is stamped as
+the newest, so re-sending a record the cloud already holds would let this
+device's copy beat an edit another device makes in the meantime.
+
+Local data is tied to the Google account that created it (`readDataOwner`).
+Sign-out removes the local tasks, labels and pending state and reloads, so the
+next person to connect on this device never sees them or uploads them to their
+own Drive; data left by a different account is discarded at connect time rather
+than merged. Labels are not written to Drive until the first pull has merged
+them (`cloudReady`), so a fresh device cannot overwrite the stored library with
+an empty one. "Delete synced data & disconnect" (`deleteAllSyncedData`) deletes
+every `kandone-*` file in the user's app folder, revokes the app's grant and
+signs out; Google must be reachable first so the data is never deleted while the
+grant is kept.
 
 The browser gets a one-hour access token and no refresh token, and Google
 only opens its token popup from a click. So when the token lapses,
@@ -369,7 +384,6 @@ sequenceDiagram
     CM->>CM: build systemPrompt (task/goal context)
     CM->>PS: delimUserField() on task fields + user text (<<< >>>)
     CM->>AI: streamChat(messages, systemPrompt, onChunk)
-    Note over AI: Anthropic SDK loaded only if provider=anthropic
     AI->>AI: checkRateLimit + buildApiMessages (role validation)
     AI->>P: POST (SSE / streaming)
     P-->>AI: token stream
@@ -390,7 +404,11 @@ sequenceDiagram
 While the app is open (or installed as a PWA) and notification permission is
 granted, `TasksApp` polls every 30 s. For each task with `reminder.enabled`, it
 compares the current time to `(dueDate + dueTime) − minutesBefore`. Matching tasks
-fire a `Notification` once per occurrence (deduped via `lastReminderKey`).
+show a notification once per occurrence (deduped via `lastReminderKey`), through
+the service worker's `showNotification` when one is registered (the only form
+Android Chrome and installed iOS PWAs accept) and `new Notification` otherwise.
+Permission is tracked in state, so granting it starts the loop without a reload.
+Reminders only fire while the app is open or running as an installed PWA.
 
 ---
 

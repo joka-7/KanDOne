@@ -7,7 +7,7 @@ import {
   ClipboardList, X, Languages, MoreVertical, Settings, Smartphone, Sparkles,
   Repeat, Bell, Zap, Tag, Globe,
 } from 'lucide-react';
-import { initAI, getGoalsTasksSystemPrompt } from './services/aiAssistant';
+import { getGoalsTasksSystemPrompt } from './services/coachPrompts';
 import { TASK_TEMPLATES } from './data/taskTemplates';
 import {
   getLocalizedQuestions, getLocalizedCategoryLabel, formatQuestionList,
@@ -16,7 +16,7 @@ import { delimUserField } from './utils/promptSafety';
 import {
   signInWithGoogle, signOut, onAuthChange, loadAllItems, formatSignInError,
   updateItem, deleteItem, batchSaveItems, saveUserProfile,
-  loadTaskLabels, saveTaskLabels, isCloudConfigured, hasRestorableSession,
+  loadTaskLabels, saveTaskLabels, isCloudConfigured, hasRestorableSession, deleteAllSyncedData,
 } from './driveSync';
 import { getStorageKey, STATUSES_TASKS, filterItemsForMode } from './statuses';
 import { usePwaInstall } from './usePwaInstall';
@@ -27,6 +27,7 @@ import {
   sanitizeTaskRecords, parseTaskStoragePayload, generateId,
   parseTaskLabelsStoragePayload,
   sanitizeTaskLabels,
+  MAX_TITLE_LEN, MAX_LONG_TEXT_LEN, MAX_STEP_NOTES_LEN,
 } from './sanitize';
 import { saveJsonFile } from './utils/saveFile';
 import LabelPicker, { LabelChipsReadOnly } from './components/LabelPicker';
@@ -36,11 +37,13 @@ import { LABEL_COLOR_PALETTE, readableTextColor } from './utils/labelColors';
 import { applyTaskStatusChange } from './utils/recurrence';
 import {
   buildReminderKey, formatDueDateTime, requestReminderPermission, shouldNotifyTask,
+  showReminderNotification,
   snoozeTaskReminder, isReminderSnoozed, SNOOZE_MINUTES,
 } from './utils/reminders';
 import { resolveLabelsOnSignIn, resolveTasksOnSignIn } from './utils/labelSync';
 import {
   fingerprintItems, diffFingerprints, readPending, recordLocalChanges,
+  readDataOwner, writeDataOwner, clearLocalSyncState,
 } from './utils/pendingSync';
 import {
   applyBoardDrag, ensureBoardOrders, nextBoardOrder, sanitizeBoardOrder,
@@ -148,6 +151,10 @@ export default function TasksApp() {
   // drives the header's error state and blocks the focus-triggered pull
   // below from clobbering local changes that haven't made it to Drive.
   const [syncError, setSyncError] = useState(false);
+  // False until the first pull after sign-in has merged the cloud labels. The
+  // label effect must not push before then: on a fresh device it would write
+  // an empty library over the cloud copy before that copy had been read.
+  const [cloudReady, setCloudReady] = useState(false);
   const [newStepTitle, setNewStepTitle] = useState('');
   const [visibleCount, setVisibleCount] = useState(25);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -235,12 +242,12 @@ export default function TasksApp() {
       console.error('Failed to save labels to localStorage', e);
       setLocalStorageError(true);
     }
-    if (user) {
+    if (user && cloudReady) {
       saveTaskLabels(user.uid, labels)
         .then(() => setSyncError(false))
         .catch((e) => { console.error(e); setSyncError(true); });
     }
-  }, [labels, user]);
+  }, [labels, user, cloudReady]);
 
   useEffect(() => {
     try {
@@ -254,14 +261,6 @@ export default function TasksApp() {
     setEffortTiers(sanitizeEffortTiers(next));
   }, []);
 
-  useEffect(() => {
-    const provider = localStorage.getItem('aiProvider') || 'gemini';
-    const apiKey = localStorage.getItem('aiApiKey') || localStorage.getItem('anthropicApiKey') || '';
-    const model = localStorage.getItem('aiModel') || '';
-    const ollamaUrl = localStorage.getItem('ollamaUrl') || 'http://localhost:11434';
-    initAI(provider, apiKey, model, ollamaUrl);
-  }, []);
-
   const userRef = useRef(null);
   useEffect(() => { userRef.current = user; }, [user]);
 
@@ -273,6 +272,37 @@ export default function TasksApp() {
     setSyncError(true);
   }, []);
   const clearSyncError = useCallback(() => setSyncError(false), []);
+
+  // One merge path for sign-in, tab focus and "Sync now", so a fix to how a
+  // pull reconciles with local state lands in all three at once.
+  const pullTasksFromCloud = useCallback(async (uid, localTasks) => {
+    const cloud = await loadAllItems(uid, MODE);
+    const { tasks: mergedTasks, pushIds, deleteFromCloud } = resolveTasksOnSignIn(
+      localTasks, filterItemsForMode(cloud?.items ?? [], MODE), readPending(MODE), cloud?.deletedIds,
+    );
+    const orderedTasks = ensureBoardOrders(mergedTasks);
+    // The pull is the new baseline: without reseating the snapshot the
+    // tracking effect would read every record the pull changed as a fresh
+    // local edit and pin it against all future pulls.
+    syncedSnapshotRef.current = fingerprintItems(orderedTasks);
+    setTasks(orderedTasks);
+    // Push only what the cloud lacks or has stale: local edits, offline
+    // creations, and records whose board order the normalization moved.
+    const reordered = diffFingerprints(fingerprintItems(mergedTasks), fingerprintItems(orderedTasks)).edited;
+    const toPush = new Set([...pushIds, ...reordered]);
+    await batchSaveItems(uid, MODE, orderedTasks.filter((t) => toPush.has(String(t.id))));
+    // Replay deletes made while unsynced, or the next pull resurrects them.
+    await Promise.all(deleteFromCloud.map((id) => deleteItem(uid, MODE, id)));
+    return cloud?.items.length ?? 0;
+  }, []);
+
+  const pullLabelsFromCloud = useCallback(async (uid, localLabels) => {
+    const cloudLabels = await loadTaskLabels(uid);
+    const { labels: mergedLabels, pushToCloud } = resolveLabelsOnSignIn(localLabels, cloudLabels);
+    setLabels(mergedLabels);
+    if (pushToCloud) await saveTaskLabels(uid, mergedLabels);
+    return mergedLabels.length;
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -294,45 +324,36 @@ export default function TasksApp() {
       setAuthResolved(true);
       setSessionRestorable(Boolean(driveUser));
       setUser(driveUser);
-      if (driveUser) {
-        setSyncing(true);
-        try {
-          await saveUserProfile(driveUser.uid, { appMode: MODE });
-          const [cloud, cloudLabels] = await Promise.all([
-            loadAllItems(driveUser.uid, MODE),
-            loadTaskLabels(driveUser.uid),
-          ]);
-          // Prefer cloud tasks when they exist; otherwise this is the user's
-          // first sign-in with local-only data, so push it up instead of
-          // silently leaving them with zero cloud backup.
-          const { tasks: mergedTasks, pushToCloud: pushTasksToCloud, deleteFromCloud } =
-            resolveTasksOnSignIn(tasksRef.current, cloud?.items ?? null, readPending(MODE), cloud?.deletedIds);
-          const orderedTasks = ensureBoardOrders(mergedTasks);
-          // The pull is the new baseline: without reseating the snapshot the
-          // tracking effect would read every record the pull changed as a fresh
-          // local edit and pin it against all future pulls.
-          syncedSnapshotRef.current = fingerprintItems(orderedTasks);
-          setTasks(orderedTasks);
-          if (pushTasksToCloud && orderedTasks.length > 0) {
-            await batchSaveItems(driveUser.uid, MODE, orderedTasks);
-          }
-          // Replay deletes made while unsynced, or the next pull resurrects them.
-          await Promise.all(
-            deleteFromCloud.map((id) => deleteItem(driveUser.uid, MODE, id)),
-          );
-          const localLabels = parseTaskLabelsStoragePayload(localStorage.getItem(TASKS_LABELS_KEY));
-          const { labels: mergedLabels, pushToCloud } = resolveLabelsOnSignIn(localLabels, cloudLabels);
-          setLabels(mergedLabels);
-          if (pushToCloud && mergedLabels.length > 0) {
-            await saveTaskLabels(driveUser.uid, mergedLabels);
-          }
-          clearSyncError();
-          if (cloud?.items.length > 0 || mergedLabels.length > 0) {
-            showToast(tt('toast.imported', 'Data loaded from cloud!'));
-          }
-        } catch (e) { markSyncError(e); }
-        setSyncing(false);
+      if (!driveUser) {
+        setCloudReady(false);
+        return;
       }
+      setSyncing(true);
+      try {
+        await saveUserProfile(driveUser.uid, { appMode: MODE });
+        let localTasks = tasksRef.current;
+        let localLabels = parseTaskLabelsStoragePayload(localStorage.getItem(TASKS_LABELS_KEY));
+        // Data left behind by a different account must never be merged into
+        // this one's cloud. Sign-out clears it; this covers sessions that
+        // ended without one (expired token, cleared cookies, older builds).
+        const owner = readDataOwner();
+        if (owner && owner !== driveUser.uid) {
+          clearLocalSyncState([MODE]);
+          localTasks = [];
+          localLabels = [];
+        }
+        writeDataOwner(driveUser.uid);
+        const [cloudTaskCount, labelCount] = await Promise.all([
+          pullTasksFromCloud(driveUser.uid, localTasks),
+          pullLabelsFromCloud(driveUser.uid, localLabels),
+        ]);
+        setCloudReady(true);
+        clearSyncError();
+        if (cloudTaskCount > 0 || labelCount > 0) {
+          showToast(tt('toast.imported', 'Data loaded from cloud!'));
+        }
+      } catch (e) { markSyncError(e); }
+      setSyncing(false);
     });
     // Belt-and-suspenders: if the first auth callback never arrives, don't
     // leave the header stuck on "checking…" forever. Where the probe found a persisted session
@@ -341,7 +362,7 @@ export default function TasksApp() {
     // to work believing their data was local-only.
     const fallbackTimer = setTimeout(() => setAuthResolved(true), 4000);
     return () => { cancelled = true; unsub(); clearTimeout(fallbackTimer); };
-  }, [clearSyncError, markSyncError, showToast, tt]);
+  }, [clearSyncError, markSyncError, showToast, tt, pullTasksFromCloud, pullLabelsFromCloud]);
 
   useEffect(() => {
     const handleVisibility = async () => {
@@ -353,23 +374,10 @@ export default function TasksApp() {
       if (document.visibilityState === 'visible' && driveUser && !syncError) {
         setSyncing(true);
         try {
-          const cloud = await loadAllItems(driveUser.uid, MODE);
-          if (cloud) {
-            // Union-merge rather than overwrite: anything typed into this
-            // tab since the last pull (e.g. while it was backgrounded) must
-            // survive, even though its id isn't in the snapshot we just read.
-            const { tasks: mergedTasks, pushToCloud, deleteFromCloud } =
-              resolveTasksOnSignIn(tasksRef.current, filterItemsForMode(cloud.items, MODE), readPending(MODE), cloud.deletedIds);
-            const orderedTasks = ensureBoardOrders(mergedTasks);
-            syncedSnapshotRef.current = fingerprintItems(orderedTasks);
-            setTasks(orderedTasks);
-            if (pushToCloud && orderedTasks.length > 0) {
-              await batchSaveItems(driveUser.uid, MODE, orderedTasks);
-            }
-            await Promise.all(
-              deleteFromCloud.map((id) => deleteItem(driveUser.uid, MODE, id)),
-            );
-          }
+          // Union-merge rather than overwrite: anything typed into this
+          // tab since the last pull (e.g. while it was backgrounded) must
+          // survive, even though its id isn't in the snapshot we just read.
+          await pullTasksFromCloud(driveUser.uid, tasksRef.current);
           clearSyncError();
         } catch (e) { markSyncError(e); }
         setSyncing(false);
@@ -377,7 +385,7 @@ export default function TasksApp() {
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [syncError, clearSyncError, markSyncError]);
+  }, [syncError, clearSyncError, markSyncError, pullTasksFromCloud]);
 
   const saveTasks = useCallback(async (newTasks) => {
     setTasks(newTasks);
@@ -413,36 +421,49 @@ export default function TasksApp() {
     if (!user || syncing) return;
     setSyncing(true);
     try {
-      const [cloud, cloudLabels] = await Promise.all([
-        loadAllItems(user.uid, MODE),
-        loadTaskLabels(user.uid),
+      await Promise.all([
+        pullTasksFromCloud(user.uid, tasksRef.current),
+        pullLabelsFromCloud(user.uid, parseTaskLabelsStoragePayload(localStorage.getItem(TASKS_LABELS_KEY))),
       ]);
-      // Union-merge, not overwrite — a manual sync must not delete work typed
-      // locally since the last pull just because it isn't in this snapshot yet.
-      if (cloud) {
-        const { tasks: mergedTasks, pushToCloud, deleteFromCloud } =
-          resolveTasksOnSignIn(tasksRef.current, filterItemsForMode(cloud.items, MODE), readPending(MODE), cloud.deletedIds);
-        const orderedTasks = ensureBoardOrders(mergedTasks);
-        syncedSnapshotRef.current = fingerprintItems(orderedTasks);
-        setTasks(orderedTasks);
-        if (pushToCloud && orderedTasks.length > 0) {
-          await batchSaveItems(user.uid, MODE, orderedTasks);
-        }
-        await Promise.all(
-          deleteFromCloud.map((id) => deleteItem(user.uid, MODE, id)),
-        );
-      }
-      if (Array.isArray(cloudLabels)) {
-        const localLabels = parseTaskLabelsStoragePayload(localStorage.getItem(TASKS_LABELS_KEY));
-        const { labels: mergedLabels, pushToCloud: pushLabels } = resolveLabelsOnSignIn(localLabels, cloudLabels);
-        setLabels(mergedLabels);
-        if (pushLabels && mergedLabels.length > 0) {
-          await saveTaskLabels(user.uid, mergedLabels);
-        }
-      }
+      setCloudReady(true);
       clearSyncError();
     } catch (e) { markSyncError(e); }
     setSyncing(false);
+  };
+
+  // Sign-out leaves the device clean: the next person to sign in here must
+  // neither see this account's tasks nor have them merged into their own.
+  const handleSignOut = async () => {
+    const pending = readPending(MODE);
+    if ((pending.edited.size > 0 || pending.deleted.size > 0)
+      && !window.confirm(tt('alert.unsyncedSignOut', 'Some changes have not reached the cloud yet and will be lost. Sign out anyway?'))) {
+      return;
+    }
+    try {
+      await signOut();
+    } catch (e) {
+      markSyncError(e);
+      return;
+    }
+    [getStorageKey(MODE), TASKS_LABELS_KEY].forEach((key) => localStorage.removeItem(key));
+    clearLocalSyncState([MODE]);
+    window.location.reload();
+  };
+
+  const handleDeleteSyncedData = async () => {
+    if (!user || !window.confirm(tt('alert.deleteSyncedDataConfirm', 'Permanently delete all KanDOne data from your Google Drive and disconnect? Tasks on this device are removed too. This cannot be undone.'))) {
+      return;
+    }
+    try {
+      await deleteAllSyncedData();
+    } catch (e) {
+      console.error('Deleting synced data failed', e);
+      showToast(tt('alert.deleteSyncedDataFailed', 'Could not delete the synced data. Nothing was removed — please try again.'));
+      return;
+    }
+    [getStorageKey(MODE), TASKS_LABELS_KEY].forEach((key) => localStorage.removeItem(key));
+    clearLocalSyncState([MODE]);
+    window.location.reload();
   };
 
   const openNewForm = useCallback(() => {
@@ -498,7 +519,7 @@ export default function TasksApp() {
   const handleSave = async () => {
     if (isSavingRef.current) return;
     if (!safeStr(formData.name).trim()) {
-      alert(tt('form.requiredName', 'Task name is required'));
+      showToast(tt('form.requiredName', 'Task name is required'));
       return;
     }
     isSavingRef.current = true;
@@ -728,12 +749,18 @@ export default function TasksApp() {
     showToast(tt('toast.saved', 'Saved!'));
   }, [clearSyncError, markSyncError, showToast, tt]);
 
+  // Tracked as state so granting permission starts the reminder loop at once
+  // instead of only after the next reload.
+  const [notifyPermission, setNotifyPermission] = useState(
+    () => ('Notification' in window ? Notification.permission : 'unsupported'),
+  );
   const handleReminderEnable = useCallback(async () => {
     const result = await requestReminderPermission();
+    setNotifyPermission(result);
     if (result === 'denied') {
-      alert(tt('reminder.permissionDenied', 'Enable notifications in your browser settings to use reminders.'));
+      showToast(tt('reminder.permissionDenied', 'Enable notifications in your browser settings to use reminders.'));
     }
-  }, [tt]);
+  }, [showToast, tt]);
 
   const applyTaskUpdate = useCallback(async (updated) => {
     setTasks(prev => prev.map(t => (t.id === updated.id ? updated : t)));
@@ -755,7 +782,7 @@ export default function TasksApp() {
   }, [tasks, applyTaskUpdate, showToast, tt]);
 
   useEffect(() => {
-    if (!('Notification' in window) || Notification.permission !== 'granted') return undefined;
+    if (notifyPermission !== 'granted') return undefined;
     // Side effects (notifications, prompt, Drive writes) run here, outside
     // any setState updater — updaters must stay pure since React may invoke
     // them more than once per commit.
@@ -767,13 +794,11 @@ export default function TasksApp() {
       const first = pending[0];
       setReminderPrompt({ taskId: first.id, name: first.name || tt('reminder.defaultTitle', 'Task reminder') });
       pending.forEach(task => {
-        try {
-          new Notification(task.name || tt('reminder.defaultTitle', 'Task reminder'), {
-            body: formatDueDateTime(task.dueDate, task.dueTime, lang, formatDate)
-              || tt('reminder.body', 'Your task is coming up.'),
-            tag: `kandone-reminder-${task.id}-${buildReminderKey(task)}`,
-          });
-        } catch { /* ignore */ }
+        showReminderNotification(task.name || tt('reminder.defaultTitle', 'Task reminder'), {
+          body: formatDueDateTime(task.dueDate, task.dueTime, lang, formatDate)
+            || tt('reminder.body', 'Your task is coming up.'),
+          tag: `kandone-reminder-${task.id}-${buildReminderKey(task)}`,
+        }).catch((e) => console.error('Reminder notification failed', e));
       });
 
       setTasks(prev => prev.map(task => (
@@ -793,7 +818,7 @@ export default function TasksApp() {
     runReminders();
     const timer = setInterval(runReminders, 30_000);
     return () => clearInterval(timer);
-  }, [lang, tt, clearSyncError, markSyncError]);
+  }, [notifyPermission, lang, tt, clearSyncError, markSyncError]);
 
   const handleExport = async () => {
     const payload = { version: 2, tasks, labels };
@@ -843,6 +868,15 @@ export default function TasksApp() {
           label: tt('toast.undo', 'Undo'),
           onUndo: () => {
             saveTasks(previousTasks);
+            // The import wrote its own records to the cloud too; without
+            // removing them they would come back on the next pull.
+            const previousIds = new Set(previousTasks.map(t => t.id));
+            const importedOnly = nextTasks.map(t => t.id).filter(id => !previousIds.has(id));
+            if (userRef.current && importedOnly.length > 0) {
+              Promise.all(importedOnly.map(id => deleteItem(userRef.current.uid, MODE, id)))
+                .then(clearSyncError)
+                .catch(markSyncError);
+            }
             setLabels(previousLabels);
             if (userRef.current) {
               saveTaskLabels(userRef.current.uid, previousLabels).then(clearSyncError).catch(markSyncError);
@@ -850,7 +884,7 @@ export default function TasksApp() {
           },
         });
       } catch {
-        alert(tt('alert.importError', 'Error importing file.'));
+        showToast(tt('alert.importError', 'Error importing file.'));
       }
     };
     reader.readAsText(file);
@@ -860,13 +894,11 @@ export default function TasksApp() {
   const selectedTask = selectedId ? tasks.find(t => t.id === selectedId) : null;
 
   const handleSaveToTask = useCallback((taskId, text) => {
-    setTasks(prev => prev.map(t => {
-      if (t.id !== taskId) return t;
-      const merged = { ...t, notes: t.notes ? `${t.notes}\n\n---\n${text}` : text };
-      if (user) updateItem(user.uid, MODE, merged).catch(() => {});
-      return merged;
-    }));
-  }, [user]);
+    const task = tasksRef.current.find(t => t.id === taskId);
+    if (!task) return;
+    const notes = task.notes ? `${task.notes}\n\n---\n${text}` : text;
+    saveTask({ ...task, notes: notes.slice(0, MAX_LONG_TEXT_LEN) });
+  }, [saveTask]);
 
   const handleStartSimulation = useCallback((categoryKey) => {
     const cat = TASK_TEMPLATES[categoryKey];
@@ -1049,6 +1081,7 @@ Rules:
           {editable ? (
             <input
               value={safeStr(step.title)}
+              maxLength={MAX_TITLE_LEN}
               onChange={e => setFormData(prev => ({
                 ...prev,
                 steps: prev.steps.map(s => s.id === step.id ? { ...s, title: e.target.value } : s),
@@ -1073,6 +1106,7 @@ Rules:
           {editable && (
             <input
               value={safeStr(step.notes)}
+              maxLength={MAX_STEP_NOTES_LEN}
               onChange={e => setFormData(prev => ({
                 ...prev,
                 steps: prev.steps.map(s => s.id === step.id ? { ...s, notes: e.target.value } : s),
@@ -1190,6 +1224,7 @@ Rules:
               </label>
               <input
                 value={safeStr(formData.name)}
+                maxLength={MAX_TITLE_LEN}
                 onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
                 className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 text-sm"
                 placeholder={tt('form.taskNamePlaceholder', 'What needs to be done?')}
@@ -1372,6 +1407,7 @@ Rules:
               </label>
               <textarea
                 value={safeStr(formData.description)}
+                maxLength={MAX_LONG_TEXT_LEN}
                 onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
                 rows={3}
                 className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 text-sm resize-none"
@@ -1392,6 +1428,7 @@ Rules:
               <div className="flex gap-2">
                 <input
                   value={newStepTitle}
+                  maxLength={MAX_TITLE_LEN}
                   onChange={e => setNewStepTitle(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddStep(); } }}
                   placeholder={tt('form.addStepPlaceholder', 'Describe the step...')}
@@ -1412,6 +1449,7 @@ Rules:
               </label>
               <textarea
                 value={safeStr(formData.notes)}
+                maxLength={MAX_LONG_TEXT_LEN}
                 onChange={e => setFormData(prev => ({ ...prev, notes: e.target.value }))}
                 rows={3}
                 className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 text-sm resize-none"
@@ -1961,7 +1999,7 @@ Rules:
             ) : user ? (
               <>
                 <button
-                  onClick={() => signOut()}
+                  onClick={handleSignOut}
                   title={syncError ? t('header.syncErrorTooltip', 'Last cloud sync failed — click "Sync Now" to retry. (This signs out.)') : user.email}
                   className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-bold transition-colors border min-h-[44px] touch-manipulation ${
                     syncing
@@ -2005,7 +2043,7 @@ Rules:
                 onClick={() => signInWithGoogle()
                   .catch((e) => {
                     console.error('Google sign-in failed:', e);
-                    alert(formatSignInError(e));
+                    showToast(formatSignInError(e));
                   })}
                 title={t('header.reconnectingTooltip', 'Restoring your session — click to sign in again')}
                 aria-live="polite"
@@ -2025,7 +2063,7 @@ Rules:
                   .then((u) => { if (!u) return; })
                   .catch((e) => {
                     console.error('Google sign-in failed:', e);
-                    alert(formatSignInError(e));
+                    showToast(formatSignInError(e));
                   })}
                 title={t('header.connectDriveTooltip')}
                 className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-bold bg-white/10 hover:bg-white/20 border border-white/20 text-green-100 transition-colors min-h-[44px] touch-manipulation"
@@ -2162,6 +2200,11 @@ Rules:
                     <button onClick={() => { setShowTasksWelcome(true); setMobileMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100">
                       <span>💡</span> {tt('board.viewTutorial', 'Quick Tour')}
                     </button>
+                    {user && (
+                      <button onClick={() => { handleDeleteSyncedData(); setMobileMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-600 hover:bg-red-50 active:bg-red-100 border-t border-gray-100">
+                        <Trash2 size={16} /> {tt('header.deleteSyncedData', 'Delete synced data & disconnect')}
+                      </button>
+                    )}
                     {canInstall && (
                       <button
                         type="button"

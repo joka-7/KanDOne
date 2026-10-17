@@ -124,3 +124,35 @@ export function clearPendingIds(mode, ids, storage = browserStorage()) {
   }
   if (changed) writePending(mode, pending, storage);
 }
+
+const OWNER_KEY = 'kandone_data_owner_v1';
+
+/** The uid whose data is in local storage, or null for signed-out-created data. */
+export function readDataOwner(storage = browserStorage()) {
+  if (!storage) return null;
+  try {
+    return storage.getItem(OWNER_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeDataOwner(uid, storage = browserStorage()) {
+  if (!storage) return;
+  try {
+    storage.setItem(OWNER_KEY, String(uid));
+  } catch {
+    // Unrecorded ownership degrades to treating the data as signed-out data.
+  }
+}
+
+/** Forget owner and pending state, as sign-out must before another account signs in. */
+export function clearLocalSyncState(modes, storage = browserStorage()) {
+  if (!storage) return;
+  try {
+    storage.removeItem(OWNER_KEY);
+    modes.forEach((mode) => storage.removeItem(pendingStorageKey(mode)));
+  } catch {
+    // Blocked storage has nothing persisted to clear.
+  }
+}
