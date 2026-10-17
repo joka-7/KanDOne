@@ -341,6 +341,32 @@ version) is skipped rather than blocking sync; a temporary failure (network,
 rate limit) fails the whole pull instead, because a merge missing one device's
 newer edits and deletes would re-upload stale copies over them.
 
+A device file only ever grows (deletes stay as tombstones) and a device that is
+gone for good leaves its file behind, so every pull keeps downloading it. After a
+pull, at most once an hour, a file is deleted when it has had no write for 90 days
+**and** it holds the winning entry for none of its records or profile fields,
+meaning every one has a newer copy in another file. This device's own file is
+never deleted. Because winning entries are never deleted, the merged result does
+not change, provided three things hold, each handled on purpose:
+
+- *Every entry was understood.* A file in which parsing dropped an entry (invalid
+  stamp, a record that is not an object), or that has a field this version does
+  not know (at the top level or inside an entry), is never deleted.
+- *No two files tie.* If two files hold different content for one record at the
+  same stamp and device, the merge cannot say which is right, so both are kept.
+- *Nothing wrote to the file after it was read.* A device returning after months
+  is the likeliest to write right then. Each file is looked at again immediately
+  before its delete and skipped if its modification time changed. Drive has no
+  conditional delete, so a write in the instant between that check and the delete
+  can still lose that one write; that residual gap cannot be closed from the client.
+
+"Idle" is measured against the newest write Drive reports (never later than the
+local clock), so a device with a wrong clock cannot make recent files look old, and
+an account that has been idle everywhere deletes nothing. A pass deletes at most
+ten files, in parallel, so a pull never fans out; any left over go in the next
+pass an hour later. A failed delete, or one another device already did (404),
+does not fail the pull.
+
 Because a write can therefore fail — or never be attempted, because the session
 had not resolved yet — a pull cannot treat cloud as authoritative for every id.
 `src/utils/pendingSync.js` records which record ids changed locally without a

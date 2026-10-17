@@ -46,6 +46,18 @@ const TOKEN_EXPIRY_MARGIN_MS = 60_000;
  */
 const NATIVE_TOKEN_EXPIRY_MARGIN_MS = 5_000;
 
+/**
+ * A device file nobody has written to for this long, all of whose records are
+ * superseded by newer copies in other files, is deleted (see findCompactableFiles).
+ */
+export const STALE_DEVICE_FILE_MS = 90 * 24 * 60 * 60 * 1000;
+
+/** The idle-file check runs at most this often, however many reads happen. */
+const COMPACTION_MIN_INTERVAL_MS = 60 * 60 * 1000;
+
+/** A pull deletes at most this many idle files; the rest wait for the next pass, so it never fans out. */
+const MAX_DELETES_PER_PASS = 10;
+
 /** After a failed silent renewal, wait this long before trying again on its own. */
 const RENEWAL_BACKOFF_MS = 5 * 60_000;
 
@@ -185,6 +197,120 @@ export function mergeDeviceDocuments(documents) {
   };
 }
 
+function sameJson(a, b) {
+  if (a === b) return true;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((value, i) => sameJson(value, b[i]));
+  }
+  if (isPlainObject(a) && isPlainObject(b)) {
+    const keys = Object.keys(a);
+    return keys.length === Object.keys(b).length && keys.every((key) => key in b && sameJson(a[key], b[key]));
+  }
+  return false;
+}
+
+const KNOWN_DOCUMENT_KEYS = new Set(['version', 'device', 'profile', 'collections']);
+
+/** The parser keeps an entry's extra fields as they are, so they must be looked for separately. */
+function hasUnknownEntryKeys(document) {
+  const unknown = (entry, known) => Object.keys(entry).some((key) => !known.includes(key));
+  return Object.values(document.profile).some((entry) => unknown(entry, ['at', 'value']))
+    || Object.values(document.collections).some(
+      (items) => Object.values(items).some((entry) => unknown(entry, ['at', 'item'])),
+    );
+}
+
+/**
+ * True when parsing a device file threw something away: an entry that failed
+ * validation, or a field this version does not know. The file still reads fine,
+ * but it is not safe to delete on the strength of what was understood.
+ */
+function parsingDroppedData(raw, document) {
+  return Object.keys(raw).some((key) => !KNOWN_DOCUMENT_KEYS.has(key))
+    || hasUnknownEntryKeys(document)
+    || !sameJson(raw.profile ?? {}, document.profile)
+    || !sameJson(raw.collections ?? {}, document.collections);
+}
+
+/**
+ * Whether `a` is the winning entry over `b`: newest stamp, then higher device
+ * id (the merge's own rule), then higher file id so that two files that are
+ * exact copies of each other still have one winner. The last step makes every
+ * device agree on which file to keep, so none of them deletes both.
+ */
+function beats(a, b) {
+  if (!b) return true;
+  if (a.at !== b.at) return a.at > b.at;
+  if (a.device !== b.device) return a.device > b.device;
+  return a.fileId > b.fileId;
+}
+
+/**
+ * Which device files can be deleted without anyone losing a record.
+ *
+ * Each file is a device's own history, and nothing ever shrinks it: deletes stay
+ * as tombstones and a device that is gone for good leaves its file behind. A file
+ * qualifies only when it has had no writes for `maxIdleMs` *and* it holds the
+ * winning entry for none of its records or profile fields — every one has a newer
+ * copy in some other file. Files holding winners are never listed, so deleting the
+ * rest cannot change what the merge returns.
+ *
+ * That guarantee needs three things this function checks or assumes:
+ * - Every entry was understood. A file whose entries parsing dropped is `lossy`
+ *   and is never listed: deleting it would destroy data nobody can see.
+ * - Two files never tie on (stamp, device) with different content. When they do,
+ *   the merge cannot say which is right, so both are kept.
+ * - Nothing wrote to the file since it was read. That is a race this function
+ *   cannot see; the caller re-checks right before deleting, which narrows it to
+ *   the gap between that check and the delete but cannot close it (Drive has no
+ *   conditional delete).
+ *
+ * "Idle" is judged against the newest write Drive itself reports, and never later
+ * than the local clock. A device whose clock is far ahead would otherwise see
+ * every superseded file as idle; one far behind sees none, which is the safe side.
+ *
+ * @param {{ id: string, name: string, modifiedTime?: string, lossy?: boolean, document: object }[]} entries
+ *   every file that was read successfully
+ * @param {{ now: number, isOwn: (entry: object) => boolean, maxIdleMs?: number }} options
+ *   `isOwn` marks this device's own file, which is never listed. It is asked
+ *   only about files that would otherwise be deleted.
+ */
+export function findCompactableFiles(entries, { now, isOwn, maxIdleMs = STALE_DEVICE_FILE_MS }) {
+  const modifiedAt = (entry) => Date.parse(entry.modifiedTime);
+  const newestWrite = Math.max(-Infinity, ...entries.map(modifiedAt).filter(Number.isFinite));
+  // No usable modification time anywhere means no evidence of idleness at all.
+  if (!Number.isFinite(newestWrite)) return [];
+  const reference = Math.min(now, newestWrite);
+
+  const winners = new Map();
+  const ambiguous = new Set();
+  const consider = (key, at, document, fileId, content) => {
+    const candidate = { at, device: document.device, fileId, content };
+    const current = winners.get(key);
+    if (current && current.at === at && current.device === document.device && current.content !== content) {
+      ambiguous.add(current.fileId).add(fileId);
+    }
+    if (beats(candidate, current)) winners.set(key, candidate);
+  };
+  for (const { id, document } of entries) {
+    for (const [field, entry] of Object.entries(document.profile)) {
+      consider(JSON.stringify(['profile', field]), entry.at, document, id, JSON.stringify(entry.value));
+    }
+    for (const [name, items] of Object.entries(document.collections)) {
+      for (const [recordId, entry] of Object.entries(items)) {
+        consider(JSON.stringify(['record', name, recordId]), entry.at, document, id, JSON.stringify(entry.item));
+      }
+    }
+  }
+  const needed = new Set([...ambiguous, ...[...winners.values()].map((winner) => winner.fileId)]);
+  return entries.filter((entry) => {
+    const modified = modifiedAt(entry);
+    if (!Number.isFinite(modified) || reference - modified < maxIdleMs) return false;
+    if (entry.lossy || needed.has(entry.id)) return false;
+    return !isOwn(entry);
+  });
+}
+
 function readJson(storage, key) {
   try {
     const raw = storage?.getItem(key);
@@ -286,6 +412,9 @@ export function createDriveSync({
   let flushChain = Promise.resolve();
   let ownFileId = null;
   let latestSeenAt = 0;
+  let lastCompactionAt = null;
+  // Files whose last read had entries the parser dropped (see parsingDroppedData).
+  const lossyFileIds = new Set();
 
   const isConfigured = () => Boolean(clientId);
   const expiryMargin = nativeAuth ? NATIVE_TOKEN_EXPIRY_MARGIN_MS : TOKEN_EXPIRY_MARGIN_MS;
@@ -504,7 +633,7 @@ export function createDriveSync({
     const params = new URLSearchParams({
       spaces: 'appDataFolder',
       q: query,
-      fields: 'nextPageToken,files(id,name)',
+      fields: 'nextPageToken,files(id,name,modifiedTime)',
       pageSize: '1000',
     });
     if (pageToken) params.set('pageToken', pageToken);
@@ -524,7 +653,10 @@ export function createDriveSync({
     } catch {
       throw new DriveSyncError('Drive sync file is not valid JSON.', { code: 'corrupt-file' });
     }
-    return parseDeviceDocument(raw);
+    const document = parseDeviceDocument(raw);
+    if (parsingDroppedData(raw, document)) lossyFileIds.add(id);
+    else lossyFileIds.delete(id);
+    return document;
   }
 
   /**
@@ -542,9 +674,49 @@ export function createDriveSync({
     if (fatal) throw fatal.reason;
     const skipped = results.filter((r) => r.status === 'rejected');
     if (skipped.length) console.warn(`KanDOne: skipped ${skipped.length} unreadable Drive sync file(s).`);
-    const documents = results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+    const readable = files.flatMap((file, index) => (results[index].status === 'fulfilled'
+      ? [{
+        id: file.id,
+        name: file.name,
+        modifiedTime: file.modifiedTime,
+        lossy: lossyFileIds.has(file.id),
+        document: results[index].value,
+      }]
+      : []));
+    const documents = readable.map((entry) => entry.document);
     latestSeenAt = Math.max(latestSeenAt, ...documents.map(latestStamp));
-    return mergeDeviceDocuments(documents);
+    const merged = mergeDeviceDocuments(documents);
+    await deleteIdleFiles(readable);
+    return merged;
+  }
+
+  /**
+   * Housekeeping that must never get in the way of a pull: a failure is logged
+   * and the read still succeeds. Runs at most once an hour. Each file is looked
+   * at again right before its delete, and skipped if anything wrote to it since
+   * the pull read it. A 404 means another device removed it first.
+   */
+  async function deleteIdleFiles(readable) {
+    const started = now();
+    // A clock that moved backwards must not block the check until it catches up.
+    if (lastCompactionAt !== null && started >= lastCompactionAt
+      && started - lastCompactionAt < COMPACTION_MIN_INTERVAL_MS) return;
+    lastCompactionAt = started;
+    try {
+      const idle = findCompactableFiles(readable, {
+        now: started,
+        isOwn: (entry) => entry.id === ownFileId || entry.name === ownFileName(),
+      });
+      const outcomes = await Promise.allSettled(idle.slice(0, MAX_DELETES_PER_PASS).map(async (entry) => {
+        const url = `${DRIVE_API}/files/${encodeURIComponent(entry.id)}`;
+        const current = await (await driveFetch(`${url}?fields=modifiedTime`)).json();
+        if (current.modifiedTime === entry.modifiedTime) await driveFetch(url, { method: 'DELETE' });
+      }));
+      const failed = outcomes.filter((o) => o.status === 'rejected' && o.reason?.status !== 404).length;
+      if (failed) console.warn(`KanDOne: could not remove ${failed} idle Drive sync file(s).`);
+    } catch (err) {
+      console.warn('KanDOne: could not check for idle Drive sync files.', err?.message);
+    }
   }
 
   async function readOwnDocument() {
@@ -671,6 +843,8 @@ export function createDriveSync({
     dropQueuedWrites();
     ownFileId = null;
     latestSeenAt = 0;
+    lastCompactionAt = null;
+    lossyFileIds.clear();
     setSession(null);
   }
 
