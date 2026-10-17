@@ -37,6 +37,13 @@ const STEP_STATUSES = new Set(['todo', 'in_progress', 'done', 'blocked']);
 const DURATION_UNITS = new Set(['minute', 'hour', 'day', 'month']);
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
+// A device's tasks are one Drive file that every pull downloads whole, so an
+// unbounded text field makes every sync slower for every device. Worst case
+// (200 full steps per task) stays near 0.55 MB per task.
+export const MAX_TITLE_LEN = 500;
+export const MAX_LONG_TEXT_LEN = 20_000;
+export const MAX_STEP_NOTES_LEN = 2_000;
+
 function sanitizeDuration(duration) {
   if (!duration || typeof duration !== 'object') return { value: '', unit: 'hour' };
   const value = safeStr(duration.value).slice(0, 10);
@@ -90,9 +97,9 @@ function sanitizeTaskSteps(steps) {
   if (!Array.isArray(steps)) return [];
   return steps.slice(0, 200).map((s) => ({
     id: s.id ? String(s.id).slice(0, 64) : generateId(),
-    title: safeStr(s.title),
+    title: safeStr(s.title).slice(0, MAX_TITLE_LEN),
     status: STEP_STATUSES.has(s.status) ? s.status : 'todo',
-    notes: safeStr(s.notes),
+    notes: safeStr(s.notes).slice(0, MAX_STEP_NOTES_LEN),
     dueDate: safeStr(s.dueDate),
     duration: sanitizeDuration(s.duration),
     effort: sanitizeEffort(s.effort),
@@ -105,8 +112,8 @@ export function sanitizeTaskRecords(rows) {
   if (!Array.isArray(rows)) return [];
   return rows.slice(0, 10000).map((t) => ({
     id: t.id ? String(t.id).slice(0, 64) : generateId(),
-    name: safeStr(t.name) || 'Unnamed',
-    description: safeStr(t.description || ''),
+    name: safeStr(t.name).slice(0, MAX_TITLE_LEN) || 'Unnamed',
+    description: safeStr(t.description || '').slice(0, MAX_LONG_TEXT_LEN),
     status: TASK_STATUS_IDS.has(t.status) ? t.status : 'active',
     priority: TASK_PRIORITIES.has(t.priority) ? t.priority : 'medium',
     impact: TASK_IMPACTS.has(t.impact) ? t.impact : 'medium',
@@ -123,7 +130,7 @@ export function sanitizeTaskRecords(rows) {
     lastReminderKey: safeStr(t.lastReminderKey || '').slice(0, 64),
     boardOrder: sanitizeBoardOrder(t.boardOrder) ?? 0,
     steps: sanitizeTaskSteps(t.steps),
-    notes: safeStr(t.notes || ''),
+    notes: safeStr(t.notes || '').slice(0, MAX_LONG_TEXT_LEN),
   }));
 }
 
