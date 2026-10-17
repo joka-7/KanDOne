@@ -20,11 +20,11 @@ KanDOne is a **client-side, offline-first single-page application (SPA)** for
 managing tasks on a Kanban board. Each task holds ordered **steps** (sub-tasks),
 a status, a priority, a due date and free-text notes. The app renders the same
 task data through five views (Board, List/Edit, Timeline, Calendar, Statistics),
-optionally syncs to the cloud (Google sign-in + Firestore), and offers an
+optionally syncs to the user's own Google Drive, and offers an
 optional **AI coach** that talks to a user-configured LLM provider.
 
 It was extracted from the *Tasks mode* of the JobFlowTracker project, so a few
-identifiers (`getStorageKey`, collection naming, Firebase project) still carry
+identifiers (`getStorageKey`, collection naming) still carry
 job-tracker heritage — this is called out where relevant.
 
 ### Key characteristics
@@ -58,7 +58,7 @@ job-tracker heritage — this is called out where relevant.
 
 **In scope:** task CRUD, step CRUD, drag-and-drop status changes, five views,
 search/filter (status + label), JSON import/export (tasks + labels), Google auth +
-Firestore sync, AI chat/coach, custom labels & card colors, estimated duration,
+Google Drive sync, AI chat/coach, custom labels & card colors, estimated duration,
 routine/recurring tasks, due-time scheduling, browser reminders, i18n (en/he/fr),
 PWA install.
 
@@ -76,7 +76,7 @@ backward-compatible data cleansing, but the app boots straight into `tasks` mode
 - FR3 — Move a task between status columns via drag-and-drop.
 - FR4 — Persist all data to `localStorage` automatically.
 - FR5 — Import/export the full task list as JSON.
-- FR6 — Optional Google sign-in; on sign-in, load and mirror data in Firestore.
+- FR6 — Optional Google sign-in; on sign-in, load and mirror data in a hidden app-only file in the user's own Google Drive.
 - FR7 — Provide Board / List / Timeline / Calendar / Statistics views.
 - FR8 — Optional AI chat: per-task coach, guided template sessions, goals finder.
 - FR9 — Localize the UI in en/he/fr, with RTL layout for Hebrew.
@@ -90,9 +90,9 @@ backward-compatible data cleansing, but the app boots straight into `tasks` mode
 
 ### 4.2 Non-Functional
 - NFR1 — **Offline-first:** all core features work without a network.
-- NFR2 — **Privacy:** API keys and data stay client-side unless the user signs in.
-- NFR3 — **Security:** Firestore rules restrict each user to their own document tree; user text is delimited before being placed into AI prompts; CSP without `script-src 'unsafe-inline'` (meta + Vercel response header).
-- NFR4 — **Performance:** list rendering is paginated (25-at-a-time); derived data is memoised; Firebase, Anthropic SDK, and heavy UI (calendar/modals) load lazily.
+- NFR2 — **Privacy:** API keys and data stay client-side. Signed-in sync goes browser → the user's own Google Drive with no KanDOne server or database in the path, so the operator holds no copy of user data.
+- NFR3 — **Security:** the Drive token is scoped to `drive.appdata` (this app's hidden folder only); user text is delimited before being placed into AI prompts; CSP without `script-src 'unsafe-inline'` (meta + Vercel response header).
+- NFR4 — **Performance:** list rendering is paginated (25-at-a-time); derived data is memoised; Google's sign-in script, Anthropic SDK, and heavy UI (calendar/modals) load lazily.
 - NFR5 — **Installability:** valid PWA manifest + service worker with auto-update.
 - NFR6 — **Resilience:** malformed imports/localStorage are sanitised, not fatal; root `AppErrorBoundary` can export local data after a render crash.
 - NFR7 — **Accessibility / i18n:** `<html lang/dir>` tracks i18n; locale key parity is tested; dialogs use `role="dialog"` / focus trapping via `useModalA11y`.
@@ -108,7 +108,7 @@ backward-compatible data cleansing, but the app boots straight into `tasks` mode
 | Styling | Tailwind CSS 3 + PostCSS |
 | Icons | lucide-react |
 | i18n | i18next + react-i18next |
-| Cloud | Firebase Auth (Google) + Cloud Firestore |
+| Cloud | Google Identity Services (OAuth token) + Google Drive API v3 (`appDataFolder`) |
 | AI | Anthropic SDK + `fetch` to Gemini / Groq / OpenAI / Ollama |
 | PWA | vite-plugin-pwa (Workbox) |
 | Tests | Vitest + Testing Library (jsdom) |
@@ -119,7 +119,7 @@ backward-compatible data cleansing, but the app boots straight into `tasks` mode
 ## 6. System Architecture
 
 KanDOne is a layered browser app. The UI layer renders state; a thin
-service/persistence layer talks to `localStorage`, Firestore and AI providers.
+service/persistence layer talks to `localStorage`, the user's Google Drive and AI providers.
 
 ```mermaid
 graph TD
@@ -144,15 +144,15 @@ graph TD
         end
         subgraph SVC["Services"]
             AI[services/aiAssistant.js<br/>provider streaming]
-            FB[firebase.js<br/>lazy auth + firestore]
+            FB[driveSync.js<br/>Google token + Drive files]
             PWA[usePwaInstall.js]
         end
         LS[(localStorage)]
     end
 
     subgraph Cloud["External Services"]
-        FAUTH[Firebase Auth<br/>Google]
-        FS[(Cloud Firestore)]
+        FAUTH[Google Identity Services<br/>OAuth token]
+        FS[(User's Google Drive<br/>appDataFolder/kandone-*.json<br/>one file per device)]
         LLM[AI Providers<br/>Gemini/Groq/OpenAI/<br/>Anthropic/Ollama]
     end
 
@@ -189,18 +189,21 @@ graph TD
   recurrence/reminders, and prompt-injection hardening (`promptSafety.js`).
 - **Services** — side-effecting integrations: `aiAssistant.js` (multi-provider
   streaming; Anthropic SDK imported only when that provider is used),
-  `firebase.js` (SDK loaded on first cloud call via `ensureFirebase()`),
+  `driveSync.js` (Google's sign-in script loaded on demand; Drive REST calls via `fetch`),
   `usePwaInstall.js`.
-- **Persistence** — `localStorage` is the always-on local store; Firestore is an
-  optional cloud mirror keyed by the signed-in user.
+- **Persistence** — `localStorage` is the always-on local store; the signed-in
+  user's own Drive `appDataFolder` is an optional cloud mirror, one JSON file per
+  device (each device writes only its own, and reads all of them).
 
 ---
 
 ## 7. Data Model (high level)
 
 A single entity — the **Task** — with an embedded list of **Steps**. There is no
-relational schema; tasks are stored as a JSON array locally and as one document
-per task in Firestore. A separate **label library** (`tasksLabelsV1` in
+relational schema; tasks are stored as a JSON array locally and keyed by id in
+one Drive file per device (`kandone-<deviceId>.json`), each record stamped with
+its write time; readers keep the newest version of each record (see
+[LLD §6.1](./LLD.md#61-drivesyncjs)). A separate **label library** (`tasksLabelsV1` in
 `localStorage`) holds `{ id, text, color }` entries referenced by `labelIds` on
 tasks and steps.
 
@@ -263,7 +266,6 @@ sequenceDiagram
     M->>M: register service worker (PROD)
     M->>M: init i18n (saved language; sync html lang/dir)
     M->>A: render AppErrorBoundary > App
-    A->>A: completeRedirectSignIn() (lazy Firebase; resolve pending Google redirect)
     A->>T: render <TasksApp/>
     T->>LS: read tasks key
     T->>T: parseTaskStoragePayload + filterItemsForMode
@@ -277,8 +279,8 @@ sequenceDiagram
     participant U as User
     participant T as TasksApp
     participant LS as localStorage
-    participant FB as firebase.js
-    participant FS as Firestore
+    participant FB as driveSync.js
+    participant FS as Google Drive
 
     U->>T: fill form, click Save
     T->>T: validate name, build task {id,...}
@@ -287,13 +289,14 @@ sequenceDiagram
     T->>LS: setItem(tasks)
     alt signed in
         T->>FB: updateItem(uid, "tasks", task)
-        FB->>FS: setDoc(users/{uid}/tasks/{id})
+        Note over FB: queued; a burst of writes is coalesced (~1.5 s)
+        FB->>FS: read this device's file, apply queued writes, upload it
     end
     T-->>U: toast "Task saved!"
 ```
 
 Drag-and-drop status changes and step-status cycling follow the same pattern:
-update React state → `localStorage` effect persists → best-effort Firestore write
+update React state → `localStorage` effect persists → best-effort Drive write
 when signed in. When a **routine** task lands on `completed`, `applyTaskStatusChange`
 (in `recurrence.js`) resets steps to `todo`, sets status back to `active`, and
 computes the next `dueDate` before persisting.
@@ -304,19 +307,20 @@ computes the next `dueDate` before persisting.
 sequenceDiagram
     participant U as User
     participant T as TasksApp
-    participant FB as firebase.js
-    participant AUTH as Firebase Auth
-    participant FS as Firestore
+    participant FB as driveSync.js
+    participant AUTH as Google Identity Services
+    participant FS as Google Drive
 
     U->>T: click "Connect Drive"
-    T->>FB: signInWithGoogle() (popup, fallback to redirect)
-    FB->>AUTH: Google OAuth
-    AUTH-->>FB: user
+    T->>FB: signInWithGoogle()
+    FB->>AUTH: token popup (scope drive.appdata + openid email profile)
+    AUTH-->>FB: access token (1 h)
+    FB->>AUTH: userinfo → { uid, email, displayName }
     Note over T,FB: onAuthChange fires with user
     T->>FB: saveUserProfile(uid,{appMode:"tasks"})
     T->>FB: loadAllItems(uid,"tasks")
-    FB->>FS: getDocs(users/{uid}/tasks)
-    FS-->>FB: task docs
+    FB->>FS: list + GET every kandone-*.json in appDataFolder
+    FS-->>FB: device files → newest version of each task
     FB-->>T: tasks[]
     T->>T: resolveTasksOnSignIn(local, cloud, readPending("tasks"))
     T->>T: setTasks(merged) + toast
@@ -324,21 +328,30 @@ sequenceDiagram
 ```
 
 Writes are **local-first and best-effort to cloud**: the UI never blocks on a
-Firestore write, and failures are swallowed so offline editing keeps working.
+Drive write, and failures only flag the header's sync-error state so offline
+editing keeps working. Each device uploads only its own file, so one device's
+upload can never overwrite another's (Drive v3 has no conditional write, which a
+single shared file would need). Tabs of one browser share a file and serialise
+their uploads with the Web Locks API; where that API is missing, each tab gets
+its own device file instead (kept in `sessionStorage`, so a reload reuses it). A
+file another device wrote that can never be read (corrupt, or from a newer app
+version) is skipped rather than blocking sync; a temporary failure (network,
+rate limit) fails the whole pull instead, because a merge missing one device's
+newer edits and deletes would re-upload stale copies over them.
 
 Because a write can therefore fail — or never be attempted, because the session
 had not resolved yet — a pull cannot treat cloud as authoritative for every id.
 `src/utils/pendingSync.js` records which record ids changed locally without a
-confirmed cloud write (`firebase.js` clears an id once its write lands), and
+confirmed cloud write (`driveSync.js` clears an id once its upload lands), and
 `resolveTasksOnSignIn` consults that set: a pending local edit keeps the local
 copy and is pushed up, a pending local delete is not resurrected, and every
 other shared id takes the cloud copy so a stale device still converges.
 
-The header distinguishes three pre-sign-in states so it never invites the user
-to work as though their data were local-only: "Checking…" while
-`hasRestorableSession()` runs, "Reconnecting…" when a persisted session exists
-but the SDK has not confirmed it, and "Connect Drive" only once Firebase has
-actually reported no session.
+The browser gets a one-hour access token and no refresh token, and Google
+only opens its token popup from a click. So when the token lapses,
+`driveSync.js` reports "signed out" (a timer fires at expiry, and a 401 does the
+same); the header shows "Connect Drive", and one click reconnects and runs the
+sign-in merge above, which replays edits made in between from `pendingSync`.
 
 ### 8.4 AI chat / coaching
 
@@ -384,14 +397,15 @@ fire a `Notification` once per occurrence (deduped via `lastReminderKey`).
 
 | Integration | Purpose | Notes |
 | --- | --- | --- |
-| **Firebase Auth** | Google sign-in | Popup with redirect fallback; redirect result resolved on load. |
-| **Cloud Firestore** | Optional cloud mirror | One doc per task under `users/{uid}/tasks/{taskId}`; batched writes (chunks of 490). |
+| **Google Identity Services** | Google sign-in | Token client (`accounts.google.com/gsi/client`), popup only; client ID from `VITE_GOOGLE_CLIENT_ID`. |
+| **Google Drive API v3** | Optional cloud mirror | One JSON file per device in the user's `appDataFolder`; queued writes coalesced into one upload of this device's file. |
 | **AI providers** | Coaching/chat | Gemini, Groq, OpenAI, Anthropic (SDK) and local Ollama. Streaming responses. Keys stored per-browser. |
-| **PWA / Workbox** | Offline + install | Precache app shell; `NetworkFirst` runtime caching for Firestore. |
+| **PWA / Workbox** | Offline + install | Precache app shell; Drive calls are not cached. |
 | **Vercel** | Static hosting | SPA + security headers (full CSP) via `vercel.json`. |
 
-The Firebase web config in `firebase.js` is a **public web API key** (not a
-secret). Default project is `kandone-a6c91`; users can swap in their own config.
+The OAuth client ID is a **public identifier** (not a secret). With
+`VITE_GOOGLE_CLIENT_ID` unset the build is local-only and shows no Connect Drive.
+`firestore.rules` now denies all access; Firestore is no longer used.
 
 ---
 
@@ -402,25 +416,28 @@ secret). Default project is `kandone-a6c91`; users can swap in their own config.
   (`appLanguage`). Both `i18n` init and `TasksApp` keep `<html lang>` /
   `dir` in sync (Hebrew → RTL). Locale key parity is enforced by unit tests.
 - **Security & privacy**
-  - Firestore rules: a user can read/write only their own `users/{uid}` subtree.
+  - Cloud data lives in each user's own Drive `appDataFolder`, readable only by
+    this OAuth client with that user's token — there is no operator-side store.
+  - The access token (1 h, `drive.appdata` scope) is kept in `localStorage`
+    (`kandone_drive_session_v1`) so a reload within the hour stays connected.
   - AI keys never leave the browser except as auth headers to the chosen provider
     (plaintext `localStorage` is an **accepted** risk — no backend proxy).
   - `sanitize.js` whitelists and size-caps all imported/loaded records (covered
     by unit tests).
   - `promptSafety.delimUserField()` is applied on live coach / goals / simulation
     prompt paths (task names, descriptions, notes, user chat text).
-  - CSP: `script-src 'self'` (+ Google/Firebase origins); no `'unsafe-inline'`
+  - CSP: `script-src 'self'` (+ Google origins); no `'unsafe-inline'`
     for scripts. Same policy in `index.html` meta and `vercel.json` header.
   - Dependabot watches npm and GitHub Actions weekly.
   - AI calls are rate-limited (3s throttle) outside browser/test environments.
 - **Offline & persistence** — `localStorage` is the source of truth; the service
   worker precaches the shell so the app opens offline.
-- **Performance** — lazy Firebase + Anthropic; `React.lazy` for Calendar and
+- **Performance** — on-demand Google sign-in script + lazy Anthropic; `React.lazy` for Calendar and
   modals; `useMemo` for derived views; list pagination; `npm run build:analyze`
   for local bundle inspection.
 - **Error handling** — root `AppErrorBoundary` (reload + export-data); 
   `ChatErrorBoundary` isolates chat crashes; import/parse and network paths fail
-  soft (alerts/toasts, swallowed cloud errors). Undo toast for destructive
+  soft (alerts/toasts, header sync-error state for cloud failures). Undo toast for destructive
   deletes and import overwrite.
 - **Accessibility** — toast `aria-live`; header icon `aria-label`s; modals use
   `useModalA11y` (dialog role, focus trap, Escape); axe-core in Playwright e2e.
@@ -435,8 +452,8 @@ secret). Default project is `kandone-a6c91`; users can swap in their own config.
 - **CI:** lint → unit tests → build; separate Playwright Chromium e2e job.
 - **Hosting:** static hosting (Vercel) with CSP and related security headers.
   No server runtime required.
-- **Config to run cloud sync under your own account:** replace `firebaseConfig`
-  in `src/firebase.js` and deploy `firestore.rules`.
+- **Config to enable cloud sync:** set `VITE_GOOGLE_CLIENT_ID` to a Web OAuth
+  client whose authorized JavaScript origins include the site (see `.env.example`).
 
 ---
 
@@ -446,9 +463,11 @@ secret). Default project is `kandone-a6c91`; users can swap in their own config.
 | --- | --- |
 | `localStorage` size limits for very large boards | JSON export as backup; consider IndexedDB. |
 | AI keys readable by malicious extensions / XSS | User-facing security notice; keys opt-in and local. **Accepted** without a backend proxy. |
-| Default shared Firebase project | Documented (`kandone-a6c91`); users swap in their own config. |
+| Browser tokens last 1 h with no refresh | One click on Connect Drive reconnects; local edits are kept and replayed. |
 | Legacy multi-mode helpers add complexity | Isolated in `statuses.js` / sanitize; `tasks` is the only live path. |
-| No conflict resolution across devices | Last-write-wins; acceptable for single-user use. |
+| No conflict resolution across devices | Per-record last-write-wins. Each write is stamped `max(now, newest stamp already read + 1)`, so a device whose clock runs behind still wins with an edit made after it read the others; concurrent edits on two devices still resolve by stamp, not by intent. Acceptable for single-user use. |
+| Device files accumulate | A new file appears whenever a browser's storage is cleared (new device id), per tab without Web Locks, or when an unreadable own file is abandoned. Listing is paginated so none is missed; nothing compacts old files yet. |
+| Unsynced edit beats a remote delete | A record with a pending local edit is kept and re-uploaded even if another device deleted it meanwhile — the edit is newer work the user can see. |
 | Reminders require active app/PWA | No service-worker background scheduling in v1. |
 | Board DnD is HTML5-only (no touch / keyboard reorder) | Deferred; phone PWA cannot drag cards yet. |
 | Manual card order within a column | Deferred (needs schema `order` + migration). |
@@ -464,7 +483,7 @@ secret). Default project is `kandone-a6c91`; users can swap in their own config.
 | FR3 drag-and-drop | `TasksApp.jsx` (`handleDragStart/Over/Drop`) |
 | FR4 local persistence | `TasksApp.jsx` effect, `storageKeys.js` |
 | FR5 import/export | `TasksApp.jsx`, `sanitize.js`, undo toast |
-| FR6 cloud sync | `firebase.js` (`ensureFirebase`, `hasRestorableSession`), `firestore.rules`, `labelSync.js`, `pendingSync.js` |
+| FR6 cloud sync | `driveSync.js` (`createDriveSync`, `applyOperations`), `labelSync.js`, `pendingSync.js` |
 | FR7 views | Board/List/Timeline/Stats in `TasksApp.jsx`, lazy `CalendarView.jsx` |
 | FR8 AI | `services/aiAssistant.js`, `ChatModal.jsx`, `promptSafety.js` |
 | FR9 i18n | `i18n.js`, `locales/*`, locale parity tests |

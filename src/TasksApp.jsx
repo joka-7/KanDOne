@@ -17,7 +17,7 @@ import {
   signInWithGoogle, signOut, onAuthChange, loadAllItems, formatSignInError,
   updateItem, deleteItem, batchSaveItems, saveUserProfile,
   loadTaskLabels, saveTaskLabels, isCloudConfigured, hasRestorableSession,
-} from './firebase';
+} from './driveSync';
 import { getStorageKey, STATUSES_TASKS, filterItemsForMode } from './statuses';
 import { usePwaInstall } from './usePwaInstall';
 import AppBrandMark from './components/AppBrandMark';
@@ -112,7 +112,7 @@ export default function TasksApp() {
     () => parseTaskLabelsStoragePayload(localStorage.getItem(TASKS_LABELS_KEY)),
   );
   // Where small/medium/large fall on the effort ladder — a local preference,
-  // so it is not synced to Firestore alongside the tasks themselves.
+  // so it is not synced to Drive alongside the tasks themselves.
   const [effortTiers, setEffortTiers] = useState(
     () => parseEffortTiersPayload(localStorage.getItem(TASKS_EFFORT_TIERS_KEY)),
   );
@@ -131,7 +131,7 @@ export default function TasksApp() {
   const [isSaved, setIsSaved] = useState(true);
   const [localStorageError, setLocalStorageError] = useState(false);
   const [user, setUser] = useState(null);
-  // Firebase's SDK bootstrap + persisted-session check is async (see
+  // The persisted-session check is async (see
   // onAuthChange), so `user` stays null for a beat even for someone who is
   // already signed in. Without this flag the header can't tell "definitely
   // signed out" from "haven't heard back yet" and shows a false "disconnected"
@@ -146,7 +146,7 @@ export default function TasksApp() {
   const [syncing, setSyncing] = useState(false);
   // True once a cloud write/read has failed and not yet succeeded since —
   // drives the header's error state and blocks the focus-triggered pull
-  // below from clobbering local changes that haven't made it to Firestore.
+  // below from clobbering local changes that haven't made it to Drive.
   const [syncError, setSyncError] = useState(false);
   const [newStepTitle, setNewStepTitle] = useState('');
   const [visibleCount, setVisibleCount] = useState(25);
@@ -285,28 +285,28 @@ export default function TasksApp() {
       if (!restorable) setAuthResolved(true);
     }).catch(() => { if (!cancelled) setSessionRestorable(false); });
 
-    const unsub = onAuthChange(async (firebaseUser) => {
-      // Firebase always calls back at least once with the definitive state
+    const unsub = onAuthChange(async (driveUser) => {
+      // onAuthChange always calls back at least once with the definitive state
       // (signed in or genuinely signed out) — that first call is the signal
       // the header needs to stop showing a "checking…" placeholder instead
       // of a false "disconnected" Connect button. It is also the answer to
       // whether the persisted session the probe found is still valid.
       setAuthResolved(true);
-      setSessionRestorable(Boolean(firebaseUser));
-      setUser(firebaseUser);
-      if (firebaseUser) {
+      setSessionRestorable(Boolean(driveUser));
+      setUser(driveUser);
+      if (driveUser) {
         setSyncing(true);
         try {
-          await saveUserProfile(firebaseUser.uid, { appMode: MODE });
-          const [data, cloudLabels] = await Promise.all([
-            loadAllItems(firebaseUser.uid, MODE),
-            loadTaskLabels(firebaseUser.uid),
+          await saveUserProfile(driveUser.uid, { appMode: MODE });
+          const [cloud, cloudLabels] = await Promise.all([
+            loadAllItems(driveUser.uid, MODE),
+            loadTaskLabels(driveUser.uid),
           ]);
           // Prefer cloud tasks when they exist; otherwise this is the user's
           // first sign-in with local-only data, so push it up instead of
           // silently leaving them with zero cloud backup.
           const { tasks: mergedTasks, pushToCloud: pushTasksToCloud, deleteFromCloud } =
-            resolveTasksOnSignIn(tasksRef.current, data, readPending(MODE));
+            resolveTasksOnSignIn(tasksRef.current, cloud?.items ?? null, readPending(MODE), cloud?.deletedIds);
           const orderedTasks = ensureBoardOrders(mergedTasks);
           // The pull is the new baseline: without reseating the snapshot the
           // tracking effect would read every record the pull changed as a fresh
@@ -314,29 +314,28 @@ export default function TasksApp() {
           syncedSnapshotRef.current = fingerprintItems(orderedTasks);
           setTasks(orderedTasks);
           if (pushTasksToCloud && orderedTasks.length > 0) {
-            await batchSaveItems(firebaseUser.uid, MODE, orderedTasks);
+            await batchSaveItems(driveUser.uid, MODE, orderedTasks);
           }
           // Replay deletes made while unsynced, or the next pull resurrects them.
           await Promise.all(
-            deleteFromCloud.map((id) => deleteItem(firebaseUser.uid, MODE, id)),
+            deleteFromCloud.map((id) => deleteItem(driveUser.uid, MODE, id)),
           );
           const localLabels = parseTaskLabelsStoragePayload(localStorage.getItem(TASKS_LABELS_KEY));
           const { labels: mergedLabels, pushToCloud } = resolveLabelsOnSignIn(localLabels, cloudLabels);
           setLabels(mergedLabels);
           if (pushToCloud && mergedLabels.length > 0) {
-            await saveTaskLabels(firebaseUser.uid, mergedLabels);
+            await saveTaskLabels(driveUser.uid, mergedLabels);
           }
           clearSyncError();
-          if ((data && data.length > 0) || mergedLabels.length > 0) {
+          if (cloud?.items.length > 0 || mergedLabels.length > 0) {
             showToast(tt('toast.imported', 'Data loaded from cloud!'));
           }
         } catch (e) { markSyncError(e); }
         setSyncing(false);
       }
     });
-    // Belt-and-suspenders: if Firebase's dynamic-import bootstrap never
-    // completes (blocked network, ad blocker, offline), don't leave the header
-    // stuck on "checking…" forever. Where the probe found a persisted session
+    // Belt-and-suspenders: if the first auth callback never arrives, don't
+    // leave the header stuck on "checking…" forever. Where the probe found a persisted session
     // this resolves into "reconnecting", not "disconnected" — the session is
     // real and still loading, and telling the user otherwise is what led them
     // to work believing their data was local-only.
@@ -346,29 +345,29 @@ export default function TasksApp() {
 
   useEffect(() => {
     const handleVisibility = async () => {
-      const firebaseUser = userRef.current;
+      const driveUser = userRef.current;
       // Skip the auto-pull while a previous write is known to have failed —
       // that write may still only exist locally, and overwriting local state
       // with a stale cloud snapshot would silently discard it. The header's
       // sync-error indicator lets the user retry manually instead.
-      if (document.visibilityState === 'visible' && firebaseUser && !syncError) {
+      if (document.visibilityState === 'visible' && driveUser && !syncError) {
         setSyncing(true);
         try {
-          const data = await loadAllItems(firebaseUser.uid, MODE);
-          if (data && data.length > 0) {
+          const cloud = await loadAllItems(driveUser.uid, MODE);
+          if (cloud) {
             // Union-merge rather than overwrite: anything typed into this
             // tab since the last pull (e.g. while it was backgrounded) must
             // survive, even though its id isn't in the snapshot we just read.
             const { tasks: mergedTasks, pushToCloud, deleteFromCloud } =
-              resolveTasksOnSignIn(tasksRef.current, filterItemsForMode(data, MODE), readPending(MODE));
+              resolveTasksOnSignIn(tasksRef.current, filterItemsForMode(cloud.items, MODE), readPending(MODE), cloud.deletedIds);
             const orderedTasks = ensureBoardOrders(mergedTasks);
             syncedSnapshotRef.current = fingerprintItems(orderedTasks);
             setTasks(orderedTasks);
             if (pushToCloud && orderedTasks.length > 0) {
-              await batchSaveItems(firebaseUser.uid, MODE, orderedTasks);
+              await batchSaveItems(driveUser.uid, MODE, orderedTasks);
             }
             await Promise.all(
-              deleteFromCloud.map((id) => deleteItem(firebaseUser.uid, MODE, id)),
+              deleteFromCloud.map((id) => deleteItem(driveUser.uid, MODE, id)),
             );
           }
           clearSyncError();
@@ -414,15 +413,15 @@ export default function TasksApp() {
     if (!user || syncing) return;
     setSyncing(true);
     try {
-      const [data, cloudLabels] = await Promise.all([
+      const [cloud, cloudLabels] = await Promise.all([
         loadAllItems(user.uid, MODE),
         loadTaskLabels(user.uid),
       ]);
       // Union-merge, not overwrite — a manual sync must not delete work typed
       // locally since the last pull just because it isn't in this snapshot yet.
-      if (data && data.length > 0) {
+      if (cloud) {
         const { tasks: mergedTasks, pushToCloud, deleteFromCloud } =
-          resolveTasksOnSignIn(tasksRef.current, filterItemsForMode(data, MODE), readPending(MODE));
+          resolveTasksOnSignIn(tasksRef.current, filterItemsForMode(cloud.items, MODE), readPending(MODE), cloud.deletedIds);
         const orderedTasks = ensureBoardOrders(mergedTasks);
         syncedSnapshotRef.current = fingerprintItems(orderedTasks);
         setTasks(orderedTasks);
@@ -656,7 +655,7 @@ export default function TasksApp() {
         changed.push(next);
         return next;
       });
-      // Keep Firestore in sync — otherwise tasks referencing the deleted label
+      // Keep Drive in sync — otherwise tasks referencing the deleted label
       // only lose it locally, and a synced device sees the orphaned id again.
       if (userRef.current && changed.length > 0) {
         batchSaveItems(userRef.current.uid, MODE, changed).then(clearSyncError).catch(markSyncError);
@@ -757,7 +756,7 @@ export default function TasksApp() {
 
   useEffect(() => {
     if (!('Notification' in window) || Notification.permission !== 'granted') return undefined;
-    // Side effects (notifications, prompt, Firestore writes) run here, outside
+    // Side effects (notifications, prompt, Drive writes) run here, outside
     // any setState updater — updaters must stay pure since React may invoke
     // them more than once per commit.
     const runReminders = () => {
@@ -1948,7 +1947,7 @@ Rules:
             </button>
 
             {!authResolved ? (
-              // Firebase hasn't confirmed the session yet — a returning
+              // The session hasn't been confirmed yet — a returning
               // signed-in user is briefly indistinguishable from a signed-out
               // one. Show a neutral placeholder rather than "Connect Drive",
               // which would wrongly invite them to work as if offline.
@@ -2016,7 +2015,7 @@ Rules:
                 <span className="hidden sm:inline shrink-0">{t('header.reconnecting', 'Reconnecting…')}</span>
               </button>
             ) : !isCloudConfigured() ? (
-              // No Firebase project configured — the app still works fully on
+              // No Google OAuth client configured — the app still works fully on
               // localStorage, so offer nothing rather than a button that
               // cannot succeed.
               null

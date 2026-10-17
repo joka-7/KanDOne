@@ -24,7 +24,7 @@
 "src/utils/promptSafety.js" = "AI prompt input sanitization"
 "src/services" = "AI coach integration (aiAssistant.js)"
 "src/sanitize.js" = "Import/localStorage data whitelisting"
-"src/firebase.js" = "Lazy-loaded Firebase SDK (auth + Firestore sync)"
+"src/driveSync.js" = "Optional sync to the user's own Google Drive (appDataFolder)"
 "src/locales" = "i18n translation files: English, Hebrew, French"
 "src/__tests__" = "Vitest unit + integration tests"
 "e2e" = "Playwright end-to-end tests"

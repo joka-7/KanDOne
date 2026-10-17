@@ -112,6 +112,19 @@ describe('resolveTasksOnSignIn', () => {
     expect(result.pushToCloud).toBe(true);
   });
 
+  it.each([
+    ['drops a stale local copy of a task another device deleted', new Set(), ['1']],
+    ['keeps it when this device has an unsynced edit to it', new Set(['2']), ['1', '2']],
+  ])('%s', (_name, edited, expectedIds) => {
+    const local = [
+      { id: '1', name: 'Kept', status: 'active', steps: [] },
+      { id: '2', name: 'Deleted elsewhere', status: 'active', steps: [] },
+    ];
+    const cloud = [{ id: '1', name: 'Kept', status: 'active', steps: [] }];
+    const result = resolveTasksOnSignIn(local, cloud, { edited, deleted: new Set() }, ['2']);
+    expect(result.tasks.map(t => t.id)).toEqual(expectedIds);
+  });
+
   it('returns empty when neither side has tasks', () => {
     const result = resolveTasksOnSignIn([], null);
     expect(result.tasks).toEqual([]);
