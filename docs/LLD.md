@@ -638,6 +638,17 @@ write — Firestore is no longer used.
 - React plugin + `VitePWA({ registerType:'autoUpdate' })`.
 - Manifest: name/short_name `KanDOne`, theme `#059669`, standalone display, icon
   set; precache globs cover `js,css,html,ico,png,svg`.
+- The Android sign-in plugin (`@capgo/capacitor-social-login`) is reached only
+  from `nativeGoogleAuth.js`, which runs inside the Capacitor shell. Its chunks
+  stay in `dist/` for the APK but are named `social-login-<hash>.js`
+  (`chunkFileName` in `scripts/pwa-chunks.js`, set as `output.chunkFileNames`)
+  and listed in Workbox `globIgnores` (`NATIVE_ONLY_PRECACHE_IGNORES`), so web
+  visitors do not download them (about 56 KiB). A chunk gets the name only if
+  every module in it is the plugin or `tslib`; one that also holds anything else
+  keeps its normal name and stays precached, which is the safe side. `npm run check:precache`
+  (`scripts/check-precache.js`, run by CI after the build) fails if the service
+  worker precaches one, if no such chunk exists any more, or if a web chunk
+  imports one statically — which would load it without it being precached.
 - Vitest block: `jsdom` env, globals on, excludes `node_modules` and `e2e`.
 - Optional: `npm run build:analyze` enables `rollup-plugin-visualizer`.
 

@@ -135,6 +135,7 @@ KanDOne/
 ├── docs/
 ├── e2e/                   # Playwright end-to-end tests
 ├── public/
+├── scripts/
 ├── src/                   # App source — single entry point (TasksApp.jsx), no mode gate (unlike…
 ├── .ai                    # Ogen-ai submodule — the shared source of rules, skills and the ai-sync…
 ├── .env.example

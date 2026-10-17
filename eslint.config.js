@@ -36,6 +36,7 @@ export default defineConfig([
       'src/__tests__/**/*.{js,jsx}',
       'src/services/aiAssistant.js',
       'e2e/screenshots.spec.js',
+      'scripts/*.js',
     ],
     languageOptions: {
       globals: { ...globals.browser, ...globals.node },

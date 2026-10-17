@@ -137,6 +137,9 @@ KanDOne/
 │   ├── pwa-192x192.png
 │   ├── pwa-512x512.png
 │   └── pwa-64x64.png
+├── scripts/
+│   ├── check-precache.js
+│   └── pwa-chunks.js
 ├── src/                               # App source — single entry point (TasksApp.jsx), no mode gate (unlike…
 │   ├── __tests__/                     # Vitest unit + integration tests
 │   │   ├── APIKeySettings.test.jsx
@@ -154,6 +157,7 @@ KanDOne/
 │   │   ├── pendingSync.test.js
 │   │   ├── phaseB.test.js
 │   │   ├── promptSafety.test.js
+│   │   ├── pwaChunks.test.js
 │   │   ├── reminders.test.js
 │   │   ├── sanitize.test.js
 │   │   ├── storageKeys.e2eParity.test.js

@@ -446,7 +446,7 @@ Reminders only fire while the app is open or running as an installed PWA.
 | **Android Credential Manager + AuthorizationClient** | Google sign-in (Android app) | Via `@capgo/capacitor-social-login` (`src/nativeGoogleAuth.js`), because Google blocks OAuth inside a WebView. Same Web client ID; Google matches it to the Android OAuth client registered for package `io.github.joka7.kandone` and the release key's SHA-1. Renews the Drive token without UI. |
 | **Google Drive API v3** | Optional cloud mirror | One JSON file per device in the user's `appDataFolder`; queued writes coalesced into one upload of this device's file. |
 | **AI providers** | Coaching/chat | Gemini, Groq, OpenAI, Anthropic (SDK) and local Ollama. Streaming responses. Keys stored per-browser. |
-| **PWA / Workbox** | Offline + install | Precache app shell; Drive calls are not cached. |
+| **PWA / Workbox** | Offline + install | Precache app shell; Drive calls are not cached; the Android-only sign-in chunks are excluded (`scripts/pwa-chunks.js`). |
 | **Vercel** | Static hosting | SPA + security headers (full CSP) via `vercel.json`. |
 
 The OAuth client ID is a **public identifier** (not a secret). With
