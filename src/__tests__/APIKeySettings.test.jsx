@@ -80,4 +80,18 @@ describe('APIKeySettings — legacy path (dispatcherFeatures.ui: false)', () => 
     expect(localStorage.getItem('aiProvider')).toBe('groq');
     expect(localStorage.getItem('aiApiKey')).toBe('gsk_testkey');
   });
+
+  it('does not carry a saved key over to a different provider', async () => {
+    localStorage.setItem('aiProvider', 'gemini');
+    localStorage.setItem('aiApiKey', 'AIza-saved-gemini-key');
+    vi.resetModules();
+    vi.doMock('../modeldispatcher.config', () => ({ dispatcherFeatures: { ui: false } }));
+    const { default: FreshAPIKeySettings } = await import('../components/APIKeySettings');
+    const user = userEvent.setup();
+    render(<FreshAPIKeySettings {...defaultProps} />);
+
+    await user.click(screen.getByText('Groq'));
+
+    expect(document.querySelector('input[type="password"]').value).toBe('');
+  });
 });

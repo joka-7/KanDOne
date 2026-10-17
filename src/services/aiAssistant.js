@@ -1,4 +1,3 @@
-import { delimUserField } from '../utils/promptSafety';
 import {
   streamComplete as agentStreamComplete,
   buildMessages as agentBuildMessages,
@@ -65,10 +64,18 @@ let config = { providers: [], ollamaUrl: 'http://localhost:11434' };
 // Rate limiting: track last call time per action
 const rateLimitMap = new Map();
 const RATE_LIMIT_MS = 3000; // 3 second throttle between calls
-// Disable rate limiting in browser environments (where E2E tests run) and Node.js test environments
-const inBrowser = typeof window !== 'undefined';
-const isNodeTest = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || process.env.VITEST);
-let rateLimitingEnabled = !inBrowser && !isNodeTest;
+/**
+ * On for real users; off under unit tests and automated browsers, whose
+ * scripted chats legitimately send faster than a person can.
+ */
+export function shouldRateLimitByDefault({ isTest, isAutomated }) {
+  return !isTest && !isAutomated;
+}
+
+let rateLimitingEnabled = shouldRateLimitByDefault({
+  isTest: typeof process !== 'undefined' && Boolean(process.env.NODE_ENV === 'test' || process.env.VITEST),
+  isAutomated: typeof navigator !== 'undefined' && navigator.webdriver === true,
+});
 
 function checkRateLimit(key) {
   // Skip rate limiting in test environment
@@ -187,37 +194,4 @@ export async function streamChat(messages, systemPrompt, onChunk) {
     systemInstruction: systemPrompt,
     onChunk: emit,
   });
-}
-
-const LANG = { en: 'Respond in English.', he: 'ענה בעברית.', fr: 'Réponds en français.' };
-
-export function getGoalsTasksSystemPrompt(tasks = [], language = 'en') {
-  const langInstruction = LANG[language] || LANG.en;
-  const activeTasks = tasks
-    .filter(t => t.status === 'active')
-    .map(t => t.name)
-    .filter(Boolean)
-    .slice(0, 8)
-    .map((name) => delimUserField(name));
-  const completedTasks = tasks
-    .filter(t => t.status === 'completed')
-    .map(t => t.name)
-    .filter(Boolean)
-    .slice(0, 5)
-    .map((name) => delimUserField(name));
-
-  return `You are a personal productivity coach, goal-setting expert, and opportunity finder.
-
-You help people with three things:
-1. **Define clear goals**: Turn vague intentions into SMART goals (Specific, Measurable, Achievable, Relevant, Time-bound) and break them into actionable steps
-2. **Find tasks & projects**: Discover open-source projects to contribute to, side projects to start, or community initiatives to join
-3. **Find volunteering opportunities**: Match their skills and interests with meaningful volunteering — local nonprofits, online volunteering platforms (Catchafire, VolunteerMatch, UN Online Volunteers), mentorship programs, hackathons
-
-Their current tasks:
-${activeTasks.length ? `- Active: ${activeTasks.join(', ')}` : '- No active tasks yet'}
-${completedTasks.length ? `- Recently completed: ${completedTasks.join(', ')}` : ''}
-
-Start by asking what they want to focus on: defining a new goal, finding projects/tasks to work on, or finding volunteering opportunities. Then guide them with specific, personalized recommendations.
-
-${langInstruction}`;
 }

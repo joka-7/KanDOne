@@ -65,7 +65,7 @@ function NewApiKeySettings({ t, language, onClose }) {
         <div className="p-6 space-y-5 overflow-y-auto flex-1 min-h-0">
           <div className="flex gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-sm">
             <span className="flex-shrink-0" aria-hidden>⚠️</span>
-            <p>{t('settings.securityNotice', 'API keys are stored in this browser only. Anyone with access to this device, or a malicious extension, could read them. Job and chat data you send is transmitted to your chosen AI provider under your account.')}</p>
+            <p>{t('settings.securityNotice', 'API keys are stored in this browser only. Anyone with access to this device, or a malicious extension, could read them. Task and chat data you send is transmitted to your chosen AI provider under your account.')}</p>
           </div>
 
           <ModelPicker
@@ -138,7 +138,9 @@ function LegacyApiKeySettings({ t, onClose }) {
 
   const handleProviderChange = (p) => {
     setProvider(p);
-    setApiKey(localStorage.getItem('aiApiKey') || '');
+    // A key belongs to the provider it was entered for; carrying it over would
+    // send that provider a foreign credential, so the field starts empty.
+    setApiKey('');
     setModel(PROVIDERS[p]?.defaultModel || '');
     setVisible(false);
   };
@@ -186,7 +188,7 @@ function LegacyApiKeySettings({ t, onClose }) {
         <div className="p-6 space-y-5 overflow-y-auto flex-1 min-h-0">
           <div className="flex gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-sm">
             <span className="flex-shrink-0" aria-hidden>⚠️</span>
-            <p>{t('settings.securityNotice', 'API keys are stored in this browser only. Anyone with access to this device, or a malicious extension, could read them. Job and chat data you send is transmitted to your chosen AI provider under your account.')}</p>
+            <p>{t('settings.securityNotice', 'API keys are stored in this browser only. Anyone with access to this device, or a malicious extension, could read them. Task and chat data you send is transmitted to your chosen AI provider under your account.')}</p>
           </div>
 
           {alreadySet && (
