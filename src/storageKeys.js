@@ -6,7 +6,7 @@ export const STORAGE_KEYS = {
   tasksWelcome: 'hasCompletedOnboarding_tasks',
 };
 
-/** Shared task/step label library (localStorage; synced to Firestore when signed in). */
+/** Shared task/step label library (localStorage; synced to Google Drive when signed in). */
 export const TASKS_LABELS_KEY = 'tasksLabelsV1';
 
 /** User-chosen small/medium/large cut-points on the effort ladder (localStorage). */
