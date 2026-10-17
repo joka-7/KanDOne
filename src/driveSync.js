@@ -1,3 +1,5 @@
+import { Capacitor } from '@capacitor/core';
+import { createNativeGoogleAuth } from './nativeGoogleAuth';
 import { getCollectionName } from './statuses';
 import { clearPendingIds } from './utils/pendingSync';
 
@@ -42,8 +44,8 @@ const DEFAULT_FLUSH_DELAY_MS = 1500;
 
 /** Error raised for any failed Drive or Google sign-in request. */
 export class DriveSyncError extends Error {
-  constructor(message, { status = 0, code = '' } = {}) {
-    super(message);
+  constructor(message, { status = 0, code = '', cause } = {}) {
+    super(message, cause === undefined ? undefined : { cause });
     this.name = 'DriveSyncError';
     this.status = status;
     this.code = code;
@@ -243,6 +245,9 @@ function browserStorage(kind = 'localStorage') {
  *   the id is kept per tab in `tabStorage` (it still survives a reload).
  * @param {Storage|null} deps.tabStorage per-tab storage (sessionStorage).
  * @param {number} deps.flushDelayMs
+ * @param {{ requestToken: (o: { interactive: boolean }) => Promise<{access_token: string, expires_in: number}|null>,
+ *   signOut: () => Promise<void> } | null} deps.nativeAuth the Android app's
+ *   sign-in (see nativeGoogleAuth.js); null in a browser, which uses Google's popup.
  */
 export function createDriveSync({
   clientId,
@@ -255,12 +260,14 @@ export function createDriveSync({
   withLock = withBrowserLock,
   persistDeviceId = hasWebLocks(),
   flushDelayMs = DEFAULT_FLUSH_DELAY_MS,
+  nativeAuth = null,
 }) {
   let session = readJson(storage, SESSION_KEY);
   let gis = null;
   let gisLoading = null;
   let tokenClient = null;
   let pendingTokenRequest = null;
+  let pendingRenewal = null;
   let expiryTimer = null;
   const listeners = new Set();
 
@@ -308,11 +315,15 @@ export function createDriveSync({
     for (const listener of listeners) listener(user);
   }
 
-  /** Tell the header the moment the token lapses, not on the next failed save. */
+  /**
+   * When the token lapses: in the app, renew it silently; in a browser, tell
+   * the header right away rather than on the next failed save.
+   */
   function scheduleExpiryNotice() {
     clearTimeout(expiryTimer);
     if (!hasValidToken()) return;
-    expiryTimer = setTimeout(notifyListeners, session.expiresAt - TOKEN_EXPIRY_MARGIN_MS - now());
+    const onExpiry = nativeAuth ? () => renewSilently().catch(() => {}) : notifyListeners;
+    expiryTimer = setTimeout(onExpiry, session.expiresAt - TOKEN_EXPIRY_MARGIN_MS - now());
   }
 
   function setSession(next) {
@@ -345,6 +356,12 @@ export function createDriveSync({
    */
   function requestToken() {
     if (pendingTokenRequest) return pendingTokenRequest;
+    if (nativeAuth) {
+      pendingTokenRequest = nativeAuth.requestToken({ interactive: true })
+        .then(requireToken)
+        .finally(() => { pendingTokenRequest = null; });
+      return pendingTokenRequest;
+    }
     const run = (loaded) => new Promise((resolve, reject) => {
       gis = loaded;
       const client = getTokenClient();
@@ -364,6 +381,36 @@ export function createDriveSync({
       .finally(() => { pendingTokenRequest = null; });
     return pendingTokenRequest;
   }
+
+  function requireToken(response) {
+    if (!response?.access_token) {
+      throw new DriveSyncError('Google did not grant access to Drive.', { code: 'access_denied' });
+    }
+    return response;
+  }
+
+  const expiredSession = () => ({ ...session, accessToken: null, expiresAt: 0 });
+
+  /**
+   * App only: renew an expired token for the signed-in user without UI. On
+   * failure the session is marked expired, so the header offers Connect Drive.
+   */
+  function renewSilently() {
+    pendingRenewal ??= nativeAuth.requestToken({ interactive: false })
+      .then(requireToken)
+      .then((response) => {
+        setSession({ ...session, accessToken: response.access_token, expiresAt: now() + Number(response.expires_in) * 1000 });
+        return response.access_token;
+      })
+      .catch((err) => {
+        if (session?.accessToken) setSession(expiredSession());
+        throw new DriveSyncError('Google Drive session expired.', { code: 'signed-out', cause: err });
+      })
+      .finally(() => { pendingRenewal = null; });
+    return pendingRenewal;
+  }
+
+  const canRenewSilently = () => Boolean(nativeAuth && session?.user);
 
   async function fetchUser(accessToken) {
     const res = await fetchImpl(USERINFO_URL, { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -390,24 +437,27 @@ export function createDriveSync({
 
   /**
    * Never opens a popup: a background save is not a click, so the browser
-   * would block it. An expired token instead reports "signed out", the header
-   * offers Connect Drive, and pendingSync replays local edits on reconnect.
+   * would block it. In a browser an expired token instead reports "signed
+   * out", the header offers Connect Drive, and pendingSync replays local edits
+   * on reconnect. The app renews the token silently first.
    */
-  function accessToken() {
+  async function accessToken() {
     if (hasValidToken()) return session.accessToken;
-    if (session?.accessToken) setSession({ ...session, accessToken: null, expiresAt: 0 });
+    if (canRenewSilently()) return renewSilently();
+    if (session?.accessToken) setSession(expiredSession());
     throw new DriveSyncError('Google Drive session expired.', { code: 'signed-out' });
   }
 
-  async function driveFetch(url, init = {}) {
-    const token = accessToken();
+  async function driveFetch(url, init = {}, retried = false) {
+    const token = await accessToken();
     const res = await fetchImpl(url, {
       ...init,
       headers: { ...init.headers, Authorization: `Bearer ${token}` },
     });
     if (res.status === 401 && session) {
       // Revoked or expired early: drop the token so the header offers to reconnect.
-      setSession({ ...session, accessToken: null, expiresAt: 0 });
+      setSession(expiredSession());
+      if (canRenewSilently() && !retried) return driveFetch(url, init, true);
     }
     if (!res.ok) throw new DriveSyncError(`Google Drive request failed (${res.status}).`, { status: res.status });
     return res;
@@ -554,21 +604,36 @@ export function createDriveSync({
     isCloudConfigured: isConfigured,
 
     /**
-     * True when a usable token is stored. An expired one is not restorable
+     * True when a usable token is stored, or (app only) when an expired one can
+     * be renewed silently. In a browser an expired one is not restorable
      * without a click, so the header should offer Connect Drive, not "Reconnecting…".
      */
-    hasRestorableSession: async () => isConfigured() && hasValidToken(),
+    hasRestorableSession: async () => isConfigured() && (hasValidToken() || canRenewSilently()),
 
     /**
-     * Reports the signed-in user now and on every change. Also starts loading
-     * Google's script, so a Connect Drive click can open the popup synchronously.
+     * Reports the signed-in user on subscribing and on every change. In the app
+     * a stored-but-expired session is renewed first, so that first report is
+     * the real answer rather than a "signed out" that flips a moment later.
+     * In a browser it also starts loading Google's script, so a Connect Drive
+     * click can open the popup synchronously.
      */
     onAuthChange(callback) {
-      listeners.add(callback);
-      scheduleExpiryNotice();
-      callback(isConfigured() ? currentUser() : null);
-      if (isConfigured()) ensureGis().catch(() => {});
-      return () => listeners.delete(callback);
+      let unsubscribed = false;
+      // Subscribe only after the first report, so the renewal's own change
+      // notice does not deliver the same user twice.
+      const subscribe = () => {
+        if (unsubscribed) return;
+        listeners.add(callback);
+        scheduleExpiryNotice();
+        callback(isConfigured() ? currentUser() : null);
+      };
+      if (isConfigured() && !hasValidToken() && canRenewSilently()) {
+        renewSilently().catch(() => {}).finally(subscribe);
+      } else {
+        subscribe();
+      }
+      if (isConfigured() && !nativeAuth) ensureGis().catch(() => {});
+      return () => { unsubscribed = true; listeners.delete(callback); };
     },
 
     signInWithGoogle: signIn,
@@ -582,6 +647,8 @@ export function createDriveSync({
       ownFileId = null;
       latestSeenAt = 0;
       setSession(null);
+      // Also forget the account on the device, so the next Connect asks again.
+      if (nativeAuth) await nativeAuth.signOut().catch(() => {});
     },
 
     async loadUserProfile() {
@@ -638,9 +705,15 @@ export function formatSignInError(err) {
   return err?.message || 'Sign-in failed.';
 }
 
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+const fetchImpl = (...args) => fetch(...args);
+
 const driveSync = createDriveSync({
-  clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
-  fetchImpl: (...args) => fetch(...args),
+  clientId: GOOGLE_CLIENT_ID,
+  fetchImpl,
+  nativeAuth: Capacitor.isNativePlatform()
+    ? createNativeGoogleAuth({ webClientId: GOOGLE_CLIENT_ID, fetchImpl })
+    : null,
 });
 
 export const {
