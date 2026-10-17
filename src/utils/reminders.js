@@ -78,6 +78,21 @@ export async function requestReminderPermission() {
   return Notification.requestPermission();
 }
 
+/**
+ * Show a reminder through the service worker when one is active. Android
+ * Chrome rejects `new Notification()` outright ("Illegal constructor") and
+ * iOS only delivers notifications from an installed PWA's worker, so the
+ * constructor is only the fallback for desktop pages without a worker.
+ */
+export async function showReminderNotification(title, options, nav = navigator) {
+  const registration = await nav.serviceWorker?.getRegistration?.();
+  if (registration?.showNotification) {
+    await registration.showNotification(title, options);
+    return;
+  }
+  new Notification(title, options);
+}
+
 export function formatDueDateTime(dateStr, timeStr, lang, formatDateFn) {
   if (!dateStr) return '';
   const dateLabel = formatDateFn(dateStr, lang);
