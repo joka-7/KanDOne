@@ -40,7 +40,10 @@ export function createNativeGoogleAuth({ webClientId, fetchImpl, loadPlugin = lo
   async function withExpiry(accessToken) {
     if (!accessToken) return null;
     const res = await fetchImpl(`${TOKENINFO_URL}?access_token=${encodeURIComponent(accessToken)}`);
-    if (!res.ok) return null;
+    // 400 is Google saying the token is invalid; anything else is a failed
+    // check, which must not be reported to the user as "access denied".
+    if (res.status === 400) return null;
+    if (!res.ok) throw new Error(`Could not check the Google token (${res.status}).`);
     const info = await res.json();
     const expiresIn = Number(info.expires_in);
     return Number.isFinite(expiresIn) && expiresIn > 0 ? { access_token: accessToken, expires_in: expiresIn } : null;

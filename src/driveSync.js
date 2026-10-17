@@ -39,6 +39,15 @@ const DEVICE_KEY = 'kandone_drive_device_v1';
 /** Treat a token as expired a little early so no request starts with one about to die. */
 const TOKEN_EXPIRY_MARGIN_MS = 60_000;
 
+/**
+ * The Android app renews through the OS, which hands back the *same* token
+ * until it has actually expired, so renewal must wait almost to the end.
+ */
+const NATIVE_TOKEN_EXPIRY_MARGIN_MS = 5_000;
+
+/** After a failed silent renewal, wait this long before trying again on its own. */
+const RENEWAL_BACKOFF_MS = 5 * 60_000;
+
 /** Coalesce bursts of edits (drag, typing) into one Drive upload. */
 const DEFAULT_FLUSH_DELAY_MS = 1500;
 
@@ -278,12 +287,27 @@ export function createDriveSync({
   let latestSeenAt = 0;
 
   const isConfigured = () => Boolean(clientId);
+  const expiryMargin = nativeAuth ? NATIVE_TOKEN_EXPIRY_MARGIN_MS : TOKEN_EXPIRY_MARGIN_MS;
 
   const hasValidToken = () => Boolean(
-    session?.accessToken && session.expiresAt - TOKEN_EXPIRY_MARGIN_MS > now(),
+    session?.accessToken && session.expiresAt - expiryMargin > now(),
   );
 
-  const currentUser = () => (hasValidToken() ? session.user : null);
+  /**
+   * Who the header shows as connected. In a browser that is the token's
+   * lifetime. In the app a lapsed token is renewed silently, so the user stays
+   * connected until a renewal actually fails.
+   */
+  const currentUser = () => {
+    if (!nativeAuth) return hasValidToken() ? session.user : null;
+    return session?.user && !session.renewalFailedAt ? session.user : null;
+  };
+
+  /** App only: a stored account whose token can be renewed without UI, outside the post-failure backoff. */
+  const canRenewSilently = () => Boolean(
+    nativeAuth && session?.user
+      && (!session.renewalFailedAt || now() - session.renewalFailedAt >= RENEWAL_BACKOFF_MS),
+  );
 
   let device = null;
   const deviceStorage = persistDeviceId ? storage : tabStorage;
@@ -310,20 +334,27 @@ export function createDriveSync({
 
   const ownFileName = () => `${FILE_PREFIX}${deviceId()}.json`;
 
+  let lastReportedUid = currentUser()?.uid ?? null;
+
+  /**
+   * Report only a change of *who is connected*. A token swap for the same user
+   * is not one: TasksApp answers every report with a full pull-and-merge.
+   */
   function notifyListeners() {
     const user = currentUser();
+    if ((user?.uid ?? null) === lastReportedUid) return;
+    lastReportedUid = user?.uid ?? null;
     for (const listener of listeners) listener(user);
   }
 
   /**
-   * When the token lapses: in the app, renew it silently; in a browser, tell
-   * the header right away rather than on the next failed save.
+   * Browser only: tell the header the moment the token lapses, not on the
+   * next failed save. The app renews lazily on the next Drive call instead.
    */
   function scheduleExpiryNotice() {
     clearTimeout(expiryTimer);
-    if (!hasValidToken()) return;
-    const onExpiry = nativeAuth ? () => renewSilently().catch(() => {}) : notifyListeners;
-    expiryTimer = setTimeout(onExpiry, session.expiresAt - TOKEN_EXPIRY_MARGIN_MS - now());
+    if (nativeAuth || !hasValidToken()) return;
+    expiryTimer = setTimeout(notifyListeners, session.expiresAt - expiryMargin - now());
   }
 
   function setSession(next) {
@@ -392,25 +423,29 @@ export function createDriveSync({
   const expiredSession = () => ({ ...session, accessToken: null, expiresAt: 0 });
 
   /**
-   * App only: renew an expired token for the signed-in user without UI. On
-   * failure the session is marked expired, so the header offers Connect Drive.
+   * App only: renew an expired token for the signed-in user without UI. A
+   * failure marks the session so the header offers Connect Drive, and stops
+   * every queued save from retrying the OS round-trip until the backoff ends.
    */
   function renewSilently() {
     pendingRenewal ??= nativeAuth.requestToken({ interactive: false })
       .then(requireToken)
       .then((response) => {
-        setSession({ ...session, accessToken: response.access_token, expiresAt: now() + Number(response.expires_in) * 1000 });
+        setSession({
+          ...session,
+          accessToken: response.access_token,
+          expiresAt: now() + Number(response.expires_in) * 1000,
+          renewalFailedAt: null,
+        });
         return response.access_token;
       })
       .catch((err) => {
-        if (session?.accessToken) setSession(expiredSession());
+        if (session) setSession({ ...expiredSession(), renewalFailedAt: now() });
         throw new DriveSyncError('Google Drive session expired.', { code: 'signed-out', cause: err });
       })
       .finally(() => { pendingRenewal = null; });
     return pendingRenewal;
   }
-
-  const canRenewSilently = () => Boolean(nativeAuth && session?.user);
 
   async function fetchUser(accessToken) {
     const res = await fetchImpl(USERINFO_URL, { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -455,7 +490,8 @@ export function createDriveSync({
       headers: { ...init.headers, Authorization: `Bearer ${token}` },
     });
     if (res.status === 401 && session) {
-      // Revoked or expired early: drop the token so the header offers to reconnect.
+      // Revoked or expired early: drop the token. A browser then offers to
+      // reconnect; the app (still connected) renews and retries once.
       setSession(expiredSession());
       if (canRenewSilently() && !retried) return driveFetch(url, init, true);
     }
@@ -648,7 +684,10 @@ export function createDriveSync({
       latestSeenAt = 0;
       setSession(null);
       // Also forget the account on the device, so the next Connect asks again.
-      if (nativeAuth) await nativeAuth.signOut().catch(() => {});
+      // The app is already signed out locally, so a failure here is not fatal.
+      if (nativeAuth) {
+        await nativeAuth.signOut().catch((err) => console.warn('KanDOne: device sign-out failed', err?.message));
+      }
     },
 
     async loadUserProfile() {

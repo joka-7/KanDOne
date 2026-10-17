@@ -526,15 +526,49 @@ describe('driveSync.js', () => {
         expect(seen).toEqual(expected);
       });
 
-      it('renews the token when it lapses instead of reporting the user signed out', async () => {
-        const nativeAuth = fakeNativeAuth();
-        const { sync } = build({ storage: signedIn(), nativeAuth });
+      it('reports the user once, through a lapsed token, a rejected token and their silent renewals', async () => {
+        const google = fakeGoogle({ revokedTokens: ['app-token-1'] });
+        const { sync } = build({ google, storage: signedIn(), nativeAuth: fakeNativeAuth() });
         const seen = [];
-
         sync.onAuthChange((u) => seen.push(u?.email ?? null));
-        await vi.advanceTimersByTimeAsync(3_600_000);
 
-        expect([seen.includes(null), nativeAuth.requestToken.mock.calls.length]).toEqual([false, 1]);
+        await vi.advanceTimersByTimeAsync(3_600_000);
+        await sync.loadAllItems('uid', 'tasks');
+
+        expect(seen).toEqual([USER.email]);
+      });
+
+      it('keeps using a token in its last minute, because Android only renews one that has really expired', async () => {
+        const nativeAuth = fakeNativeAuth();
+        const storage = memoryStorage({ [SESSION_KEY]: validSession({ expiresAt: NOW + 30_000 }) });
+        const { sync } = build({ storage, nativeAuth });
+
+        const done = sync.updateItem('uid', 'tasks', { id: 1 });
+        await settle();
+        await done;
+
+        expect(nativeAuth.requestToken).not.toHaveBeenCalled();
+      });
+
+      it('reports signed out when renewal fails, and does not retry it on every save until the backoff ends', async () => {
+        const nativeAuth = fakeNativeAuth({ silent: 'fail' });
+        const { sync } = build({ storage: expiredSession(), nativeAuth });
+        const seen = [];
+        sync.onAuthChange((u) => seen.push(u?.email ?? null));
+        await vi.advanceTimersByTimeAsync(0);
+
+        for (const id of [1, 2]) {
+          const done = sync.updateItem('uid', 'tasks', { id });
+          done.catch(() => {});
+          await settle();
+        }
+        const duringBackoff = nativeAuth.requestToken.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(5 * 60_000);
+        const late = sync.updateItem('uid', 'tasks', { id: 3 });
+        late.catch(() => {});
+        await settle();
+
+        expect([seen, duringBackoff, nativeAuth.requestToken.mock.calls.length]).toEqual([[null], 1, 2]);
       });
     });
 

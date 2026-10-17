@@ -447,10 +447,16 @@ everything else is identical:
 | Behaviour | Browser | Android app |
 | --- | --- | --- |
 | Connect Drive | GIS popup | `nativeAuth.requestToken({ interactive: true })` — Android account sheet + Drive consent |
-| Token lapses | header reports signed out | renewed silently at expiry (`interactive: false`); signed out only if that needs the user |
+| Token lapses | header reports signed out (timer at expiry − 60 s) | stays connected; renewed silently on the next Drive call (`interactive: false`), at expiry − 5 s, because the OS returns the same token until it has really expired |
+| Renewal fails | — | header reports signed out; no further silent attempt for 5 min, so queued saves don't each retry it |
 | `401` from Drive | session marked expired | renewed silently and the request retried once |
 | Stored expired session at startup | not restorable | renewed before the first `onAuthChange` report; `hasRestorableSession()` is true |
 | `signOut()` | forget session | also signs the account out on the device |
+
+`onAuthChange` listeners hear only a change of *who is connected* (user ↔
+signed out), never a token swap for the same user: TasksApp answers each report
+with a full pull-and-merge. Known limit: if Google needs fresh consent (e.g. the
+user revoked access), a silent renewal can show Google's consent screen.
 
 ### 6.1a `nativeGoogleAuth.js`
 

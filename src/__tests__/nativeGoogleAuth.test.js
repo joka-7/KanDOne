@@ -57,6 +57,12 @@ describe('nativeGoogleAuth.js', () => {
         expect(await auth.requestToken({ interactive: true })).toBeNull();
       });
 
+      it('rejects rather than reporting a denied grant when the token check itself fails', async () => {
+        const { auth } = build({ fetchImpl: fakeTokenInfo({ status: 503 }) });
+
+        await expect(auth.requestToken({ interactive: true })).rejects.toThrow('503');
+      });
+
       it('initialises the plugin once with the web client id, and retries after a failed start', async () => {
         const plugin = fakePlugin({ initFailures: 1 });
         const { auth } = build({ plugin });

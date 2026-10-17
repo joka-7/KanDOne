@@ -43,6 +43,13 @@ jobs:
 
       - run: npm ci
 
+      # This workflow can publish a release on its own, so it does not rely on
+      # the separate CI workflow having passed.
+      - name: Lint and unit tests
+        run: |
+          npm run lint
+          npm test
+
       - name: Build the web app into the Android project
         run: |
           npm run build
@@ -64,12 +71,15 @@ jobs:
           printf '%s' "$KEYSTORE_B64" | tr -d ' \r\n\t' | base64 -d > release.jks 2>/dev/null \
             || { echo "::error::ANDROID_KEYSTORE_B64 + ANDROID_KEYSTORE_B64_2 are not valid base64. Paste both files again exactly."; exit 1; }
           KEY_PASSWORD=$(printf '%s' "$KEY_PASSWORD" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-          keytool -list -keystore release.jks -storepass "$KEY_PASSWORD" -alias kandone > /dev/null 2>&1 \
+          export KEY_PASSWORD
+          # Passwords go through the environment, never on a command line other processes can read.
+          keytool -list -keystore release.jks -storepass:env KEY_PASSWORD -alias kandone > /dev/null 2>&1 \
             || { echo "::error::ANDROID_KEY_PASSWORD does not open the keystore, or it has no 'kandone' key."; exit 1; }
-          echo "::notice::Signing key $(keytool -list -v -keystore release.jks -storepass "$KEY_PASSWORD" -alias kandone | grep -o 'SHA1:.*')"
-          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          echo "::notice::Signing key $(keytool -list -v -keystore release.jks -storepass:env KEY_PASSWORD -alias kandone | grep -o 'SHA1:.*')"
+          # Newest stable build-tools (skip rc/preview directories).
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | grep -E '/[0-9]+(\.[0-9]+)*$' | sort -V | tail -1)
           "$BT/zipalign" -f -p 4 android/app/build/outputs/apk/release/app-release-unsigned.apk aligned.apk
-          "$BT/apksigner" sign --ks release.jks --ks-key-alias kandone --ks-pass "pass:$KEY_PASSWORD" --key-pass "pass:$KEY_PASSWORD" \
+          "$BT/apksigner" sign --ks release.jks --ks-key-alias kandone --ks-pass env:KEY_PASSWORD --key-pass env:KEY_PASSWORD \
             --out KanDOne.apk aligned.apk
           "$BT/apksigner" verify KanDOne.apk
           rm -f release.jks aligned.apk
@@ -84,6 +94,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "android-$VERSION_NAME" KanDOne.apk --target "$GITHUB_SHA" --latest \
-            --title "KanDOne Android $VERSION_NAME" \
-            --notes "Android app built from $GITHUB_SHA. Install: download KanDOne.apk on the phone and open it (allow installing from this source when asked)."
+          # A re-run keeps the run number, so the release may already exist.
+          if gh release view "android-$VERSION_NAME" > /dev/null 2>&1; then
+            gh release upload "android-$VERSION_NAME" KanDOne.apk --clobber
+          else
+            gh release create "android-$VERSION_NAME" KanDOne.apk --target "$GITHUB_SHA" --latest \
+              --title "KanDOne Android $VERSION_NAME" \
+              --notes "Android app built from $GITHUB_SHA. Install: download KanDOne.apk on the phone and open it (allow installing from this source when asked)."
+          fi
