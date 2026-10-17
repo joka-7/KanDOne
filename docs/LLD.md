@@ -450,7 +450,7 @@ everything else is identical:
 | Token lapses | header reports signed out (timer at expiry − 60 s) | stays connected; renewed silently on the next Drive call (`interactive: false`), at expiry − 5 s, because the OS returns the same token until it has really expired |
 | Renewal fails | — | header reports signed out; no further silent attempt for 5 min, so queued saves don't each retry it |
 | `401` from Drive | session marked expired | renewed silently and the request retried once |
-| Stored expired session at startup | not restorable | renewed before the first `onAuthChange` report; `hasRestorableSession()` is true |
+| Stored session with a lapsed token at startup | not restorable | reported connected (`hasRestorableSession()` true); the first Drive call renews it, and only a failed renewal reports signed out |
 | `signOut()` | forget session | also signs the account out on the device |
 
 `onAuthChange` listeners hear only a change of *who is connected* (user ↔

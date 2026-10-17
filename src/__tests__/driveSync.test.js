@@ -514,16 +514,27 @@ describe('driveSync.js', () => {
 
     describe('onAuthChange', () => {
       it.each([
-        ['renewed silently', 'grant', [USER.email]],
-        ['that cannot be renewed without the user', 'fail', [null]],
-      ])('first reports a stored, expired session only once it is %s', async (_name, silent, expected) => {
+        ['can be renewed', 'grant', [USER.email]],
+        ['cannot be renewed without the user', 'fail', [USER.email, null]],
+      ])('reports a stored session with a lapsed token as connected, and signed out only once it %s', async (_name, silent, expected) => {
         const { sync } = build({ storage: expiredSession(), nativeAuth: fakeNativeAuth({ silent }) });
         const seen = [];
-
         sync.onAuthChange((u) => seen.push(u?.email ?? null));
-        await vi.advanceTimersByTimeAsync(0);
+
+        await sync.loadAllItems('uid', 'tasks').catch(() => {});
 
         expect(seen).toEqual(expected);
+      });
+
+      it('reports a sign-in to a subscriber whose first report was "signed out"', async () => {
+        const { sync } = build({ storage: memoryStorage({ [SESSION_KEY]: validSession({ expiresAt: NOW + 120_000 }) }) });
+        vi.setSystemTime(NOW + 120_000);
+        const seen = [];
+        sync.onAuthChange((u) => seen.push(u?.email ?? null));
+
+        await sync.signInWithGoogle();
+
+        expect(seen).toEqual([null, USER.email]);
       });
 
       it('reports the user once, through a lapsed token, a rejected token and their silent renewals', async () => {
@@ -555,7 +566,6 @@ describe('driveSync.js', () => {
         const { sync } = build({ storage: expiredSession(), nativeAuth });
         const seen = [];
         sync.onAuthChange((u) => seen.push(u?.email ?? null));
-        await vi.advanceTimersByTimeAsync(0);
 
         for (const id of [1, 2]) {
           const done = sync.updateItem('uid', 'tasks', { id });
@@ -568,7 +578,7 @@ describe('driveSync.js', () => {
         late.catch(() => {});
         await settle();
 
-        expect([seen, duringBackoff, nativeAuth.requestToken.mock.calls.length]).toEqual([[null], 1, 2]);
+        expect([seen, duringBackoff, nativeAuth.requestToken.mock.calls.length]).toEqual([[USER.email, null], 1, 2]);
       });
     });
 

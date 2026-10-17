@@ -647,29 +647,20 @@ export function createDriveSync({
     hasRestorableSession: async () => isConfigured() && (hasValidToken() || canRenewSilently()),
 
     /**
-     * Reports the signed-in user on subscribing and on every change. In the app
-     * a stored-but-expired session is renewed first, so that first report is
-     * the real answer rather than a "signed out" that flips a moment later.
+     * Reports the connected user on subscribing, then on every change. In the
+     * app a stored session whose token has lapsed still reports the user: the
+     * first Drive call renews it, and only a failed renewal reports signed out.
      * In a browser it also starts loading Google's script, so a Connect Drive
      * click can open the popup synchronously.
      */
     onAuthChange(callback) {
-      let unsubscribed = false;
-      // Subscribe only after the first report, so the renewal's own change
-      // notice does not deliver the same user twice.
-      const subscribe = () => {
-        if (unsubscribed) return;
-        listeners.add(callback);
-        scheduleExpiryNotice();
-        callback(isConfigured() ? currentUser() : null);
-      };
-      if (isConfigured() && !hasValidToken() && canRenewSilently()) {
-        renewSilently().catch(() => {}).finally(subscribe);
-      } else {
-        subscribe();
-      }
+      listeners.add(callback);
+      scheduleExpiryNotice();
+      const user = isConfigured() ? currentUser() : null;
+      lastReportedUid = user?.uid ?? null;
+      callback(user);
       if (isConfigured() && !nativeAuth) ensureGis().catch(() => {});
-      return () => { unsubscribed = true; listeners.delete(callback); };
+      return () => listeners.delete(callback);
     },
 
     signInWithGoogle: signIn,
