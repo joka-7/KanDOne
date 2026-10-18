@@ -57,6 +57,14 @@ const COMPACTION_MIN_INTERVAL_MS = 60 * 60 * 1000;
 
 /** A pull deletes at most this many idle files; the rest wait for the next pass, so it never fans out. */
 const MAX_DELETES_PER_PASS = 10;
+/** Drive answers 429 and transient 5xx when it is busy; asking again a moment later usually works. */
+const MAX_ATTEMPTS = 4;
+const RETRY_BASE_MS = 500;
+const RETRY_MAX_MS = 30_000;
+const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
+
+/** How many device files download at once; a user with many devices would otherwise open them all together. */
+const DOWNLOAD_CONCURRENCY = 4;
 
 /** After a failed silent renewal, wait this long before trying again on its own. */
 const RENEWAL_BACKOFF_MS = 5 * 60_000;
@@ -385,6 +393,28 @@ function browserStorage(kind = 'localStorage') {
  *   signOut: () => Promise<void> } | null} deps.nativeAuth the Android app's
  *   sign-in (see nativeGoogleAuth.js); null in a browser, which uses Google's popup.
  */
+/**
+ * Run `task` over `items`, at most `limit` at a time, and report each outcome
+ * the way Promise.allSettled does, in input order.
+ */
+async function settleWithConcurrency(items, limit, task) {
+  const results = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      try {
+        results[index] = { status: 'fulfilled', value: await task(items[index]) };
+      } catch (reason) {
+        results[index] = { status: 'rejected', reason };
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 export function createDriveSync({
   clientId,
   fetchImpl,
@@ -397,6 +427,8 @@ export function createDriveSync({
   persistDeviceId = hasWebLocks(),
   flushDelayMs = DEFAULT_FLUSH_DELAY_MS,
   nativeAuth = null,
+  sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); }),
+  random = Math.random,
 }) {
   let session = readJson(storage, SESSION_KEY);
   let gis = null;
@@ -415,6 +447,14 @@ export function createDriveSync({
   let lastCompactionAt = null;
   // Files whose last read had entries the parser dropped (see parsingDroppedData).
   const lossyFileIds = new Set();
+
+  // A file whose modifiedTime has not changed since the last pull is not
+  // downloaded again. Keyed by file id.
+  const documentCache = new Map();
+  // Counts uploads, so a read started before one is never handed to a caller
+  // that asked after it.
+  let writeEpoch = 0;
+  let readInFlight = null;
 
   const isConfigured = () => Boolean(clientId);
   const expiryMargin = nativeAuth ? NATIVE_TOKEN_EXPIRY_MARGIN_MS : TOKEN_EXPIRY_MARGIN_MS;
@@ -459,6 +499,7 @@ export function createDriveSync({
     device = null;
     writeJson(deviceStorage, DEVICE_KEY, null);
     ownFileId = null;
+    documentCache.clear();
     return emptyDocument(deviceId());
   }
 
@@ -590,6 +631,7 @@ export function createDriveSync({
     const user = await fetchUser(response.access_token);
     if (session?.user?.uid !== user.uid) {
       ownFileId = null;
+      documentCache.clear();
       latestSeenAt = 0;
     }
     setSession({
@@ -613,7 +655,25 @@ export function createDriveSync({
     throw new DriveSyncError('Google Drive session expired.', { code: 'signed-out' });
   }
 
-  async function driveFetch(url, init = {}, retried = false) {
+  /**
+   * Whether asking again can help. A 429 means the request was refused, so any
+   * request may repeat. A 5xx may have been applied before it failed, and
+   * repeating a file *creation* then could leave two files, so only requests
+   * that are safe to repeat (reads, deletes, whole-file uploads) are retried.
+   */
+  function worthRetrying(status, method) {
+    if (!RETRYABLE_STATUSES.has(status)) return false;
+    return status === 429 || (method ?? 'GET') !== 'POST';
+  }
+
+  /** Exponential, jittered, and never shorter than the Retry-After the server sent. */
+  function retryDelayMs(attempt, res) {
+    const asked = Number(res.headers?.get?.('Retry-After'));
+    const backoff = RETRY_BASE_MS * 2 ** attempt * (0.5 + random());
+    return Math.min(RETRY_MAX_MS, Math.max(backoff, Number.isFinite(asked) ? asked * 1000 : 0));
+  }
+
+  async function driveFetch(url, init = {}, retried = false, attempt = 0) {
     const token = await accessToken();
     const res = await fetchImpl(url, {
       ...init,
@@ -623,7 +683,11 @@ export function createDriveSync({
       // Revoked or expired early: drop the token. A browser then offers to
       // reconnect; the app (still connected) renews and retries once.
       setSession(expiredSession());
-      if (canRenewSilently() && !retried) return driveFetch(url, init, true);
+      if (canRenewSilently() && !retried) return driveFetch(url, init, true, attempt);
+    }
+    if (!res.ok && attempt < MAX_ATTEMPTS - 1 && worthRetrying(res.status, init.method)) {
+      await sleep(retryDelayMs(attempt, res));
+      return driveFetch(url, init, retried, attempt + 1);
     }
     if (!res.ok) throw new DriveSyncError(`Google Drive request failed (${res.status}).`, { status: res.status });
     return res;
@@ -666,10 +730,12 @@ export function createDriveSync({
    * rate limit, auth) fails the whole read — a merge missing a device's newer
    * edits and deletes would let this device re-upload stale copies over them.
    */
-  async function readMerged() {
+  async function readMergedFresh() {
     const files = (await listFiles(`name contains '${FILE_PREFIX}'`))
       .filter((file) => file.name.startsWith(FILE_PREFIX) && file.name.endsWith('.json'));
-    const results = await Promise.allSettled(files.map((file) => readFile(file.id)));
+    const listed = new Set(files.map((file) => file.id));
+    for (const id of documentCache.keys()) if (!listed.has(id)) documentCache.delete(id);
+    const results = await settleWithConcurrency(files, DOWNLOAD_CONCURRENCY, readFileUnlessUnchanged);
     const fatal = results.find((r) => r.status === 'rejected' && !isPermanentlyUnreadable(r.reason));
     if (fatal) throw fatal.reason;
     const skipped = results.filter((r) => r.status === 'rejected');
@@ -719,6 +785,25 @@ export function createDriveSync({
     }
   }
 
+  /** The device file's parsed content, from the cache while its modifiedTime has not moved. */
+  async function readFileUnlessUnchanged(file) {
+    const cached = documentCache.get(file.id);
+    if (file.modifiedTime && cached?.modifiedTime === file.modifiedTime) return cached.document;
+    const document = await readFile(file.id);
+    if (file.modifiedTime) documentCache.set(file.id, { modifiedTime: file.modifiedTime, document });
+    return document;
+  }
+
+  /** Concurrent callers (tasks and labels at sign-in) share one read; a read from before an upload is never reused after it. */
+  function readMerged() {
+    if (readInFlight?.epoch !== writeEpoch) {
+      const entry = { epoch: writeEpoch };
+      entry.promise = readMergedFresh().finally(() => { if (readInFlight === entry) readInFlight = null; });
+      readInFlight = entry;
+    }
+    return readInFlight.promise;
+  }
+
   async function readOwnDocument() {
     if (!ownFileId) {
       const [file] = await listFiles(`name = '${ownFileName()}'`);
@@ -740,12 +825,15 @@ export function createDriveSync({
 
   async function writeOwnDocument(document) {
     const body = JSON.stringify(document);
+    writeEpoch += 1;
     if (ownFileId) {
+      documentCache.delete(ownFileId);
       await driveFetch(`${DRIVE_UPLOAD_API}/files/${encodeURIComponent(ownFileId)}?uploadType=media`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body,
       });
+      writeEpoch += 1;
       return;
     }
     const boundary = `kandone-${now()}`;
@@ -761,6 +849,7 @@ export function createDriveSync({
       body: multipart,
     });
     ownFileId = (await res.json()).id;
+    writeEpoch += 1;
   }
 
   async function flush() {
@@ -845,6 +934,8 @@ export function createDriveSync({
     latestSeenAt = 0;
     lastCompactionAt = null;
     lossyFileIds.clear();
+    documentCache.clear();
+    writeEpoch += 1;
     setSession(null);
   }
 

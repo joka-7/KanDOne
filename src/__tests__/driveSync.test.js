@@ -15,13 +15,28 @@ const deviceFile = (device, collections = {}, profile = {}) => ({
 });
 
 /** In-memory stand-in for the Drive v3 + userinfo endpoints this module calls. */
-function fakeGoogle({ files = {}, failWith = null, pageLimit = Infinity, failRead = {}, revokedTokens = [] } = {}) {
-  const state = { files: { ...files }, nextId: 1, patched: [], deleted: [] };
-  const json = (body, status = 200) => ({ ok: status < 400, status, json: async () => body });
+function fakeGoogle({
+  files = {}, failWith = null, pageLimit = Infinity, failRead = {}, revokedTokens = [], flaky = null,
+} = {}) {
+  const state = {
+    files: { ...files }, nextId: 1, patched: [], deleted: [], listings: 0, reads: [], clock: 0, active: 0, maxActive: 0,
+  };
+  // Files without their own modifiedTime get an increasing one, as Drive would give them.
+  const touch = (file) => { file.modifiedTime = new Date(NOW + ++state.clock).toISOString(); return file; };
+  Object.values(state.files).forEach((file) => { if (!file.modifiedTime) touch(file); });
+  const json = (body, status = 200, headers = {}) => ({
+    ok: status < 400, status, json: async () => body, headers: { get: (name) => headers[name] ?? null },
+  });
   const raw = (text) => ({ ok: true, status: 200, text: async () => text });
+  let flakyLeft = flaky?.times ?? 0;
 
   const fetchImpl = vi.fn(async (url, init = {}) => {
     if (failWith) return json({}, failWith);
+    if (flakyLeft > 0 && url !== 'https://openidconnect.googleapis.com/v1/userinfo'
+      && (!flaky.method || (init.method ?? 'GET') === flaky.method)) {
+      flakyLeft -= 1;
+      return json({}, flaky.status, flaky.retryAfter ? { 'Retry-After': flaky.retryAfter } : {});
+    }
     if (revokedTokens.some((t) => init.headers?.Authorization === `Bearer ${t}`)) return json({}, 401);
     if (url === 'https://oauth2.googleapis.com/revoke') {
       state.revoked = new URLSearchParams(init.body).get('token');
@@ -31,13 +46,14 @@ function fakeGoogle({ files = {}, failWith = null, pageLimit = Infinity, failRea
     if (url.includes('/upload/drive/v3/files?uploadType=multipart')) {
       const parts = init.body.split('\r\n');
       const id = `new-${state.nextId++}`;
-      state.files[id] = { name: JSON.parse(parts[3]).name, body: parts[7] };
+      state.files[id] = touch({ name: JSON.parse(parts[3]).name, body: parts[7] });
       return json({ id });
     }
     const patch = url.match(/\/upload\/drive\/v3\/files\/([^?]+)\?uploadType=media/);
     if (patch) {
       if (!state.files[patch[1]]) return json({}, 404);
       state.files[patch[1]].body = init.body;
+      touch(state.files[patch[1]]);
       state.patched.push(patch[1]);
       return json({});
     }
@@ -49,6 +65,7 @@ function fakeGoogle({ files = {}, failWith = null, pageLimit = Infinity, failRea
       return json({}, 204);
     }
     if (url.startsWith('https://www.googleapis.com/drive/v3/files?')) {
+      state.listings += 1;
       const params = new URL(url).searchParams;
       const exact = params.get('q').match(/^name = '(.+)'$/)?.[1];
       const list = Object.entries(state.files)
@@ -65,6 +82,13 @@ function fakeGoogle({ files = {}, failWith = null, pageLimit = Infinity, failRea
       return state.files[modified[1]] ? json({ modifiedTime: state.files[modified[1]].modifiedTime }) : json({}, 404);
     }
     const media = url.match(/\/drive\/v3\/files\/([^?]+)\?alt=media/);
+    if (media) {
+      state.reads.push(media[1]);
+      state.active += 1;
+      state.maxActive = Math.max(state.maxActive, state.active);
+      for (let tick = 0; tick < 3; tick += 1) await Promise.resolve();
+      state.active -= 1;
+    }
     if (media && failRead[media[1]] === 'network') return { ok: true, status: 200, text: async () => { throw new TypeError('network error'); } };
     if (media && failRead[media[1]]) return json({}, failRead[media[1]]);
     if (media) return state.files[media[1]] ? raw(state.files[media[1]].body) : json({}, 404);
@@ -112,6 +136,7 @@ function build({
   nativeAuth = null,
 } = {}) {
   const ids = [...deviceIds];
+  const sleeps = [];
   const sync = createDriveSync({
     clientId,
     fetchImpl: google.fetchImpl,
@@ -124,8 +149,10 @@ function build({
     persistDeviceId,
     flushDelayMs: 100,
     nativeAuth,
+    sleep: async (ms) => { sleeps.push(ms); },
+    random: () => 0.5,
   });
-  return { sync, google, gis, storage };
+  return { sync, google, gis, storage, sleeps };
 }
 
 /** Stand-in for the Android sign-in: hands out `app-token-1`, `app-token-2`, … */
@@ -384,7 +411,7 @@ describe('driveSync.js', () => {
         await settle();
         await done;
 
-        expect([google.state.files.mine, google.state.files['new-1'].name]).toEqual([corrupt, 'kandone-next.json']);
+        expect([google.state.files.mine.body, google.state.files['new-1'].name]).toEqual([corrupt.body, 'kandone-next.json']);
       });
 
       it('stamps a write after the newest entry already in Drive, even if another device\'s clock runs ahead', async () => {
@@ -656,6 +683,126 @@ describe('driveSync.js', () => {
         expect([google.state.deleted, google.state.revoked, nativeAuth.signOut.mock.calls.length, loadGis.mock.calls.length])
           .toEqual([['a'], 'app-token-1', 1, 0]);
       });
+    });
+  });
+
+  describe('Drive rate limits and errors', () => {
+    it.each([
+      ['a 429', 429],
+      ['a 503', 503],
+    ])('retries %s with a growing wait, then succeeds', async (_name, status) => {
+      const google = fakeGoogle({ files: { a: deviceFile('this') }, flaky: { status, times: 2 } });
+      const { sync, sleeps } = build({ google, storage: signedIn() });
+
+      await expect(sync.loadAllItems('uid', 'tasks')).resolves.toBeNull();
+
+      expect(sleeps).toHaveLength(2);
+      expect(sleeps[1]).toBeGreaterThan(sleeps[0]);
+    });
+
+    it('waits at least as long as Retry-After asks', async () => {
+      const google = fakeGoogle({ flaky: { status: 429, times: 1, retryAfter: '7' } });
+      const { sync, sleeps } = build({ google, storage: signedIn() });
+
+      await sync.loadAllItems('uid', 'tasks');
+
+      expect(sleeps).toEqual([7000]);
+    });
+
+    it('gives up after a few attempts and reports the status', async () => {
+      const google = fakeGoogle({ flaky: { status: 429, times: 99 } });
+      const { sync, sleeps } = build({ google, storage: signedIn() });
+
+      await expect(sync.loadAllItems('uid', 'tasks')).rejects.toMatchObject({ status: 429 });
+
+      expect(sleeps).toHaveLength(3);
+    });
+
+    it('does not retry an error that will not change', async () => {
+      const google = fakeGoogle({ flaky: { status: 403, times: 99 } });
+      const { sync, sleeps } = build({ google, storage: signedIn() });
+
+      await expect(sync.loadAllItems('uid', 'tasks')).rejects.toMatchObject({ status: 403 });
+
+      expect(sleeps).toEqual([]);
+    });
+
+    it('does not repeat a file creation after a 5xx, which may already have created it', async () => {
+      const google = fakeGoogle({ flaky: { status: 500, times: 1, method: 'POST' } });
+      const { sync, sleeps } = build({ google, storage: signedIn() });
+      const saved = sync.updateItem('uid', 'tasks', { id: 1, name: 'x' });
+      saved.catch(() => {});
+
+      await vi.advanceTimersByTimeAsync(200);
+
+      await expect(saved).rejects.toMatchObject({ status: 500 });
+      expect(sleeps).toEqual([]);
+      expect(Object.keys(google.state.files)).toEqual([]);
+    });
+  });
+
+  describe('pull cost', () => {
+    it('shares one read between a tasks pull and a labels pull started together', async () => {
+      const google = fakeGoogle({ files: { a: deviceFile('a'), b: deviceFile('b') } });
+      const { sync } = build({ google, storage: signedIn() });
+
+      await Promise.all([sync.loadAllItems('uid', 'tasks'), sync.loadTaskLabels('uid')]);
+
+      expect(google.state.listings).toBe(1);
+      expect(google.state.reads.sort()).toEqual(['a', 'b']);
+    });
+
+    it('downloads only the files that changed since the last pull', async () => {
+      const google = fakeGoogle({ files: { a: deviceFile('a'), b: deviceFile('b') } });
+      const { sync } = build({ google, storage: signedIn() });
+
+      await sync.loadAllItems('uid', 'tasks');
+      google.state.reads.length = 0;
+      await sync.loadAllItems('uid', 'tasks');
+      expect(google.state.reads).toEqual([]);
+
+      google.state.files.b.body = deviceFile('b', { tasks: { 1: { item: { id: 1 }, at: 5 } } }).body;
+      google.state.files.b.modifiedTime = '2030-01-01T00:00:00.000Z';
+      const cloud = await sync.loadAllItems('uid', 'tasks');
+
+      expect(google.state.reads).toEqual(['b']);
+      expect(cloud.items.map((t) => t.id)).toEqual([1]);
+    });
+
+    it('never serves a stale copy of a file this device just rewrote', async () => {
+      const google = fakeGoogle({ files: { a: deviceFile('this') } });
+      const { sync } = build({ google, storage: signedIn() });
+      await sync.loadAllItems('uid', 'tasks');
+
+      const saved = sync.updateItem('uid', 'tasks', { id: 7, name: 'fresh' });
+      await vi.advanceTimersByTimeAsync(200);
+      await saved;
+      const cloud = await sync.loadAllItems('uid', 'tasks');
+
+      expect(cloud.items.map((t) => t.id)).toEqual([7]);
+    });
+
+    it('does not keep the cached files after signing out', async () => {
+      const google = fakeGoogle({ files: { a: deviceFile('a') } });
+      const { sync } = build({ google, storage: signedIn() });
+      await sync.loadAllItems('uid', 'tasks');
+      await sync.signOut();
+      google.state.reads.length = 0;
+
+      await build({ google, storage: signedIn() }).sync.loadAllItems('uid', 'tasks');
+
+      expect(google.state.reads).toEqual(['a']);
+    });
+
+    it('limits how many files download at once', async () => {
+      const files = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`f${i}`, deviceFile(`d${i}`)]));
+      const google = fakeGoogle({ files });
+      const { sync } = build({ google, storage: signedIn() });
+
+      await sync.loadAllItems('uid', 'tasks');
+
+      expect(google.state.reads).toHaveLength(12);
+      expect(google.state.maxActive).toBeLessThanOrEqual(4);
     });
   });
 
