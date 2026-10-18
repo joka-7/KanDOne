@@ -21,6 +21,8 @@ import {
 import { getStorageKey, STATUSES_TASKS, filterItemsForMode } from './statuses';
 import { usePwaInstall } from './usePwaInstall';
 import { ANDROID_APK_URL } from './utils/androidApk';
+import { useStorageSync } from './hooks/useStorageSync';
+import { isFocusPullDue } from './utils/focusPull';
 import AppBrandMark from './components/AppBrandMark';
 import KanbanBoard from './components/KanbanBoard';
 import { STORAGE_KEYS, TASKS_LABELS_KEY, TASKS_EFFORT_TIERS_KEY } from './storageKeys.js';
@@ -44,7 +46,7 @@ import {
 import { resolveLabelsOnSignIn, resolveTasksOnSignIn } from './utils/labelSync';
 import {
   fingerprintItems, diffFingerprints, readPending, recordLocalChanges,
-  readDataOwner, writeDataOwner, clearLocalSyncState,
+  readDataOwner, writeDataOwner, clearLocalSyncState, countPending,
 } from './utils/pendingSync';
 import {
   applyBoardDrag, ensureBoardOrders, nextBoardOrder, sanitizeBoardOrder,
@@ -204,7 +206,12 @@ export default function TasksApp() {
     try {
       if (tasks.length > 0 || localStorage.getItem(getStorageKey(MODE))) {
         setIsSaved(false);
-        localStorage.setItem(getStorageKey(MODE), JSON.stringify(tasks));
+        // Skip an identical write: it would fire a `storage` event in every other
+        // tab, and two tabs handing the same list back and forth never settle.
+        const serialized = JSON.stringify(tasks);
+        if (localStorage.getItem(getStorageKey(MODE)) !== serialized) {
+          localStorage.setItem(getStorageKey(MODE), serialized);
+        }
         setLocalStorageError(false);
         const timer = setTimeout(() => setIsSaved(true), 800);
         return () => clearTimeout(timer);
@@ -268,6 +275,25 @@ export default function TasksApp() {
   const tasksRef = useRef(tasks);
   useEffect(() => { tasksRef.current = tasks; }, [tasks]);
 
+  // Another tab of this browser writes the same localStorage. Adopt its list
+  // instead of overwriting it with this tab's older copy on the next save.
+  const adoptTasksFromOtherTab = useCallback((incoming) => {
+    const next = ensureBoardOrders(filterItemsForMode(incoming, MODE));
+    if (JSON.stringify(next) === JSON.stringify(tasksRef.current)) return;
+    // The other tab already recorded these changes as pending (that key is
+    // shared) and uploads them itself, so they are not this tab's edits.
+    syncedSnapshotRef.current = fingerprintItems(next);
+    setTasks(next);
+  }, []);
+  const adoptLabelsFromOtherTab = useCallback((incoming) => {
+    setLabels((current) => (JSON.stringify(current) === JSON.stringify(incoming) ? current : incoming));
+  }, []);
+  // Sign-out and data deletion in another tab clear these keys. Staying open
+  // would let this tab write its copy back and hand it to the next account.
+  const reloadAfterOtherTabClears = useCallback(() => window.location.reload(), []);
+  useStorageSync(getStorageKey(MODE), parseTaskStoragePayload, adoptTasksFromOtherTab, reloadAfterOtherTabClears);
+  useStorageSync(TASKS_LABELS_KEY, parseTaskLabelsStoragePayload, adoptLabelsFromOtherTab, reloadAfterOtherTabClears);
+
   const markSyncError = useCallback((e) => {
     console.error(e);
     setSyncError(true);
@@ -276,6 +302,15 @@ export default function TasksApp() {
 
   // One merge path for sign-in, tab focus and "Sync now", so a fix to how a
   // pull reconciles with local state lands in all three at once.
+  // Records waiting for a Drive write. Only meaningful on a device that has been
+  // connected: a never-connected one has everything "pending" and nothing to wait for.
+  // Re-read when sync state changes, not only when the tasks do: an upload landing clears ids without touching `tasks`.
+  const pendingCount = useMemo(
+    () => (readDataOwner() ? countPending(MODE) : 0),
+    [tasks, user, syncing, syncError], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  const lastPullAtRef = useRef(null);
   const pullTasksFromCloud = useCallback(async (uid, localTasks) => {
     const cloud = await loadAllItems(uid, MODE);
     const { tasks: mergedTasks, pushIds, deleteFromCloud } = resolveTasksOnSignIn(
@@ -294,6 +329,7 @@ export default function TasksApp() {
     await batchSaveItems(uid, MODE, orderedTasks.filter((t) => toPush.has(String(t.id))));
     // Replay deletes made while unsynced, or the next pull resurrects them.
     await Promise.all(deleteFromCloud.map((id) => deleteItem(uid, MODE, id)));
+    lastPullAtRef.current = Date.now();
     return cloud?.items.length ?? 0;
   }, []);
 
@@ -372,7 +408,11 @@ export default function TasksApp() {
       // that write may still only exist locally, and overwriting local state
       // with a stale cloud snapshot would silently discard it. The header's
       // sync-error indicator lets the user retry manually instead.
-      if (document.visibilityState === 'visible' && driveUser && !syncError) {
+      if (document.visibilityState === 'visible' && driveUser && !syncError
+        && isFocusPullDue(lastPullAtRef.current, Date.now())) {
+        // Claimed now, not when the pull finishes: a second focus while this one
+        // is still reading would otherwise start a second full read.
+        lastPullAtRef.current = Date.now();
         setSyncing(true);
         try {
           // Union-merge rather than overwrite: anything typed into this
@@ -435,11 +475,12 @@ export default function TasksApp() {
   // Sign-out leaves the device clean: the next person to sign in here must
   // neither see this account's tasks nor have them merged into their own.
   const handleSignOut = async () => {
-    const pending = readPending(MODE);
-    if ((pending.edited.size > 0 || pending.deleted.size > 0)
-      && !window.confirm(tt('alert.unsyncedSignOut', 'Some changes have not reached the cloud yet and will be lost. Sign out anyway?'))) {
-      return;
-    }
+    // Signing out removes this device's copy, so it always asks: the header's
+    // cloud button is one tap, and the copy in Drive only helps if it is current.
+    const message = countPending(MODE) > 0
+      ? tt('alert.unsyncedSignOut', 'Some changes have not reached the cloud yet and will be lost. Sign out anyway?')
+      : tt('alert.signOutConfirm', "Disconnect from Google Drive and remove this device's copy of your tasks? They stay in your Drive and come back when you reconnect.");
+    if (!window.confirm(message)) return;
     try {
       await signOut();
     } catch (e) {
@@ -2020,6 +2061,7 @@ Rules:
                         ? t('header.syncErrorBadge', 'Sync issue')
                         : user.displayName?.split(' ')[0] || t('header.driveOn')}
                   </span>
+                  {syncError && pendingCount > 0 && <span className="shrink-0 rounded-full bg-white/25 px-1.5 text-xs" title={t('header.pendingChanges', 'Waiting to sync: {{count}}', { count: pendingCount })}>{pendingCount}</span>}
                 </button>
                 <button
                   onClick={handleSyncNow}
@@ -2052,6 +2094,7 @@ Rules:
               >
                 <Cloud size={16} className="shrink-0 animate-pulse" />
                 <span className="hidden sm:inline shrink-0">{t('header.reconnecting', 'Reconnecting…')}</span>
+                {pendingCount > 0 && <span className="shrink-0 rounded-full bg-white/25 px-1.5 text-xs" title={t('header.pendingChanges', 'Waiting to sync: {{count}}', { count: pendingCount })}>{pendingCount}</span>}
               </button>
             ) : !isCloudConfigured() ? (
               // No Google OAuth client configured — the app still works fully on
@@ -2070,6 +2113,7 @@ Rules:
                 className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-bold bg-white/10 hover:bg-white/20 border border-white/20 text-green-100 transition-colors min-h-[44px] touch-manipulation"
               >
                 <CloudOff size={16} className="shrink-0" /> <span className="hidden sm:inline shrink-0 max-w-[5rem] truncate sm:max-w-none">{t('header.connectDrive')}</span>
+                {pendingCount > 0 && <span className="shrink-0 rounded-full bg-white/25 px-1.5 text-xs" title={t('header.pendingChanges', 'Waiting to sync: {{count}}', { count: pendingCount })}>{pendingCount}</span>}
               </button>
             )}
 
@@ -2435,6 +2479,9 @@ Rules:
 
       <div className="flex items-center justify-center gap-1.5 py-6">
         <span className="text-[11px] text-gray-600">{t('settings.credit', 'Built by joka-7')}</span>
+        <a href="/privacy.html" className="text-[11px] text-gray-600 underline hover:text-gray-800 px-1">
+          {t('settings.privacy', 'Privacy')}
+        </a>
         <a
           href="https://jk-dev-7.vercel.app"
           target="_blank"

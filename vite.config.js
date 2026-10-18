@@ -33,6 +33,9 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         globIgnores: ['**/icon-master.png', ...NATIVE_ONLY_PRECACHE_IGNORES],
+        // The privacy page is a separate static file; without this an installed
+        // app would answer the navigation with index.html.
+        navigateFallbackDenylist: [/^\/privacy\.html$/],
       },
     }),
     // Opt-in: `npm run build:analyze` writes dist/stats.html (not run in CI).
@@ -63,10 +66,11 @@ export default defineConfig({
       reporter: ['text-summary', 'lcov'],
       include: ['src/**'],
       exclude: ['src/**/__tests__/**', 'src/main.jsx'],
-      // Floors just under the measured 30.6/30.5/22.7/23.4, to ratchet up.
+      // Floors just under the measured lines 47.9, statements 46.7, functions
+      // 37.8, branches 36.6, to ratchet up. Raise them when coverage grows.
       // Unit coverage only: the UI paths are covered by the Playwright suite,
       // which does not report here, so this number understates what is tested.
-      thresholds: { lines: 28, statements: 28, functions: 20, branches: 20 },
+      thresholds: { lines: 46, statements: 45, functions: 36, branches: 35 },
     },
   },
 })

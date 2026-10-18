@@ -54,7 +54,8 @@
     "syncErrorBadge": "Sync issue",
     "syncErrorTooltip": "Last cloud sync failed — click \"Sync Now\" to retry. (This signs out.)",
     "androidApp": "Android app",
-    "androidAppTooltip": "Download the Android app (APK). Open the file on your phone to install it."
+    "androidAppTooltip": "Download the Android app (APK). Open the file on your phone to install it.",
+    "pendingChanges": "Waiting to sync: {{count}}"
   },
   "tabs": {
     "board": "Status Board",
@@ -356,7 +357,8 @@
       "repoLabel": "View repository",
       "emailLabel": "Send feedback by email",
       "issueLabel": "Report an issue"
-    }
+    },
+    "privacy": "Privacy"
   },
   "rejection": {
     "analysisTitle": "Rejection Analysis",
@@ -594,7 +596,8 @@
       "importError": "Error importing file. Make sure this is a valid JSON file.",
       "unsyncedSignOut": "Some changes have not reached the cloud yet and will be lost. Sign out anyway?",
       "deleteSyncedDataConfirm": "Permanently delete all KanDOne data from your Google Drive and disconnect? Tasks on this device are removed too. Devices that are still connected will upload their copies again, so disconnect them first. This cannot be undone — download a backup first if you want to keep it.",
-      "deleteSyncedDataFailed": "Could not delete the synced data. Nothing was removed — please try again."
+      "deleteSyncedDataFailed": "Could not delete the synced data. Nothing was removed — please try again.",
+      "signOutConfirm": "Disconnect from Google Drive and remove this device's copy of your tasks? They stay in your Drive and come back when you reconnect."
     },
     "impact": {
       "high": "High",
