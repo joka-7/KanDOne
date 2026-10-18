@@ -46,6 +46,7 @@ import {
 import { pullTasks, pullLabels } from './utils/cloudPull';
 import { deriveSyncStatus } from './utils/syncStatus';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
+import { useBackClose, consumeProgrammaticPop, isOverlayState } from './hooks/useBackClose';
 import {
   fingerprintItems, diffFingerprints, readPending, recordLocalChanges,
   readDataOwner, writeDataOwner, clearLocalSyncState, countPending,
@@ -620,16 +621,34 @@ export default function TasksApp() {
   }, []);
 
   useEffect(() => {
+    // The first entry has no state, so Back to it used to do nothing and the
+    // next Back left the app. Give it one.
+    if (!window.history.state) window.history.replaceState({ tab: 'board', selectedId: null }, '');
     const onPop = (e) => {
-      const s = e.state;
-      if (!s) return;
-      setActiveTab(s.tab || 'board');
-      setSelectedId(s.selectedId || null);
+      // Overlays remove their own entries; that is not a move between views.
+      if (consumeProgrammaticPop() || isOverlayState(e.state)) return;
+      const view = e.state ?? {};
+      setActiveTab(view.tab || 'board');
+      setSelectedId(view.selectedId || null);
       setIsEditing(false);
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
+
+  // Back closes the open form, dialog or menu before it leaves the view.
+  const closeEditing = useCallback(() => setIsEditing(false), []);
+  const closeTemplates = useCallback(() => setShowTemplates(false), []);
+  const closeAISettings = useCallback(() => setShowAISettings(false), []);
+  const closeChat = useCallback(() => setChatOpen(false), []);
+  const closeGoalsFinder = useCallback(() => setShowGoalsFinder(false), []);
+  const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
+  useBackClose(isEditing, closeEditing, 'editing');
+  useBackClose(showTemplates, closeTemplates, 'templates');
+  useBackClose(showAISettings, closeAISettings, 'ai-settings');
+  useBackClose(chatOpen, closeChat, 'chat');
+  useBackClose(showGoalsFinder, closeGoalsFinder, 'goals-finder');
+  useBackClose(mobileMenuOpen, closeMobileMenu, 'mobile-menu');
 
   const isSavingRef = useRef(false);
   const handleSave = async () => {
@@ -1831,7 +1850,7 @@ Rules:
                   return (
                     <button
                       key={task.id}
-                      onClick={() => { setSelectedId(task.id); setIsEditing(false); }}
+                      onClick={() => navigateTo('list', task.id)}
                       style={task.cardColor ? { backgroundColor: task.cardColor } : undefined}
                       className={`w-full text-left px-3 sm:px-4 py-3 min-h-[52px] border-b border-gray-50 transition-colors ${isRTL ? 'border-r-4' : 'border-l-4'} ${getBandStyle(priority.band).stripe} ${task.cardColor ? '' : 'hover:bg-emerald-50 active:bg-emerald-100'} ${isSelected ? 'ring-2 ring-inset ring-emerald-500' : ''} ${isSelected && !task.cardColor ? 'bg-emerald-50' : ''}`}
                     >
@@ -2386,6 +2405,7 @@ Rules:
               key={id}
               type="button"
               onClick={() => navigateTo(id)}
+              aria-current={activeTab === id ? 'page' : undefined}
               className={`px-2 sm:px-4 py-1.5 sm:py-2.5 rounded-t-lg font-medium flex items-center gap-0.5 sm:gap-2 transition-colors whitespace-nowrap flex-shrink-0 text-[10px] sm:text-sm min-h-[34px] sm:min-h-[44px] touch-manipulation ${activeTab === id ? 'bg-gray-50 text-emerald-800' : 'bg-white/10 text-green-100 hover:bg-white/20 active:bg-white/25'}`}
             >
               <span className="hidden sm:inline-flex shrink-0"><Icon size={15} /></span>

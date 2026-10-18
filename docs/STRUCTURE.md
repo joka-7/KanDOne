@@ -126,7 +126,9 @@ KanDOne/
 │   ├── onboarding.spec.js
 │   ├── privacy.spec.js
 │   ├── screenshots.spec.js
+│   ├── signed-in.spec.js
 │   ├── tasks-flow.spec.js
+│   ├── touch-drag.spec.js
 │   └── two-tabs.spec.js
 ├── public/
 │   ├── apple-touch-icon-180x180.png

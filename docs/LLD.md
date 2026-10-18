@@ -29,6 +29,7 @@ src/
 ├── usePwaInstall.js            # PWA install prompt hook
 ├── hooks/
 │   ├── useModalA11y.js         # dialog role, focus trap, Escape, restore focus
+│   ├── useBackClose.js         # Back closes an open overlay instead of leaving the app
 │   ├── useOnlineStatus.js      # the browser's online/offline flag
 │   └── useStorageSync.js       # follow another tab's localStorage writes and removals
 ├── services/
@@ -392,6 +393,10 @@ set of reflective `questions` used to seed a guided AI session.
 - `AppErrorBoundary.jsx` — root error UI (see §2.1).
 - `hooks/useModalA11y.js` — `role="dialog"`, `aria-modal`, focus trap, Escape,
   restore focus on close (used by settings/templates/onboarding).
+- `hooks/useBackClose.js` — `useBackClose(isOpen, close, id)`: opening pushes a history entry, Back
+  pops it and calls `close`, closing by other means removes the entry. `TasksApp` uses it for the
+  task form, templates, AI settings, chat, goals finder and mobile menu; tab and task selection
+  use `navigateTo`, and the first history entry is given a state so Back reaches it.
 - `hooks/useOnlineStatus.js` — `useOnlineStatus()`: `navigator.onLine`, following the
   `online` / `offline` window events.
 - `hooks/useStorageSync.js` — `useStorageSync(key, parse, onChange, onRemoved)`:
