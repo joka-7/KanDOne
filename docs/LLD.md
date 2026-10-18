@@ -28,7 +28,8 @@ src/
 ├── i18n.js                     # i18next init + syncDocumentLang/dir
 ├── usePwaInstall.js            # PWA install prompt hook
 ├── hooks/
-│   └── useModalA11y.js         # dialog role, focus trap, Escape, restore focus
+│   ├── useModalA11y.js         # dialog role, focus trap, Escape, restore focus
+│   └── useStorageSync.js       # follow another tab's localStorage writes and removals
 ├── services/
 │   ├── aiAssistant.js          # AI config state, rate limit, streaming via modeldispatcher-browser-agent
 │   └── coachPrompts.js         # goals-finder system prompt (no provider imports)
@@ -48,6 +49,7 @@ src/
 │   ├── taskHelpers.js          # pure task/display helpers (tested)
 │   ├── labelSync.js            # merge local/cloud label & task libraries
 │   ├── pendingSync.js          # record ids changed locally but not yet in the cloud
+│   ├── focusPull.js            # minimum gap between tab-focus pulls
 │   ├── promptSafety.js         # delimUserField() prompt hardening
 │   ├── recurrence.js           # routine schedule logic
 │   ├── reminders.js            # notification timing
@@ -334,6 +336,8 @@ collection in localStorage (`kandone_pending_sync_v1:{mode}`).
 - `readPending(mode)` — the set `resolveTasksOnSignIn` consults.
 - `readDataOwner` / `writeDataOwner` — the uid the local data belongs to
   (`kandone_data_owner_v1`).
+- `countPending(mode)` — how many records wait for a cloud write; the header
+  shows it on a previously connected device that is not syncing.
 - `clearLocalSyncState(modes)` — removes owner and pending state; used by
   sign-out and by "Delete synced data".
 
@@ -370,6 +374,11 @@ set of reflective `questions` used to seed a guided AI session.
 - `AppErrorBoundary.jsx` — root error UI (see §2.1).
 - `hooks/useModalA11y.js` — `role="dialog"`, `aria-modal`, focus trap, Escape,
   restore focus on close (used by settings/templates/onboarding).
+- `hooks/useStorageSync.js` — `useStorageSync(key, parse, onChange, onRemoved)`:
+  listens for the `storage` event on `key` (other tabs only), hands the parsed
+  value to `onChange`, or calls `onRemoved` when the key was deleted. Callbacks
+  live in a ref, so a new callback never re-subscribes. `TasksApp` uses it for
+  the task list and the label library.
 ---
 
 ## 6. Services
@@ -407,6 +416,7 @@ builds the client; the module exports one instance built from
 | `loadUserProfile()` / `saveUserProfile(uid, data)` | Merged `profile` / queue profile fields. |
 | `loadTaskLabels()` / `saveTaskLabels(uid, labels)` | `profile.tasksLabels` for cross-device label sync. |
 | `loadAllItems(uid, mode)` | `{ items, deletedIds }` for `getCollectionName(mode)` — merged live records plus ids whose newest entry is a delete — or `null` when Drive has never held one. `resolveTasksOnSignIn` drops a local copy of a deleted id unless it has an unsynced edit. Files that can never be read (404, `corrupt-file`, `unsupported-version`) are skipped; any other read failure (network, 429, 5xx, 401) rejects the whole load. The listing follows `nextPageToken`. |
+| Reads and errors | Every request goes through `driveFetch`: 429 and 500/502/503/504 retry up to 4 attempts (`MAX_ATTEMPTS`) with a doubling, jittered wait (`retryDelayMs`, capped at 30 s, never below `Retry-After`); a 5xx on a `POST` (file creation) is not retried. `readMerged` coalesces concurrent callers into one read, reuses a file's parsed content while its `modifiedTime` is unchanged (`documentCache`, cleared on sign-out and account change), and downloads at most `DOWNLOAD_CONCURRENCY` (4) files at once. An upload bumps `writeEpoch`, so a read started before it is never shared with a caller that asked after. `sleep` and `random` are injectable for tests. |
 | `updateItem` / `deleteItem` / `batchSaveItems` | Queue upsert/delete operations; resolve once the upload holding them lands, then `clearPendingIds` for ids with no newer write still queued. |
 | `parseDeviceDocument(raw)` | Pure: validate a device file; throws `corrupt-file` / `unsupported-version` rather than returning empty, so a bad file is never overwritten. An unreadable *own* file is left in place and this device continues under a new device id. |
 | `findCompactableFiles(entries, { now, isOwn, maxIdleMs })` | Pure: which files `readMerged` may delete afterwards. Picks the winner of every record and profile field across all readable files (newest stamp, then higher device id as in the merge, then higher file id so exact copies keep one winner on every device) and lists a file only if its `modifiedTime` is at least `STALE_DEVICE_FILE_MS` (90 days) older than the reference time, it holds no winner, it is not `lossy`, it is not in an ambiguous tie, and `isOwn` says it is not this device's file. The reference is `min(now, newest modifiedTime listed)`, so a skewed local clock cannot make recent files look idle and a wholly idle account lists nothing. Ambiguous tie: same stamp and device with different content in two files, which pins both. `lossy` is set by `readFile` when `parsingDroppedData` finds an entry the parser dropped, an unknown top-level field, or an unknown field inside an entry (`hasUnknownEntryKeys`). `isOwn` is asked only about files that would otherwise be listed. A file without a usable `modifiedTime`, or that could not be read, is never listed. |

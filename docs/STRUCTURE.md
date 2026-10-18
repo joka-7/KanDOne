@@ -124,8 +124,10 @@ KanDOne/
 │   ├── dark-mode.spec.js
 │   ├── helpers.js
 │   ├── onboarding.spec.js
+│   ├── privacy.spec.js
 │   ├── screenshots.spec.js
-│   └── tasks-flow.spec.js
+│   ├── tasks-flow.spec.js
+│   └── two-tabs.spec.js
 ├── public/
 │   ├── apple-touch-icon-180x180.png
 │   ├── favicon.ico
@@ -134,6 +136,7 @@ KanDOne/
 │   ├── icon-master.png
 │   ├── icons.svg
 │   ├── maskable-icon-512x512.png
+│   ├── privacy.html
 │   ├── pwa-192x192.png
 │   ├── pwa-512x512.png
 │   └── pwa-64x64.png
@@ -149,8 +152,10 @@ KanDOne/
 │   │   ├── aiAssistant.test.js
 │   │   ├── androidApk.test.js
 │   │   ├── boardOrder.test.js
+│   │   ├── csp.parity.test.js
 │   │   ├── driveSync.test.js
 │   │   ├── effortScale.test.js
+│   │   ├── focusPull.test.js
 │   │   ├── labelSync.test.js
 │   │   ├── localeParity.test.js
 │   │   ├── nativeGoogleAuth.test.js
@@ -163,7 +168,8 @@ KanDOne/
 │   │   ├── storageKeys.e2eParity.test.js
 │   │   ├── taskHelpers.test.js
 │   │   ├── taskPriority.test.js
-│   │   └── taskTypes.test.js
+│   │   ├── taskTypes.test.js
+│   │   └── useStorageSync.test.jsx
 │   ├── components/
 │   │   ├── APIKeySettings.jsx         # User-supplied LLM provider API key settings
 │   │   ├── AppBrandMark.jsx           # App logo/brand mark
@@ -186,7 +192,8 @@ KanDOne/
 │   ├── data/
 │   │   └── taskTemplates.js
 │   ├── hooks/
-│   │   └── useModalA11y.js            # Dialog accessibility helpers
+│   │   ├── useModalA11y.js            # Dialog accessibility helpers
+│   │   └── useStorageSync.js
 │   ├── locales/                       # I18n translation files: English, Hebrew, French
 │   │   ├── templateQuestions/
 │   │   │   ├── en.js
@@ -202,6 +209,7 @@ KanDOne/
 │   │   ├── androidApk.js
 │   │   ├── boardOrder.js
 │   │   ├── effortScale.js
+│   │   ├── focusPull.js
 │   │   ├── labelColors.js
 │   │   ├── labelSync.js               # Label sync logic
 │   │   ├── pendingSync.js
