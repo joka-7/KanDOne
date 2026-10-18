@@ -152,6 +152,7 @@ KanDOne/
 │   │   ├── aiAssistant.test.js
 │   │   ├── androidApk.test.js
 │   │   ├── boardOrder.test.js
+│   │   ├── cloudPull.test.js
 │   │   ├── csp.parity.test.js
 │   │   ├── driveSync.test.js
 │   │   ├── effortScale.test.js
@@ -166,9 +167,11 @@ KanDOne/
 │   │   ├── reminders.test.js
 │   │   ├── sanitize.test.js
 │   │   ├── storageKeys.e2eParity.test.js
+│   │   ├── syncStatus.test.js
 │   │   ├── taskHelpers.test.js
 │   │   ├── taskPriority.test.js
 │   │   ├── taskTypes.test.js
+│   │   ├── useOnlineStatus.test.jsx
 │   │   └── useStorageSync.test.jsx
 │   ├── components/
 │   │   ├── APIKeySettings.jsx         # User-supplied LLM provider API key settings
@@ -193,6 +196,7 @@ KanDOne/
 │   │   └── taskTemplates.js
 │   ├── hooks/
 │   │   ├── useModalA11y.js            # Dialog accessibility helpers
+│   │   ├── useOnlineStatus.js
 │   │   └── useStorageSync.js
 │   ├── locales/                       # I18n translation files: English, Hebrew, French
 │   │   ├── templateQuestions/
@@ -208,6 +212,7 @@ KanDOne/
 │   ├── utils/
 │   │   ├── androidApk.js
 │   │   ├── boardOrder.js
+│   │   ├── cloudPull.js
 │   │   ├── effortScale.js
 │   │   ├── focusPull.js
 │   │   ├── labelColors.js
@@ -217,6 +222,7 @@ KanDOne/
 │   │   ├── recurrence.js              # Recurring-schedule (routine) logic
 │   │   ├── reminders.js               # Reminder scheduling logic
 │   │   ├── saveFile.js
+│   │   ├── syncStatus.js
 │   │   ├── taskHelpers.js             # Pure task/display logic
 │   │   ├── taskPriority.js
 │   │   ├── taskTypes.js

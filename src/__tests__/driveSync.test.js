@@ -31,6 +31,7 @@ function fakeGoogle({
   let flakyLeft = flaky?.times ?? 0;
 
   const fetchImpl = vi.fn(async (url, init = {}) => {
+    if (state.offline) throw new TypeError('Failed to fetch');
     if (failWith) return json({}, failWith);
     if (flakyLeft > 0 && url !== 'https://openidconnect.googleapis.com/v1/userinfo'
       && (!flaky.method || (init.method ?? 'GET') === flaky.method)) {
@@ -133,7 +134,7 @@ const signedIn = () => memoryStorage({ [SESSION_KEY]: validSession() });
 function build({
   google = fakeGoogle(), gis = fakeGis(), storage = memoryStorage(), clientId = 'client-id',
   withLock = (task) => task(), persistDeviceId = true, deviceIds = ['this', 'next'], tabStorage = memoryStorage(),
-  nativeAuth = null,
+  nativeAuth = null, isOnline = () => true,
 } = {}) {
   const ids = [...deviceIds];
   const sleeps = [];
@@ -149,6 +150,7 @@ function build({
     persistDeviceId,
     flushDelayMs: 100,
     nativeAuth,
+    isOnline,
     sleep: async (ms) => { sleeps.push(ms); },
     random: () => 0.5,
   });
@@ -738,6 +740,42 @@ describe('driveSync.js', () => {
       await expect(saved).rejects.toMatchObject({ status: 500 });
       expect(sleeps).toEqual([]);
       expect(Object.keys(google.state.files)).toEqual([]);
+    });
+  });
+
+  describe('working offline', () => {
+    it('reports an unreachable Drive as offline, not as a sign-in problem', async () => {
+      const google = fakeGoogle();
+      google.state.offline = true;
+      const { sync } = build({ google, storage: signedIn() });
+
+      await expect(sync.loadAllItems('uid', 'tasks')).rejects.toMatchObject({ name: 'DriveSyncError', code: 'offline' });
+    });
+
+    it('stays connected through an offline start with a lapsed token, then renews once back online', async () => {
+      let online = false;
+      const nativeAuth = fakeNativeAuth();
+      nativeAuth.requestToken.mockImplementationOnce(() => Promise.reject(new Error('network')));
+      const { sync } = build({ storage: expiredSession(), nativeAuth, isOnline: () => online });
+      const seen = [];
+      sync.onAuthChange((u) => seen.push(u?.email ?? null));
+
+      await expect(sync.loadAllItems('uid', 'tasks')).rejects.toMatchObject({ code: 'offline' });
+      online = true;
+      await expect(sync.loadAllItems('uid', 'tasks')).resolves.toBeNull();
+
+      expect(seen).toEqual([USER.email]);
+    });
+
+    it('tells a browser with a lapsed token that it is offline while it is, and signed out once it is not', async () => {
+      let online = false;
+      const { sync } = build({ storage: expiredSession(), isOnline: () => online });
+
+      const whileOffline = await sync.loadAllItems('uid', 'tasks').catch((e) => e.code);
+      online = true;
+      const whileOnline = await sync.loadAllItems('uid', 'tasks').catch((e) => e.code);
+
+      expect([whileOffline, whileOnline]).toEqual(['offline', 'signed-out']);
     });
   });
 

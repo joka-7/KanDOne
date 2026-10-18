@@ -412,6 +412,20 @@ only opens its token popup from a click. So when the token lapses,
 same); the header shows "Connect Drive", and one click reconnects and runs the
 sign-in merge above, which replays edits made in between from `pendingSync`.
 
+**Offline.** A request that cannot reach Google fails with `DriveSyncError`
+code `offline` (`driveSync.js`), and a lapsed token that cannot be renewed
+while `navigator.onLine` is false raises the same code instead of ending the
+session. `utils/syncStatus.js` turns that, the browser's online flag
+(`hooks/useOnlineStatus.js`) and the sign-in state into one header state; the
+header shows **Offline** with the count of changes waiting, and a toast says so
+once. When the browser comes back online `TasksApp` runs a normal pull.
+
+**The pull never replaces the local list.** `utils/cloudPull.js` reads the cloud,
+and only then reads the local tasks and labels, so anything added while the read
+was running is part of the merge. Items created offline are uploaded; cloud
+items the device lacks are added; only a delete recorded as pending or listed
+by another device removes anything.
+
 ### 8.4 AI chat / coaching
 
 ```mermaid

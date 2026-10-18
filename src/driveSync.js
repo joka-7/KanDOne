@@ -72,6 +72,11 @@ const RENEWAL_BACKOFF_MS = 5 * 60_000;
 /** Coalesce bursts of edits (drag, typing) into one Drive upload. */
 const DEFAULT_FLUSH_DELAY_MS = 1500;
 
+/** Raised when Google cannot be reached at all: the work is kept and retried once the network is back. */
+function offlineError(cause) {
+  return new DriveSyncError('Cannot reach Google Drive.', { code: 'offline', cause });
+}
+
 /** Error raised for any failed Drive or Google sign-in request. */
 export class DriveSyncError extends Error {
   constructor(message, { status = 0, code = '', cause } = {}) {
@@ -389,6 +394,8 @@ function browserStorage(kind = 'localStorage') {
  *   the id is kept per tab in `tabStorage` (it still survives a reload).
  * @param {Storage|null} deps.tabStorage per-tab storage (sessionStorage).
  * @param {number} deps.flushDelayMs
+ * @param {() => boolean} deps.isOnline whether the device has a network. A failed
+ *   request or token renewal while it has none is "offline", never a sign-out.
  * @param {{ requestToken: (o: { interactive: boolean }) => Promise<{access_token: string, expires_in: number}|null>,
  *   signOut: () => Promise<void> } | null} deps.nativeAuth the Android app's
  *   sign-in (see nativeGoogleAuth.js); null in a browser, which uses Google's popup.
@@ -429,6 +436,7 @@ export function createDriveSync({
   nativeAuth = null,
   sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); }),
   random = Math.random,
+  isOnline = () => globalThis.navigator?.onLine !== false,
 }) {
   let session = readJson(storage, SESSION_KEY);
   let gis = null;
@@ -611,6 +619,8 @@ export function createDriveSync({
         return response.access_token;
       })
       .catch((err) => {
+        // No network is not a lapsed sign-in: keep the session and try again when it returns.
+        if (!isOnline()) throw offlineError(err);
         if (session) setSession({ ...expiredSession(), renewalFailedAt: now() });
         throw new DriveSyncError('Google Drive session expired.', { code: 'signed-out', cause: err });
       })
@@ -619,7 +629,8 @@ export function createDriveSync({
   }
 
   async function fetchUser(accessToken) {
-    const res = await fetchImpl(USERINFO_URL, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const res = await fetchImpl(USERINFO_URL, { headers: { Authorization: `Bearer ${accessToken}` } })
+      .catch((err) => { throw offlineError(err); });
     if (!res.ok) throw new DriveSyncError('Could not read the Google account.', { status: res.status });
     const info = await res.json();
     return { uid: info.sub, email: info.email || '', displayName: info.name || '' };
@@ -651,6 +662,7 @@ export function createDriveSync({
   async function accessToken() {
     if (hasValidToken()) return session.accessToken;
     if (canRenewSilently()) return renewSilently();
+    if (!isOnline()) throw offlineError();
     if (session?.accessToken) setSession(expiredSession());
     throw new DriveSyncError('Google Drive session expired.', { code: 'signed-out' });
   }
@@ -678,7 +690,7 @@ export function createDriveSync({
     const res = await fetchImpl(url, {
       ...init,
       headers: { ...init.headers, Authorization: `Bearer ${token}` },
-    });
+    }).catch((err) => { throw offlineError(err); });
     if (res.status === 401 && session) {
       // Revoked or expired early: drop the token. A browser then offers to
       // reconnect; the app (still connected) renews and retries once.
@@ -710,7 +722,7 @@ export function createDriveSync({
     const res = await driveFetch(`${DRIVE_API}/files/${encodeURIComponent(id)}?alt=media`);
     // Read the body first: a connection dropped mid-download must surface as a
     // network error, not be mistaken for a corrupt file and abandoned.
-    const text = await res.text();
+    const text = await res.text().catch((err) => { throw offlineError(err); });
     let raw;
     try {
       raw = JSON.parse(text);

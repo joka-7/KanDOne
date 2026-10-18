@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Plus, Search, Download, Upload, Layout, List, BarChart2, Activity,
   Trash2, Edit2, ArrowLeft, ArrowRight, CheckCircle2, CheckCircle, Circle,
-  Clock, AlertCircle, Calendar, Cloud, CloudOff, RefreshCw,
+  Clock, AlertCircle, Calendar, Cloud, CloudOff, RefreshCw, WifiOff,
   ClipboardList, X, Languages, MoreVertical, Settings, Smartphone, Sparkles,
   Repeat, Bell, Zap, Tag, Globe,
 } from 'lucide-react';
@@ -44,6 +44,8 @@ import {
   snoozeTaskReminder, isReminderSnoozed, SNOOZE_MINUTES,
 } from './utils/reminders';
 import { pullTasks, pullLabels } from './utils/cloudPull';
+import { deriveSyncStatus } from './utils/syncStatus';
+import { useOnlineStatus } from './hooks/useOnlineStatus';
 import {
   fingerprintItems, diffFingerprints, readPending, recordLocalChanges,
   readDataOwner, writeDataOwner, clearLocalSyncState, countPending,
@@ -77,6 +79,8 @@ const PriorityView = lazy(() => import('./components/PriorityView'));
 const TypeView = lazy(() => import('./components/TypeView'));
 
 const MODE = 'tasks';
+/** Wait before asking Drive again when the browser says online but Google was unreachable. */
+const UNREACHABLE_RETRY_MS = 15_000;
 
 const PRIORITY_COLORS = {
   high: 'bg-red-100 text-red-700 border-red-200',
@@ -154,6 +158,11 @@ export default function TasksApp() {
   // drives the header's error state and blocks the focus-triggered pull
   // below from clobbering local changes that haven't made it to Drive.
   const [syncError, setSyncError] = useState(false);
+  // The last Drive request could not reach Google at all (as opposed to Google
+  // refusing it). Together with the browser's own online flag this is what the
+  // header calls "Offline": the work is safe on this device and goes up later.
+  const [unreachable, setUnreachable] = useState(false);
+  const online = useOnlineStatus();
   // False until the first pull after sign-in has merged the cloud labels. The
   // label effect must not push before then: on a fresh device it would write
   // an empty library over the cloud copy before that copy had been read.
@@ -242,6 +251,18 @@ export default function TasksApp() {
     recordLocalChanges(MODE, diffFingerprints(previous, next));
   }, [tasks]);
 
+  const markSyncError = useCallback((e) => {
+    const lostNetwork = e?.code === 'offline';
+    if (lostNetwork) console.warn('KanDOne: Google Drive is unreachable', e?.message);
+    else console.error(e);
+    setUnreachable(lostNetwork);
+    setSyncError(true);
+  }, []);
+  const clearSyncError = useCallback(() => {
+    setUnreachable(false);
+    setSyncError(false);
+  }, []);
+
   useEffect(() => {
     try {
       localStorage.setItem(TASKS_LABELS_KEY, JSON.stringify(labels));
@@ -251,11 +272,9 @@ export default function TasksApp() {
       setLocalStorageError(true);
     }
     if (user && cloudReady) {
-      saveTaskLabels(user.uid, labels)
-        .then(() => setSyncError(false))
-        .catch((e) => { console.error(e); setSyncError(true); });
+      saveTaskLabels(user.uid, labels).then(clearSyncError).catch(markSyncError);
     }
-  }, [labels, user, cloudReady]);
+  }, [labels, user, cloudReady, clearSyncError, markSyncError]);
 
   useEffect(() => {
     try {
@@ -271,6 +290,9 @@ export default function TasksApp() {
 
   const userRef = useRef(null);
   useEffect(() => { userRef.current = user; }, [user]);
+
+  const labelsRef = useRef(labels);
+  useEffect(() => { labelsRef.current = labels; }, [labels]);
 
   const tasksRef = useRef(tasks);
   useEffect(() => { tasksRef.current = tasks; }, [tasks]);
@@ -294,11 +316,6 @@ export default function TasksApp() {
   useStorageSync(getStorageKey(MODE), parseTaskStoragePayload, adoptTasksFromOtherTab, reloadAfterOtherTabClears);
   useStorageSync(TASKS_LABELS_KEY, parseTaskLabelsStoragePayload, adoptLabelsFromOtherTab, reloadAfterOtherTabClears);
 
-  const markSyncError = useCallback((e) => {
-    console.error(e);
-    setSyncError(true);
-  }, []);
-  const clearSyncError = useCallback(() => setSyncError(false), []);
 
   // One merge path for sign-in, tab focus and "Sync now", so a fix to how a
   // pull reconciles with local state lands in all three at once.
@@ -334,8 +351,8 @@ export default function TasksApp() {
 
   const pullLabelsFromCloud = useCallback((uid) => pullLabels({
     load: () => loadTaskLabels(uid),
-    getLocal: () => parseTaskLabelsStoragePayload(localStorage.getItem(TASKS_LABELS_KEY)),
-    apply: setLabels,
+    getLocal: () => labelsRef.current,
+    apply: (merged) => { labelsRef.current = merged; setLabels(merged); },
     save: (merged) => saveTaskLabels(uid, merged),
   }), []);
 
@@ -372,10 +389,12 @@ export default function TasksApp() {
         const owner = readDataOwner();
         if (owner && owner !== driveUser.uid) {
           clearLocalSyncState([MODE]);
+          setCloudReady(false);
           syncedSnapshotRef.current = fingerprintItems([]);
           tasksRef.current = [];
           setTasks([]);
           localStorage.removeItem(TASKS_LABELS_KEY);
+          labelsRef.current = [];
           setLabels([]);
         }
         writeDataOwner(driveUser.uid);
@@ -457,19 +476,63 @@ export default function TasksApp() {
     }
   }, [user, clearSyncError, markSyncError]);
 
-  const handleSyncNow = async () => {
-    if (!user || syncing) return;
+  const handleSyncNow = useCallback(async () => {
+    if (!user) return false;
     setSyncing(true);
     try {
-      await Promise.all([
-        pullTasksFromCloud(user.uid),
-        pullLabelsFromCloud(user.uid),
-      ]);
+      await Promise.all([pullTasksFromCloud(user.uid), pullLabelsFromCloud(user.uid)]);
       setCloudReady(true);
       clearSyncError();
-    } catch (e) { markSyncError(e); }
-    setSyncing(false);
-  };
+      return true;
+    } catch (e) {
+      markSyncError(e);
+      return false;
+    } finally {
+      setSyncing(false);
+    }
+  }, [user, pullTasksFromCloud, pullLabelsFromCloud, clearSyncError, markSyncError]);
+
+  const handleSyncNowRef = useRef(handleSyncNow);
+  useEffect(() => { handleSyncNowRef.current = handleSyncNow; }, [handleSyncNow]);
+
+  const offline = !online || unreachable;
+  const syncStatus = deriveSyncStatus({
+    configured: isCloudConfigured(), authResolved, user, sessionRestorable, syncing, syncError, offline,
+  });
+
+  // Say so once when the connection is lost, including at app start: the
+  // header used to sit on "Reconnecting…" and users kept working unaware
+  // that nothing was reaching Drive.
+  const offlineToldRef = useRef(false);
+  useEffect(() => {
+    if (syncStatus !== 'offline') {
+      offlineToldRef.current = false;
+      return;
+    }
+    if (offlineToldRef.current) return;
+    offlineToldRef.current = true;
+    showToast(tt('toast.offline', "You're offline — your changes are saved on this device."));
+  }, [syncStatus, showToast, tt]);
+
+  // The browser can report online before Google is reachable (Wi-Fi up, DNS
+  // not yet): keep retrying quietly instead of waiting for a click.
+  useEffect(() => {
+    if (!online || !unreachable || !user) return undefined;
+    const timer = setTimeout(() => { handleSyncNowRef.current(); }, UNREACHABLE_RETRY_MS);
+    return () => clearTimeout(timer);
+  }, [online, unreachable, user, syncing]);
+
+  // Coming back online pulls and pushes at once. The merge keeps what was
+  // added meanwhile and uploads it; it never replaces the local list.
+  const wasOnlineRef = useRef(online);
+  useEffect(() => {
+    const returned = online && !wasOnlineRef.current;
+    wasOnlineRef.current = online;
+    if (!returned) return;
+    handleSyncNowRef.current().then((synced) => {
+      if (synced) showToast(tt('toast.backOnline', 'Back online — your changes were synced.'));
+    });
+  }, [online, showToast, tt]);
 
   // Sign-out leaves the device clean: the next person to sign in here must
   // neither see this account's tasks nor have them merged into their own.
@@ -2037,6 +2100,22 @@ Rules:
                 <Cloud size={16} className="shrink-0 animate-pulse" />
                 <span className="hidden sm:inline shrink-0">{t('header.checkingSession', 'Checking…')}</span>
               </span>
+            ) : syncStatus === 'offline' ? (
+              // No network: say so plainly instead of "Reconnecting…" or a sync
+              // error. Clickable only where a retry can help (the browser
+              // thinks it is online but Google was unreachable).
+              <button
+                type="button"
+                onClick={handleSyncNow}
+                disabled={!user || !online || syncing}
+                title={t('header.offlineTooltip', 'No connection to Google Drive. Your changes are saved on this device and will sync when you are back online.')}
+                aria-label={t('header.offlineTooltip', 'No connection to Google Drive. Your changes are saved on this device and will sync when you are back online.')}
+                className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-bold bg-amber-500/20 border border-amber-400/40 text-amber-100 min-h-[44px] touch-manipulation disabled:cursor-default"
+              >
+                <WifiOff size={16} className="shrink-0" />
+                <span className="hidden sm:inline shrink-0">{t('header.offline', 'Offline')}</span>
+                {pendingCount > 0 && <span className="shrink-0 rounded-full bg-white/25 px-1.5 text-xs" title={t('header.pendingChanges', 'Waiting to sync: {{count}}', { count: pendingCount })}>{pendingCount}</span>}
+              </button>
             ) : user ? (
               <>
                 <button

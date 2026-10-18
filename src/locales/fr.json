@@ -52,10 +52,12 @@
     "syncNow": "Synchroniser",
     "syncNowRetry": "Réessayer la synchronisation",
     "syncErrorBadge": "Problème de sync",
-    "syncErrorTooltip": "La dernière synchronisation a échoué — cliquez sur « Synchroniser » pour réessayer. (Cela vous déconnecte.)",
+    "syncErrorTooltip": "La dernière synchronisation a échoué — utilisez « Réessayer ». (Cliquer sur ce bouton vous déconnecte.)",
     "androidApp": "Application Android",
     "androidAppTooltip": "Télécharger l'application Android (APK). Ouvrez le fichier sur votre téléphone pour l'installer.",
-    "pendingChanges": "En attente de synchronisation : {{count}}"
+    "pendingChanges": "En attente de synchronisation : {{count}}",
+    "offline": "Hors ligne",
+    "offlineTooltip": "Pas de connexion à Google Drive. Vos modifications sont enregistrées sur cet appareil et seront synchronisées au retour de la connexion."
   },
   "tabs": {
     "board": "Tableau",
@@ -537,7 +539,9 @@
       "imported": "Fichier chargé avec succès !",
       "undo": "Annuler",
       "labelDeleted": "Étiquette supprimée.",
-      "stepDeleted": "Étape supprimée."
+      "stepDeleted": "Étape supprimée.",
+      "offline": "Vous êtes hors ligne — vos modifications sont enregistrées sur cet appareil.",
+      "backOnline": "De retour en ligne — vos modifications ont été synchronisées."
     },
     "alert": {
       "deleteConfirm": "Êtes-vous sûr de vouloir supprimer cette tâche ?",

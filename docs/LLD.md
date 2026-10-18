@@ -29,6 +29,7 @@ src/
 ├── usePwaInstall.js            # PWA install prompt hook
 ├── hooks/
 │   ├── useModalA11y.js         # dialog role, focus trap, Escape, restore focus
+│   ├── useOnlineStatus.js      # the browser's online/offline flag
 │   └── useStorageSync.js       # follow another tab's localStorage writes and removals
 ├── services/
 │   ├── aiAssistant.js          # AI config state, rate limit, streaming via modeldispatcher-browser-agent
@@ -50,6 +51,8 @@ src/
 │   ├── labelSync.js            # merge local/cloud label & task libraries
 │   ├── pendingSync.js          # record ids changed locally but not yet in the cloud
 │   ├── focusPull.js            # minimum gap between tab-focus pulls
+│   ├── cloudPull.js            # pull the cloud into the local tasks/labels without dropping new local items
+│   ├── syncStatus.js           # the header's Drive state (offline, syncing, error, ...)
 │   ├── promptSafety.js         # delimUserField() prompt hardening
 │   ├── recurrence.js           # routine schedule logic
 │   ├── reminders.js            # notification timing
@@ -322,6 +325,21 @@ the cloud:
 Omitting `pending` reproduces the old cloud-wins-on-every-shared-id rule, which
 is the degraded behaviour when localStorage is unavailable.
 
+### 5.6b `utils/cloudPull.js`
+`pullTasks({ mode, load, getLocal, getPending, apply, save, remove })` and
+`pullLabels({ load, getLocal, apply, save })` run the merge above against the
+cloud. `getLocal` is called after `load()` resolves, so items added during the
+read are kept and, being unknown to the cloud, uploaded. `pullTasks` uploads only
+`pushIds` plus records whose board order changed, replays `deleteFromCloud`, and
+returns the number of cloud items; a failed `load` rejects before anything is
+applied.
+
+### 5.6c `utils/syncStatus.js`
+`deriveSyncStatus({ configured, authResolved, user, sessionRestorable, syncing,
+syncError, offline })` returns `unconfigured`, `checking`, `signed-out`,
+`offline`, `reconnecting`, `syncing`, `error` or `connected`. `offline` wins over every
+other state once cloud sync is configured and the session check has finished.
+
 ### 5.6a `utils/pendingSync.js`
 Which record ids changed locally without a confirmed cloud write, keyed per
 collection in localStorage (`kandone_pending_sync_v1:{mode}`).
@@ -374,6 +392,8 @@ set of reflective `questions` used to seed a guided AI session.
 - `AppErrorBoundary.jsx` — root error UI (see §2.1).
 - `hooks/useModalA11y.js` — `role="dialog"`, `aria-modal`, focus trap, Escape,
   restore focus on close (used by settings/templates/onboarding).
+- `hooks/useOnlineStatus.js` — `useOnlineStatus()`: `navigator.onLine`, following the
+  `online` / `offline` window events.
 - `hooks/useStorageSync.js` — `useStorageSync(key, parse, onChange, onRemoved)`:
   listens for the `storage` event on `key` (other tabs only), hands the parsed
   value to `onChange`, or calls `onRemoved` when the key was deleted. Callbacks
@@ -674,6 +694,8 @@ Unit tests under `src/__tests__/` import real modules (not re-implemented copies
 | `sanitize.test.js` | Hostile/malformed import & label payloads |
 | `phaseB.test.js` | Routines + reminder timing |
 | `labelSync.test.js` | Local/cloud label & task merge, including offline edits and deletes, and dropping local copies of records deleted on another device |
+| `cloudPull.test.js` | Pulling the cloud keeps items added during the read and offline, uploads only what the cloud lacks, replays deletes, and leaves state untouched when the read fails |
+| `syncStatus.test.js` / `useOnlineStatus.test.jsx` | The header state table; the online flag following the browser events |
 | `pendingSync.test.js` | Change detection and the pending-write bookkeeping |
 | `driveSync.test.js` | Device-file parsing and newest-wins merge, sign-in (incl. popup opened inside the click) and token expiry, coalesced uploads to this device's own file only, pending-id clearing with a newer edit queued, 404 recovery, leaving an unreadable own file untouched, skipping another device's bad file, paginated listing, stamps after a clock running ahead, per-tab device ids without Web Locks, error paths (fake `fetch` and GIS); Android path: native sign-in without GIS, silent renewal at startup / expiry / on `401`, renewal that needs the user, device sign-out |
 | `nativeGoogleAuth.test.js` | Interactive vs silent token requests, lifetime from `tokeninfo`, `null` for missing/invalid/expired tokens, one-time plugin init with retry, device sign-out (fake plugin and `fetch`) |
