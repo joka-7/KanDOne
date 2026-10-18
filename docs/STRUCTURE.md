@@ -119,6 +119,7 @@ KanDOne/
 ├── e2e/                               # Playwright end-to-end tests
 │   ├── README.md                      # E2E tests (Playwright)
 │   ├── accessibility.spec.js
+│   ├── android-apk.spec.js
 │   ├── chat-simulation.spec.js
 │   ├── dark-mode.spec.js
 │   ├── helpers.js
@@ -136,6 +137,9 @@ KanDOne/
 │   ├── pwa-192x192.png
 │   ├── pwa-512x512.png
 │   └── pwa-64x64.png
+├── scripts/
+│   ├── check-precache.js
+│   └── pwa-chunks.js
 ├── src/                               # App source — single entry point (TasksApp.jsx), no mode gate (unlike…
 │   ├── __tests__/                     # Vitest unit + integration tests
 │   │   ├── APIKeySettings.test.jsx
@@ -143,6 +147,7 @@ KanDOne/
 │   │   ├── ChatModal.test.jsx
 │   │   ├── TasksApp.logic.test.js
 │   │   ├── aiAssistant.test.js
+│   │   ├── androidApk.test.js
 │   │   ├── boardOrder.test.js
 │   │   ├── driveSync.test.js
 │   │   ├── effortScale.test.js
@@ -152,6 +157,7 @@ KanDOne/
 │   │   ├── pendingSync.test.js
 │   │   ├── phaseB.test.js
 │   │   ├── promptSafety.test.js
+│   │   ├── pwaChunks.test.js
 │   │   ├── reminders.test.js
 │   │   ├── sanitize.test.js
 │   │   ├── storageKeys.e2eParity.test.js
@@ -193,6 +199,7 @@ KanDOne/
 │   │   ├── aiAssistant.js
 │   │   └── coachPrompts.js
 │   ├── utils/
+│   │   ├── androidApk.js
 │   │   ├── boardOrder.js
 │   │   ├── effortScale.js
 │   │   ├── labelColors.js

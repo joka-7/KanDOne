@@ -111,7 +111,8 @@ npm run lint          # eslint (also runs in CI)
 
 The same web build runs inside a Capacitor shell (`android/`). CI
 (`.github/workflows/android.yml`) builds and signs the APK on every pull request
-and publishes it as a release on every push to `main`. To build locally you need
+and publishes it as a release on every push to `main`. The website links to the
+latest APK beside Install App, on Android browsers only. To build locally you need
 JDK 21 and the Android SDK:
 
 ```bash
@@ -134,6 +135,7 @@ KanDOne/
 ├── docs/
 ├── e2e/                   # Playwright end-to-end tests
 ├── public/
+├── scripts/
 ├── src/                   # App source — single entry point (TasksApp.jsx), no mode gate (unlike…
 ├── .ai                    # Ogen-ai submodule — the shared source of rules, skills and the ai-sync…
 ├── .env.example

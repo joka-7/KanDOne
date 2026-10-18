@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Capacitor } from '@capacitor/core';
+import { isAndroidBrowser } from './utils/androidApk';
 
 export function usePwaInstall() {
   const [installPrompt, setInstallPrompt] = useState(null);
@@ -40,12 +41,16 @@ export function usePwaInstall() {
     window.alert(t('header.chromeInstallHint'));
   }, [installPrompt, isIOS]);
 
+  // The Android app is already installed; it has nothing to offer here.
+  const canInstall = !isStandalone && !Capacitor.isNativePlatform();
+
   return {
     installPrompt,
     isIOS,
     isStandalone,
-    // The Android app is already installed; it has nothing to offer here.
-    canInstall: !isStandalone && !Capacitor.isNativePlatform(),
+    canInstall,
+    // The website offers the APK wherever it offers Install App, on Android only.
+    canOfferApk: canInstall && typeof navigator !== 'undefined' && isAndroidBrowser(navigator.userAgent),
     runInstall,
   };
 }

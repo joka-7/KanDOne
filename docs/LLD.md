@@ -44,6 +44,7 @@ src/
 │   ├── RoutineReminderFields.jsx
 │   └── AppBrandMark.jsx        # logo SVG
 ├── utils/
+│   ├── androidApk.js           # latest-APK URL and the Android-browser check
 │   ├── taskHelpers.js          # pure task/display helpers (tested)
 │   ├── labelSync.js            # merge local/cloud label & task libraries
 │   ├── pendingSync.js          # record ids changed locally but not yet in the cloud
@@ -408,6 +409,8 @@ builds the client; the module exports one instance built from
 | `loadAllItems(uid, mode)` | `{ items, deletedIds }` for `getCollectionName(mode)` — merged live records plus ids whose newest entry is a delete — or `null` when Drive has never held one. `resolveTasksOnSignIn` drops a local copy of a deleted id unless it has an unsynced edit. Files that can never be read (404, `corrupt-file`, `unsupported-version`) are skipped; any other read failure (network, 429, 5xx, 401) rejects the whole load. The listing follows `nextPageToken`. |
 | `updateItem` / `deleteItem` / `batchSaveItems` | Queue upsert/delete operations; resolve once the upload holding them lands, then `clearPendingIds` for ids with no newer write still queued. |
 | `parseDeviceDocument(raw)` | Pure: validate a device file; throws `corrupt-file` / `unsupported-version` rather than returning empty, so a bad file is never overwritten. An unreadable *own* file is left in place and this device continues under a new device id. |
+| `findCompactableFiles(entries, { now, isOwn, maxIdleMs })` | Pure: which files `readMerged` may delete afterwards. Picks the winner of every record and profile field across all readable files (newest stamp, then higher device id as in the merge, then higher file id so exact copies keep one winner on every device) and lists a file only if its `modifiedTime` is at least `STALE_DEVICE_FILE_MS` (90 days) older than the reference time, it holds no winner, it is not `lossy`, it is not in an ambiguous tie, and `isOwn` says it is not this device's file. The reference is `min(now, newest modifiedTime listed)`, so a skewed local clock cannot make recent files look idle and a wholly idle account lists nothing. Ambiguous tie: same stamp and device with different content in two files, which pins both. `lossy` is set by `readFile` when `parsingDroppedData` finds an entry the parser dropped, an unknown top-level field, or an unknown field inside an entry (`hasUnknownEntryKeys`). `isOwn` is asked only about files that would otherwise be listed. A file without a usable `modifiedTime`, or that could not be read, is never listed. |
+| `deleteIdleFiles(readable)` (inside `createDriveSync`) | Runs after a merge, at most once per `COMPACTION_MIN_INTERVAL_MS` (1 h; cleared on sign-out; a backwards clock does not block it). For up to `MAX_DELETES_PER_PASS` (10) listed files, in parallel (`Promise.allSettled`), it re-reads `modifiedTime` and sends `DELETE` only if unchanged since the pull read it; this narrows, but cannot close, the race with the owner writing (Drive has no conditional delete). A 404 is done; any other failure is counted and logged once, never thrown.
 | `applyOperations(doc, ops, at)` / `mergeDeviceDocuments(docs)` | Pure: stamp queued ops into this device's file; keep the newest entry per record/field across files (tie → higher device id) and list deleted ids. |
 | `nextStamp(now, latestSeen)` | Pure: `max(now, latestSeen + 1)`, so a write is never stamped before anything already read. |
 
@@ -528,9 +531,12 @@ validation live in `modeldispatcher-browser-agent`; this file keeps app state.
 
 ### 6.3 `usePwaInstall.js`
 Captures `beforeinstallprompt`, detects iOS/standalone, exposes
-`{ canInstall, runInstall, isIOS, isStandalone, installPrompt }`. `canInstall`
-is false inside the Android app, which is already installed. `runInstall(t)`
-triggers the native prompt or shows an OS-specific hint.
+`{ canInstall, canOfferApk, runInstall, isIOS, isStandalone, installPrompt }`.
+`canInstall` is false inside the Android app, which is already installed.
+`canOfferApk` is `canInstall` on an Android browser (`isAndroidBrowser` in
+`utils/androidApk.js`): `TasksApp` then shows a link to `ANDROID_APK_URL`, the
+latest release's `KanDOne.apk`, beside Install App in the header and the menu.
+`runInstall(t)` triggers the native prompt or shows an OS-specific hint.
 
 ---
 
@@ -632,6 +638,17 @@ write — Firestore is no longer used.
 - React plugin + `VitePWA({ registerType:'autoUpdate' })`.
 - Manifest: name/short_name `KanDOne`, theme `#059669`, standalone display, icon
   set; precache globs cover `js,css,html,ico,png,svg`.
+- The Android sign-in plugin (`@capgo/capacitor-social-login`) is reached only
+  from `nativeGoogleAuth.js`, which runs inside the Capacitor shell. Its chunks
+  stay in `dist/` for the APK but are named `social-login-<hash>.js`
+  (`chunkFileName` in `scripts/pwa-chunks.js`, set as `output.chunkFileNames`)
+  and listed in Workbox `globIgnores` (`NATIVE_ONLY_PRECACHE_IGNORES`), so web
+  visitors do not download them (about 56 KiB). A chunk gets the name only if
+  every module in it is the plugin or `tslib`; one that also holds anything else
+  keeps its normal name and stays precached, which is the safe side. `npm run check:precache`
+  (`scripts/check-precache.js`, run by CI after the build) fails if the service
+  worker precaches one, if no such chunk exists any more, or if a web chunk
+  imports one statically — which would load it without it being precached.
 - Vitest block: `jsdom` env, globals on, excludes `node_modules` and `e2e`.
 - Optional: `npm run build:analyze` enables `rollup-plugin-visualizer`.
 

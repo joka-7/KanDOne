@@ -52,7 +52,9 @@
     "syncNow": "Synchroniser",
     "syncNowRetry": "Réessayer la synchronisation",
     "syncErrorBadge": "Problème de sync",
-    "syncErrorTooltip": "La dernière synchronisation a échoué — cliquez sur « Synchroniser » pour réessayer. (Cela vous déconnecte.)"
+    "syncErrorTooltip": "La dernière synchronisation a échoué — cliquez sur « Synchroniser » pour réessayer. (Cela vous déconnecte.)",
+    "androidApp": "Application Android",
+    "androidAppTooltip": "Télécharger l'application Android (APK). Ouvrez le fichier sur votre téléphone pour l'installer."
   },
   "tabs": {
     "board": "Tableau",

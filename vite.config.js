@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { visualizer } from 'rollup-plugin-visualizer'
+import { chunkFileName, NATIVE_ONLY_PRECACHE_IGNORES } from './scripts/pwa-chunks.js'
 
 export default defineConfig({
   plugins: [
@@ -31,7 +32,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        globIgnores: ['**/icon-master.png'],
+        globIgnores: ['**/icon-master.png', ...NATIVE_ONLY_PRECACHE_IGNORES],
       },
     }),
     // Opt-in: `npm run build:analyze` writes dist/stats.html (not run in CI).
@@ -42,6 +43,13 @@ export default defineConfig({
       open: false,
     }),
   ].filter(Boolean),
+  build: {
+    rollupOptions: {
+      // Names the Android sign-in plugin's chunks so the service worker can skip
+      // them (see scripts/pwa-chunks.js); `npm run check:precache` verifies it.
+      output: { chunkFileNames: chunkFileName },
+    },
+  },
   test: {
     environment: 'jsdom',
     globals: true,

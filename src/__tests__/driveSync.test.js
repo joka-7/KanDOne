@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  applyOperations, createDriveSync, formatSignInError, mergeDeviceDocuments, nextStamp, parseDeviceDocument,
+  applyOperations, createDriveSync, findCompactableFiles, formatSignInError, mergeDeviceDocuments, nextStamp,
+  parseDeviceDocument, STALE_DEVICE_FILE_MS,
 } from '../driveSync.js';
 import { readPending, recordLocalChanges } from '../utils/pendingSync.js';
 
@@ -52,12 +53,16 @@ function fakeGoogle({ files = {}, failWith = null, pageLimit = Infinity, failRea
       const exact = params.get('q').match(/^name = '(.+)'$/)?.[1];
       const list = Object.entries(state.files)
         .filter(([, f]) => (exact ? f.name === exact : f.name.startsWith('kandone-')))
-        .map(([id, f]) => ({ id, name: f.name }));
+        .map(([id, f]) => ({ id, name: f.name, modifiedTime: f.modifiedTime }));
       const start = Number(params.get('pageToken') || 0);
       const end = start + Math.min(pageLimit, Number(params.get('pageSize')));
       return json(end < list.length
         ? { files: list.slice(start, end), nextPageToken: String(end) }
         : { files: list.slice(start) });
+    }
+    const modified = url.match(/\/drive\/v3\/files\/([^?]+)\?fields=modifiedTime/);
+    if (modified) {
+      return state.files[modified[1]] ? json({ modifiedTime: state.files[modified[1]].modifiedTime }) : json({}, 404);
     }
     const media = url.match(/\/drive\/v3\/files\/([^?]+)\?alt=media/);
     if (media && failRead[media[1]] === 'network') return { ok: true, status: 200, text: async () => { throw new TypeError('network error'); } };
@@ -651,6 +656,379 @@ describe('driveSync.js', () => {
         expect([google.state.deleted, google.state.revoked, nativeAuth.signOut.mock.calls.length, loadGis.mock.calls.length])
           .toEqual([['a'], 'app-token-1', 1, 0]);
       });
+    });
+  });
+
+  describe('compacting idle device files', () => {
+    const DAY = 86_400_000;
+    const idle = (days) => new Date(NOW - days * DAY).toISOString();
+    const task = (id, at, name = `task ${id}`) => ({ [id]: { item: { id, name }, at } });
+    /** A device file as Drive lists it: `days` since its last write. */
+    const file = (device, { days, tasks = {}, profile = {} }) => ({
+      ...deviceFile(device, { tasks }, profile),
+      modifiedTime: idle(days),
+    });
+    const names = (google) => Object.values(google.state.files).map((f) => f.name).sort();
+    const pull = (google, options) => build({ google, storage: signedIn(), ...options }).sync.loadAllItems('uid', 'tasks');
+    const deletes = (google) => google.fetchImpl.mock.calls.filter(([, init]) => init?.method === 'DELETE');
+
+    /** Same Drive, but `intercept(url, init)` may answer a request itself (return undefined to pass it on). */
+    function withInterceptor(google, intercept) {
+      const real = google.fetchImpl.getMockImplementation();
+      google.fetchImpl.mockImplementation(async (url, init = {}) => (await intercept(url, init)) ?? real(url, init));
+    }
+    const refused = (status) => ({ ok: false, status, json: async () => ({}), headers: { get: () => null } });
+    /** A signed-in session that outlives the clock changes some tests make. */
+    const longSession = () => memoryStorage({ [SESSION_KEY]: validSession({ expiresAt: NOW + 20 * 365 * DAY }) });
+
+    afterEach(() => { vi.restoreAllMocks(); });
+
+    it('deletes a file idle for 90 days whose every record is older elsewhere, and changes nothing anyone sees', async () => {
+      const google = fakeGoogle({
+        files: {
+          old: file('old', { days: 120, tasks: { ...task(1, 10), ...task(2, 10) } }),
+          live: file('live', { days: 1, tasks: { ...task(1, 20, 'edited'), ...task(2, 30) } }),
+        },
+      });
+      const before = mergeDeviceDocuments([parseDeviceDocument(JSON.parse(google.state.files.old.body)),
+        parseDeviceDocument(JSON.parse(google.state.files.live.body))]);
+
+      const cloud = await pull(google);
+
+      expect(names(google)).toEqual(['kandone-live.json']);
+      expect(cloud.items).toEqual(before.collections.tasks);
+    });
+
+    it('keeps an idle file that holds the newest copy of any record', async () => {
+      const google = fakeGoogle({
+        files: {
+          old: file('old', { days: 400, tasks: { ...task(1, 10), ...task(2, 99) } }),
+          live: file('live', { days: 1, tasks: task(1, 20) }),
+        },
+      });
+
+      await pull(google);
+
+      expect(names(google)).toEqual(['kandone-live.json', 'kandone-old.json']);
+    });
+
+    it.each([
+      ['89 days idle is kept', 89, true],
+      ['one tick under 90 days idle is kept', STALE_DEVICE_FILE_MS / DAY - 1 / DAY, true],
+      ['exactly 90 days idle is deleted', 90, false],
+      ['a year idle is deleted', 365, false],
+    ])('%s', async (_label, days, kept) => {
+      const google = fakeGoogle({
+        files: {
+          old: file('old', { days, tasks: task(1, 10) }),
+          live: file('live', { days: 0, tasks: task(1, 20) }),
+        },
+      });
+
+      await pull(google);
+
+      expect(names(google).includes('kandone-old.json')).toBe(kept);
+    });
+
+    it("never deletes this device's own file, however idle and superseded it is", async () => {
+      const google = fakeGoogle({
+        files: {
+          mine: file('this', { days: 500, tasks: task(1, 10) }),
+          live: file('live', { days: 1, tasks: task(1, 20) }),
+        },
+      });
+
+      await pull(google);
+
+      expect(names(google)).toEqual(['kandone-live.json', 'kandone-this.json']);
+    });
+
+    it('deletes an idle file with no records at all', async () => {
+      const google = fakeGoogle({
+        files: { empty: file('empty', { days: 200 }), live: file('live', { days: 1, tasks: task(1, 20) }) },
+      });
+
+      await pull(google);
+
+      expect(names(google)).toEqual(['kandone-live.json']);
+    });
+
+    it.each([
+      ['a profile field only it has is kept', { labels: { value: ['x'], at: 5 } }, {}, true],
+      ['a profile field newer than elsewhere is kept', { labels: { value: ['x'], at: 50 } }, { labels: { value: ['y'], at: 40 } }, true],
+      ['a profile field older than elsewhere is deleted', { labels: { value: ['x'], at: 5 } }, { labels: { value: ['y'], at: 40 } }, false],
+    ])('an idle file with %s', async (_label, oldProfile, liveProfile, kept) => {
+      const google = fakeGoogle({
+        files: {
+          old: file('old', { days: 200, tasks: task(1, 10), profile: oldProfile }),
+          live: file('live', { days: 1, tasks: task(1, 20), profile: liveProfile }),
+        },
+      });
+
+      await pull(google);
+
+      expect(names(google).includes('kandone-old.json')).toBe(kept);
+    });
+
+    it.each([
+      ['a delete older than a newer edit elsewhere is deleted', { 1: { item: null, at: 10 } }, task(1, 20), false],
+      ['a delete newer than the copy elsewhere is kept', { 1: { item: null, at: 30 } }, task(1, 20), true],
+      ['an edit older than a newer delete elsewhere is deleted', task(1, 10), { 1: { item: null, at: 20 } }, false],
+    ])('an idle file with %s', async (_label, oldTasks, liveTasks, kept) => {
+      const google = fakeGoogle({
+        files: {
+          old: file('old', { days: 200, tasks: oldTasks }),
+          live: file('live', { days: 1, tasks: liveTasks }),
+        },
+      });
+
+      await pull(google);
+
+      expect(names(google).includes('kandone-old.json')).toBe(kept);
+    });
+
+    it('breaks a tie between devices the way the merge does, so the winner is never deleted', async () => {
+      const google = fakeGoogle({
+        files: {
+          low: file('aaa', { days: 200, tasks: task(1, 10, 'from aaa') }),
+          high: file('zzz', { days: 200, tasks: task(1, 10, 'from zzz') }),
+          live: file('live', { days: 0, tasks: task(2, 50) }),
+        },
+      });
+
+      const cloud = await pull(google);
+
+      expect(names(google)).toEqual(['kandone-live.json', 'kandone-zzz.json']);
+      expect(cloud.items.find((t) => t.id === 1)).toEqual({ id: 1, name: 'from zzz' });
+    });
+
+    it('keeps exactly one of two identical idle files', async () => {
+      const twin = (id) => ({ ...file('same', { days: 200, tasks: task(1, 10) }), id });
+      const google = fakeGoogle({ files: { a: twin('a'), b: twin('b'), live: file('live', { days: 0, tasks: task(2, 50) }) } });
+
+      await pull(google);
+
+      expect(Object.keys(google.state.files).sort()).toEqual(['b', 'live']);
+    });
+
+    it('keeps both files when one device id wrote different content at the same stamp, since the merge cannot say which wins', async () => {
+      const google = fakeGoogle({
+        files: {
+          a: file('same', { days: 200, tasks: task(1, 10, 'first') }),
+          b: file('same', { days: 200, tasks: task(1, 10, 'second') }),
+          live: file('live', { days: 0, tasks: task(2, 50) }),
+        },
+      });
+
+      await pull(google);
+
+      expect(Object.keys(google.state.files).sort()).toEqual(['a', 'b', 'live']);
+    });
+
+    it('leaves files with no modifiedTime and files it cannot read alone', async () => {
+      const google = fakeGoogle({
+        files: {
+          unknown: deviceFile('unknown', { tasks: task(1, 10) }),
+          corrupt: { name: 'kandone-bad.json', body: '{"version":1', modifiedTime: idle(300) },
+          live: file('live', { days: 1, tasks: task(1, 20) }),
+        },
+      });
+
+      await pull(google);
+
+      expect(names(google)).toEqual(['kandone-bad.json', 'kandone-live.json', 'kandone-unknown.json']);
+    });
+
+    it.each([
+      ['an entry whose stamp is not a number', { version: 1, device: 'old', profile: {}, collections: { tasks: { 1: { item: { id: 1 }, at: 'x' } } } }],
+      ['an entry whose record is not an object', { version: 1, device: 'old', profile: {}, collections: { tasks: { 1: { item: 'oops', at: 5 } } } }],
+      ['a field this version does not know', { version: 1, device: 'old', profile: {}, collections: {}, addedLater: { keep: true } }],
+      ['a record entry with a field this version does not know', { version: 1, device: 'old', profile: {}, collections: { tasks: { 1: { item: { id: 1 }, at: 5, editedBy: 'phone' } } } }],
+    ])('keeps an idle file holding %s, which parsing would drop without a trace', async (_label, raw) => {
+      const google = fakeGoogle({
+        files: {
+          old: { name: 'kandone-old.json', body: JSON.stringify(raw), modifiedTime: idle(300) },
+          live: file('live', { days: 1, tasks: task(1, 20) }),
+        },
+      });
+
+      await pull(google);
+
+      expect(names(google)).toEqual(['kandone-live.json', 'kandone-old.json']);
+    });
+
+    it('keeps an idle file whose profile entry has a field this version does not know, even when a newer copy exists elsewhere', async () => {
+      const raw = { version: 1, device: 'old', profile: { labels: { value: ['x'], at: 5, editedBy: 'phone' } }, collections: {} };
+      const google = fakeGoogle({
+        files: {
+          old: { name: 'kandone-old.json', body: JSON.stringify(raw), modifiedTime: idle(300) },
+          live: file('live', { days: 1, tasks: task(1, 20), profile: { labels: { value: ['y'], at: 50 } } }),
+        },
+      });
+
+      await pull(google);
+
+      expect(names(google)).toEqual(['kandone-live.json', 'kandone-old.json']);
+    });
+
+    it('does not delete a file that was written to after the pull read it', async () => {
+      const google = fakeGoogle({
+        files: {
+          old: file('old', { days: 200, tasks: task(1, 10) }),
+          live: file('live', { days: 1, tasks: task(1, 20) }),
+        },
+      });
+      // The owner comes back and writes between our read and the delete.
+      withInterceptor(google, (url) => {
+        if (url.includes('/files/old?fields=modifiedTime')) google.state.files.old.modifiedTime = idle(0);
+      });
+
+      await pull(google);
+
+      expect(deletes(google)).toHaveLength(0);
+      expect(names(google)).toEqual(['kandone-live.json', 'kandone-old.json']);
+    });
+
+    it.each([
+      ['a device whose clock is years ahead', 5 * 365 * DAY],
+      ['a device whose clock is years behind', -5 * 365 * DAY],
+    ])('does not delete a recently written file on %s', async (_label, skew) => {
+      const google = fakeGoogle({
+        files: {
+          old: file('old', { days: 20, tasks: task(1, 10) }),
+          live: file('live', { days: 0, tasks: task(1, 20) }),
+        },
+      });
+      vi.setSystemTime(NOW + skew);
+
+      await pull(google, { storage: longSession() });
+
+      expect(names(google)).toEqual(['kandone-live.json', 'kandone-old.json']);
+    });
+
+    it('checks for idle files at most once an hour, however many reads happen', async () => {
+      const google = fakeGoogle({ files: { live: file('live', { days: 1, tasks: task(1, 20) }) } });
+      const { sync } = build({ google, storage: longSession() });
+      await sync.loadAllItems('uid', 'tasks');
+
+      google.state.files.old = file('old', { days: 200, tasks: task(1, 10) });
+      await sync.loadAllItems('uid', 'tasks');
+      expect(names(google)).toEqual(['kandone-live.json', 'kandone-old.json']);
+
+      vi.advanceTimersByTime(60 * 60 * 1000);
+      await sync.loadAllItems('uid', 'tasks');
+      expect(names(google)).toEqual(['kandone-live.json']);
+    });
+
+    it('deletes at most ten files per pass and the rest an hour later, so one pull never fans out into dozens of requests', async () => {
+      const stale = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`old${i}`, file(`d${String(i).padStart(2, '0')}`, { days: 200, tasks: task(1, i + 1) })]));
+      const google = fakeGoogle({ files: { ...stale, live: file('live', { days: 0, tasks: task(1, 1000) }) } });
+      const { sync } = build({ google, storage: longSession() });
+
+      await sync.loadAllItems('uid', 'tasks');
+      expect(Object.keys(google.state.files)).toHaveLength(1 + 2);
+
+      vi.advanceTimersByTime(60 * 60 * 1000);
+      await sync.loadAllItems('uid', 'tasks');
+      expect(names(google)).toEqual(['kandone-live.json']);
+    });
+
+    it('runs one pass when tasks and labels are pulled together', async () => {
+      const google = fakeGoogle({
+        files: {
+          old: file('old', { days: 200, tasks: task(1, 10) }),
+          live: file('live', { days: 1, tasks: task(1, 20) }),
+        },
+      });
+      const { sync } = build({ google, storage: signedIn() });
+
+      await Promise.all([sync.loadAllItems('uid', 'tasks'), sync.loadTaskLabels('uid')]);
+
+      expect(deletes(google)).toHaveLength(1);
+    });
+
+    it('still completes the pull when Drive refuses the delete, and says so', async () => {
+      const google = fakeGoogle({
+        files: {
+          old: file('old', { days: 200, tasks: task(1, 10) }),
+          live: file('live', { days: 1, tasks: task(1, 20) }),
+        },
+      });
+      withInterceptor(google, (url, init) => (init.method === 'DELETE' ? refused(403) : undefined));
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const cloud = await pull(google);
+
+      expect(cloud.items.map((t) => t.id)).toEqual([1]);
+      expect(deletes(google)).toHaveLength(1);
+      expect(warn).toHaveBeenCalledWith(expect.stringMatching(/could not remove 1 idle/i));
+      expect(names(google)).toEqual(['kandone-live.json', 'kandone-old.json']);
+    });
+
+    it('treats a file another device already deleted as done, without a warning', async () => {
+      const google = fakeGoogle({
+        files: {
+          old: file('old', { days: 200, tasks: task(1, 10) }),
+          live: file('live', { days: 1, tasks: task(1, 20) }),
+        },
+      });
+      withInterceptor(google, (url, init) => (init.method === 'DELETE' ? refused(404) : undefined));
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const cloud = await pull(google);
+
+      expect(cloud.items.map((t) => t.id)).toEqual([1]);
+      expect(deletes(google)).toHaveLength(1);
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findCompactableFiles', () => {
+    const NOW_MS = 1_700_000_000_000;
+    const old = new Date(NOW_MS - STALE_DEVICE_FILE_MS - 1).toISOString();
+    const recent = new Date(NOW_MS).toISOString();
+    const doc = (device, tasks) => ({ version: 1, device, profile: {}, collections: { tasks } });
+    const entry = (at, name = 'x') => ({ item: { id: 1, name }, at });
+    const options = { now: NOW_MS, isOwn: () => false };
+
+    it('lists only files that are idle, not needed and not this device\'s own', () => {
+      const entries = [
+        { id: 'a', name: 'kandone-a.json', modifiedTime: old, document: doc('a', { 1: entry(5) }) },
+        { id: 'b', name: 'kandone-b.json', modifiedTime: recent, document: doc('b', { 1: entry(9) }) },
+        { id: 'c', name: 'kandone-c.json', modifiedTime: old, document: doc('c', { 1: entry(2) }) },
+      ];
+
+      const ids = findCompactableFiles(entries, { ...options, isOwn: (f) => f.id === 'c' }).map((f) => f.id);
+
+      expect(ids).toEqual(['a']);
+    });
+
+    it('asks whether a file is its own only once it is otherwise deletable', () => {
+      const isOwn = vi.fn(() => false);
+      const entries = [
+        { id: 'a', name: 'kandone-a.json', modifiedTime: old, document: doc('a', { 1: entry(9) }) },
+      ];
+
+      findCompactableFiles(entries, { ...options, isOwn });
+
+      expect(isOwn).not.toHaveBeenCalled();
+    });
+
+    it('measures idleness against the newest write Drive reports when the local clock is ahead of it', () => {
+      const entries = [
+        { id: 'a', name: 'kandone-a.json', modifiedTime: old, document: doc('a', { 1: entry(5) }) },
+        { id: 'b', name: 'kandone-b.json', modifiedTime: old, document: doc('b', { 1: entry(9) }) },
+      ];
+
+      // The only evidence of "now" is Drive's own newest write, which is as old as the file.
+      expect(findCompactableFiles(entries, { ...options, now: NOW_MS + 10 * STALE_DEVICE_FILE_MS })).toEqual([]);
+    });
+
+    it('lists nothing when the document carries entries it could not parse', () => {
+      const lossy = { id: 'a', name: 'kandone-a.json', modifiedTime: old, document: doc('a', { 1: entry(5) }), lossy: true };
+      const live = { id: 'b', name: 'kandone-b.json', modifiedTime: recent, document: doc('b', { 1: entry(9) }) };
+
+      expect(findCompactableFiles([lossy, live], options)).toEqual([]);
     });
   });
 

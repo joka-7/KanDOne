@@ -20,6 +20,7 @@ import {
 } from './driveSync';
 import { getStorageKey, STATUSES_TASKS, filterItemsForMode } from './statuses';
 import { usePwaInstall } from './usePwaInstall';
+import { ANDROID_APK_URL } from './utils/androidApk';
 import AppBrandMark from './components/AppBrandMark';
 import KanbanBoard from './components/KanbanBoard';
 import { STORAGE_KEYS, TASKS_LABELS_KEY, TASKS_EFFORT_TIERS_KEY } from './storageKeys.js';
@@ -166,7 +167,7 @@ export default function TasksApp() {
   const [showTasksWelcome, setShowTasksWelcome] = useState(
     () => !localStorage.getItem(STORAGE_KEYS.tasksWelcome),
   );
-  const { canInstall, runInstall } = usePwaInstall();
+  const { canInstall, canOfferApk, runInstall } = usePwaInstall();
 
   const fileInputRef = useRef(null);
   const toastTimerRef = useRef(null);
@@ -2083,6 +2084,17 @@ Rules:
                 <span className="shrink-0 max-w-[5rem] truncate sm:max-w-none">{t('header.installApp')}</span>
               </button>
             )}
+            {canOfferApk && (
+              <a
+                href={ANDROID_APK_URL}
+                rel="noreferrer"
+                className="hidden sm:flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs sm:text-sm font-bold bg-white/10 border border-white/20 text-white min-h-[40px] transition-colors hover:bg-white/20 shrink-0"
+                title={t('header.androidAppTooltip')}
+              >
+                <Download size={16} className="shrink-0" />
+                <span className="shrink-0 max-w-[6rem] truncate sm:max-w-none">{t('header.androidApp')}</span>
+              </a>
+            )}
 
             {/* Desktop controls */}
             <div className="hidden md:flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white/10 border border-white/20">
@@ -2213,6 +2225,17 @@ Rules:
                       >
                         <Smartphone size={16} className="text-emerald-600" /> {t('header.installApp')}
                       </button>
+                    )}
+                    {canOfferApk && (
+                      <a
+                        href={ANDROID_APK_URL}
+                        rel="noreferrer"
+                        onClick={() => setMobileMenuOpen(false)}
+                        title={t('header.androidAppTooltip')}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-emerald-700 hover:bg-emerald-50 active:bg-emerald-100"
+                      >
+                        <Download size={16} className="text-emerald-600" /> {t('header.androidApp')}
+                      </a>
                     )}
                   </div>
                 </>
