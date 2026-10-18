@@ -120,6 +120,7 @@ KanDOne/
 │   ├── README.md                      # E2E tests (Playwright)
 │   ├── accessibility.spec.js
 │   ├── android-apk.spec.js
+│   ├── back-button.spec.js
 │   ├── chat-simulation.spec.js
 │   ├── dark-mode.spec.js
 │   ├── helpers.js
@@ -173,6 +174,7 @@ KanDOne/
 │   │   ├── taskHelpers.test.js
 │   │   ├── taskPriority.test.js
 │   │   ├── taskTypes.test.js
+│   │   ├── useBackClose.test.jsx
 │   │   ├── useOnlineStatus.test.jsx
 │   │   └── useStorageSync.test.jsx
 │   ├── components/
@@ -197,6 +199,7 @@ KanDOne/
 │   ├── data/
 │   │   └── taskTemplates.js
 │   ├── hooks/
+│   │   ├── useBackClose.js
 │   │   ├── useModalA11y.js            # Dialog accessibility helpers
 │   │   ├── useOnlineStatus.js
 │   │   └── useStorageSync.js
