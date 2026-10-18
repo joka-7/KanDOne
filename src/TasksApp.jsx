@@ -43,7 +43,7 @@ import {
   showReminderNotification,
   snoozeTaskReminder, isReminderSnoozed, SNOOZE_MINUTES,
 } from './utils/reminders';
-import { resolveLabelsOnSignIn, resolveTasksOnSignIn } from './utils/labelSync';
+import { pullTasks, pullLabels } from './utils/cloudPull';
 import {
   fingerprintItems, diffFingerprints, readPending, recordLocalChanges,
   readDataOwner, writeDataOwner, clearLocalSyncState, countPending,
@@ -311,35 +311,33 @@ export default function TasksApp() {
   );
 
   const lastPullAtRef = useRef(null);
-  const pullTasksFromCloud = useCallback(async (uid, localTasks) => {
-    const cloud = await loadAllItems(uid, MODE);
-    const { tasks: mergedTasks, pushIds, deleteFromCloud } = resolveTasksOnSignIn(
-      localTasks, filterItemsForMode(cloud?.items ?? [], MODE), readPending(MODE), cloud?.deletedIds,
-    );
-    const orderedTasks = ensureBoardOrders(mergedTasks);
-    // The pull is the new baseline: without reseating the snapshot the
-    // tracking effect would read every record the pull changed as a fresh
-    // local edit and pin it against all future pulls.
-    syncedSnapshotRef.current = fingerprintItems(orderedTasks);
-    setTasks(orderedTasks);
-    // Push only what the cloud lacks or has stale: local edits, offline
-    // creations, and records whose board order the normalization moved.
-    const reordered = diffFingerprints(fingerprintItems(mergedTasks), fingerprintItems(orderedTasks)).edited;
-    const toPush = new Set([...pushIds, ...reordered]);
-    await batchSaveItems(uid, MODE, orderedTasks.filter((t) => toPush.has(String(t.id))));
-    // Replay deletes made while unsynced, or the next pull resurrects them.
-    await Promise.all(deleteFromCloud.map((id) => deleteItem(uid, MODE, id)));
+  const pullTasksFromCloud = useCallback(async (uid) => {
+    const count = await pullTasks({
+      mode: MODE,
+      load: () => loadAllItems(uid, MODE),
+      getLocal: () => tasksRef.current,
+      getPending: () => readPending(MODE),
+      apply: (ordered) => {
+        // The pull is the new baseline: without reseating the snapshot the
+        // tracking effect would read every record the pull changed as a fresh
+        // local edit and pin it against all future pulls.
+        syncedSnapshotRef.current = fingerprintItems(ordered);
+        tasksRef.current = ordered;
+        setTasks(ordered);
+      },
+      save: (changed) => batchSaveItems(uid, MODE, changed),
+      remove: (id) => deleteItem(uid, MODE, id),
+    });
     lastPullAtRef.current = Date.now();
-    return cloud?.items.length ?? 0;
+    return count;
   }, []);
 
-  const pullLabelsFromCloud = useCallback(async (uid, localLabels) => {
-    const cloudLabels = await loadTaskLabels(uid);
-    const { labels: mergedLabels, pushToCloud } = resolveLabelsOnSignIn(localLabels, cloudLabels);
-    setLabels(mergedLabels);
-    if (pushToCloud) await saveTaskLabels(uid, mergedLabels);
-    return mergedLabels.length;
-  }, []);
+  const pullLabelsFromCloud = useCallback((uid) => pullLabels({
+    load: () => loadTaskLabels(uid),
+    getLocal: () => parseTaskLabelsStoragePayload(localStorage.getItem(TASKS_LABELS_KEY)),
+    apply: setLabels,
+    save: (merged) => saveTaskLabels(uid, merged),
+  }), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -368,21 +366,22 @@ export default function TasksApp() {
       setSyncing(true);
       try {
         await saveUserProfile(driveUser.uid, { appMode: MODE });
-        let localTasks = tasksRef.current;
-        let localLabels = parseTaskLabelsStoragePayload(localStorage.getItem(TASKS_LABELS_KEY));
         // Data left behind by a different account must never be merged into
         // this one's cloud. Sign-out clears it; this covers sessions that
         // ended without one (expired token, cleared cookies, older builds).
         const owner = readDataOwner();
         if (owner && owner !== driveUser.uid) {
           clearLocalSyncState([MODE]);
-          localTasks = [];
-          localLabels = [];
+          syncedSnapshotRef.current = fingerprintItems([]);
+          tasksRef.current = [];
+          setTasks([]);
+          localStorage.removeItem(TASKS_LABELS_KEY);
+          setLabels([]);
         }
         writeDataOwner(driveUser.uid);
         const [cloudTaskCount, labelCount] = await Promise.all([
-          pullTasksFromCloud(driveUser.uid, localTasks),
-          pullLabelsFromCloud(driveUser.uid, localLabels),
+          pullTasksFromCloud(driveUser.uid),
+          pullLabelsFromCloud(driveUser.uid),
         ]);
         setCloudReady(true);
         clearSyncError();
@@ -418,7 +417,7 @@ export default function TasksApp() {
           // Union-merge rather than overwrite: anything typed into this
           // tab since the last pull (e.g. while it was backgrounded) must
           // survive, even though its id isn't in the snapshot we just read.
-          await pullTasksFromCloud(driveUser.uid, tasksRef.current);
+          await pullTasksFromCloud(driveUser.uid);
           clearSyncError();
         } catch (e) { markSyncError(e); }
         setSyncing(false);
@@ -463,8 +462,8 @@ export default function TasksApp() {
     setSyncing(true);
     try {
       await Promise.all([
-        pullTasksFromCloud(user.uid, tasksRef.current),
-        pullLabelsFromCloud(user.uid, parseTaskLabelsStoragePayload(localStorage.getItem(TASKS_LABELS_KEY))),
+        pullTasksFromCloud(user.uid),
+        pullLabelsFromCloud(user.uid),
       ]);
       setCloudReady(true);
       clearSyncError();
