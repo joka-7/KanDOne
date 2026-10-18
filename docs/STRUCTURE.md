@@ -59,22 +59,27 @@ KanDOne/
 │   │   │       │   │   └── ic_launcher_round.xml
 │   │   │       │   ├── mipmap-hdpi/
 │   │   │       │   │   ├── ic_launcher.png
+│   │   │       │   │   ├── ic_launcher_background.png
 │   │   │       │   │   ├── ic_launcher_foreground.png
 │   │   │       │   │   └── ic_launcher_round.png
 │   │   │       │   ├── mipmap-mdpi/
 │   │   │       │   │   ├── ic_launcher.png
+│   │   │       │   │   ├── ic_launcher_background.png
 │   │   │       │   │   ├── ic_launcher_foreground.png
 │   │   │       │   │   └── ic_launcher_round.png
 │   │   │       │   ├── mipmap-xhdpi/
 │   │   │       │   │   ├── ic_launcher.png
+│   │   │       │   │   ├── ic_launcher_background.png
 │   │   │       │   │   ├── ic_launcher_foreground.png
 │   │   │       │   │   └── ic_launcher_round.png
 │   │   │       │   ├── mipmap-xxhdpi/
 │   │   │       │   │   ├── ic_launcher.png
+│   │   │       │   │   ├── ic_launcher_background.png
 │   │   │       │   │   ├── ic_launcher_foreground.png
 │   │   │       │   │   └── ic_launcher_round.png
 │   │   │       │   ├── mipmap-xxxhdpi/
 │   │   │       │   │   ├── ic_launcher.png
+│   │   │       │   │   ├── ic_launcher_background.png
 │   │   │       │   │   ├── ic_launcher_foreground.png
 │   │   │       │   │   └── ic_launcher_round.png
 │   │   │       │   ├── values/
@@ -145,6 +150,7 @@ KanDOne/
 │   └── pwa-64x64.png
 ├── scripts/
 │   ├── check-precache.js
+│   ├── gen-android-icons.mjs
 │   └── pwa-chunks.js
 ├── src/                               # App source — single entry point (TasksApp.jsx), no mode gate (unlike…
 │   ├── __tests__/                     # Vitest unit + integration tests
