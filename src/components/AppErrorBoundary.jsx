@@ -14,7 +14,7 @@ const MODE = 'tasks';
 export default class AppErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { error: null };
+    this.state = { error: null, exportFailed: false };
   }
 
   static getDerivedStateFromError(error) {
@@ -26,6 +26,7 @@ export default class AppErrorBoundary extends React.Component {
   }
 
   handleExport = async () => {
+    this.setState({ exportFailed: false });
     try {
       const tasksRaw = localStorage.getItem(getStorageKey(MODE));
       const labelsRaw = localStorage.getItem(TASKS_LABELS_KEY);
@@ -37,7 +38,7 @@ export default class AppErrorBoundary extends React.Component {
       await saveJsonFile(`tasks-backup-${Date.now()}.json`, payload);
     } catch (e) {
       console.error('Crash-recovery export failed:', e);
-      alert('Could not export automatically. Open your browser devtools console and copy localStorage manually.');
+      this.setState({ exportFailed: true });
     }
   };
 
@@ -73,6 +74,11 @@ export default class AppErrorBoundary extends React.Component {
               Reload app
             </button>
           </div>
+          {this.state.exportFailed && (
+            <p role="alert" className="text-sm text-red-600 mt-3">
+              Could not export automatically. Open your browser devtools console and copy localStorage manually.
+            </p>
+          )}
           {this.state.error?.message && (
             <p className="text-xs text-gray-400 mt-4 break-words">{this.state.error.message}</p>
           )}

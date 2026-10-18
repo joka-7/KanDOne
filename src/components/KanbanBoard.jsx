@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   closestCorners,
   useSensor,
@@ -110,7 +110,10 @@ function SortableTaskCard({
       data-testid="board-task-card"
       aria-label={`${safeStr(task.name)}. ${tt('board.dragHandle', 'Drag to reorder')}`}
       onClick={() => onOpen(task.id)}
-      className={`${task.cardColor ? '' : 'bg-white'} border rounded-xl p-2.5 sm:p-3 cursor-grab active:cursor-grabbing hover:shadow-md hover:border-emerald-300 active:bg-emerald-50/50 transition-shadow group touch-manipulation ${
+      // A long press on a phone otherwise opens the text-selection / context menu,
+      // which cancels the touch before the drag starts.
+      onContextMenu={(event) => event.preventDefault()}
+      className={`${task.cardColor ? '' : 'bg-white'} border rounded-xl p-2.5 sm:p-3 cursor-grab active:cursor-grabbing hover:shadow-md hover:border-emerald-300 active:bg-emerald-50/50 transition-shadow group touch-manipulation select-none [-webkit-touch-callout:none] ${
         isRTL ? 'border-r-4' : 'border-l-4'
       } ${getBandStyle(priority.band).stripe} ${
         overdue ? 'border-red-300' : 'border-gray-200'
@@ -121,7 +124,7 @@ function SortableTaskCard({
       <div className="flex items-start justify-between gap-2 mb-1">
         <p className="font-semibold text-gray-800 text-xs sm:text-sm leading-snug flex-1">{safeStr(task.name)}</p>
         <span
-          className="text-gray-300 shrink-0 mt-0.5 p-0.5 rounded"
+          className="text-gray-300 shrink-0 -mt-1 -me-1 p-2 rounded touch-none"
           aria-hidden="true"
           data-testid="board-drag-handle"
         >
@@ -209,7 +212,7 @@ export default function KanbanBoard({
   const [activeId, setActiveId] = useState(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: { distance: 8 },
     }),
     useSensor(TouchSensor, {
