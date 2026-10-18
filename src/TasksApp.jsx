@@ -79,8 +79,9 @@ const PriorityView = lazy(() => import('./components/PriorityView'));
 const TypeView = lazy(() => import('./components/TypeView'));
 
 const MODE = 'tasks';
-/** Wait before asking Drive again when the browser says online but Google was unreachable. */
-const UNREACHABLE_RETRY_MS = 15_000;
+/** First wait before a failed sync retries itself; it doubles up to the cap. */
+const SYNC_RETRY_BASE_MS = 15_000;
+const SYNC_RETRY_MAX_MS = 5 * 60_000;
 
 const PRIORITY_COLORS = {
   high: 'bg-red-100 text-red-700 border-red-200',
@@ -514,13 +515,24 @@ export default function TasksApp() {
     showToast(tt('toast.offline', "You're offline — your changes are saved on this device."));
   }, [syncStatus, showToast, tt]);
 
-  // The browser can report online before Google is reachable (Wi-Fi up, DNS
-  // not yet): keep retrying quietly instead of waiting for a click.
+  // A failed sync used to wait for a click: the focus pull skips while an error
+  // is showing, so one transient failure (a rate limit at start-up, Wi-Fi up
+  // but DNS not yet) left the app unsynced until the user pressed Sync. Retry
+  // quietly, backing off so a failure that will not clear does not hammer Drive.
+  const retryCountRef = useRef(0);
   useEffect(() => {
-    if (!online || !unreachable || !user) return undefined;
-    const timer = setTimeout(() => { handleSyncNowRef.current(); }, UNREACHABLE_RETRY_MS);
+    if (!syncError) {
+      retryCountRef.current = 0;
+      return undefined;
+    }
+    if (!online || !user || syncing) return undefined;
+    const wait = Math.min(SYNC_RETRY_BASE_MS * 2 ** retryCountRef.current, SYNC_RETRY_MAX_MS);
+    const timer = setTimeout(() => {
+      retryCountRef.current += 1;
+      handleSyncNowRef.current();
+    }, wait);
     return () => clearTimeout(timer);
-  }, [online, unreachable, user, syncing]);
+  }, [online, syncError, user, syncing]);
 
   // Coming back online pulls and pushes at once. The merge keeps what was
   // added meanwhile and uploads it; it never replaces the local list.

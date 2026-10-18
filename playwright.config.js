@@ -16,6 +16,9 @@ export default defineConfig({
   webServer: {
     command: 'npm run dev -- --host 127.0.0.1 --port 5199 --strictPort',
     url: 'http://127.0.0.1:5199',
+    // A client ID (public, not a secret) turns on the Drive controls so the
+    // signed-in flows can run against a faked Drive.
+    env: { VITE_GOOGLE_CLIENT_ID: 'e2e-client.apps.googleusercontent.com' },
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },

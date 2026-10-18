@@ -418,7 +418,9 @@ while `navigator.onLine` is false raises the same code instead of ending the
 session. `utils/syncStatus.js` turns that, the browser's online flag
 (`hooks/useOnlineStatus.js`) and the sign-in state into one header state; the
 header shows **Offline** with the count of changes waiting, and a toast says so
-once. When the browser comes back online `TasksApp` runs a normal pull.
+once. When the browser comes back online `TasksApp` runs a normal pull. Any failed
+sync also retries by itself (15 s, doubling to 5 min) while the browser is online,
+because the focus pull is skipped while an error shows and used to wait for a click.
 
 **The pull never replaces the local list.** `utils/cloudPull.js` reads the cloud,
 and only then reads the local tasks and labels, so anything added while the read
