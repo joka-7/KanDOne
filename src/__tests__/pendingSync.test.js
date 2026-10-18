@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   fingerprintItems, diffFingerprints, readPending, recordLocalChanges,
   clearPendingIds, pendingStorageKey,
-  readDataOwner, writeDataOwner, clearLocalSyncState,
+  readDataOwner, writeDataOwner, clearLocalSyncState, countPending,
 } from '../utils/pendingSync';
 
 /** In-memory stand-in for localStorage — keeps these tests off real storage. */
@@ -117,5 +117,18 @@ describe('local data ownership', () => {
   it('survives blocked storage', () => {
     expect(() => writeDataOwner('uid-a', blockedStorage)).not.toThrow();
     expect(() => clearLocalSyncState([MODE], blockedStorage)).not.toThrow();
+  });
+});
+
+describe('countPending', () => {
+  it('counts edits and deletes, and is zero for empty, missing or blocked storage', () => {
+    const storage = fakeStorage();
+    expect(countPending(MODE, storage)).toBe(0);
+
+    recordLocalChanges(MODE, { edited: ['1', '2'], deleted: ['3'] }, storage);
+
+    expect(countPending(MODE, storage)).toBe(3);
+    expect(countPending(MODE, null)).toBe(0);
+    expect(countPending(MODE, blockedStorage)).toBe(0);
   });
 });

@@ -339,7 +339,17 @@ its own device file instead (kept in `sessionStorage`, so a reload reuses it). A
 file another device wrote that can never be read (corrupt, or from a newer app
 version) is skipped rather than blocking sync; a temporary failure (network,
 rate limit) fails the whole pull instead, because a merge missing one device's
-newer edits and deletes would re-upload stale copies over them.
+newer edits and deletes would re-upload stale copies over them. Before failing,
+a request that Drive refused (429) or that hit a transient server error (500,
+502, 503, 504) is retried up to four times with a jittered, doubling wait that
+is never shorter than the server's `Retry-After`; a 5xx is not retried for a
+file *creation*, which may already have succeeded.
+
+A pull lists the folder and downloads every device's file, so it is kept cheap:
+tasks and labels asked for together share one read; a file whose `modifiedTime`
+has not moved since the last pull is not downloaded again; at most four files
+download at once; and the focus-triggered pull waits at least 30 s after the
+previous one (`utils/focusPull.js`).
 
 A device file only ever grows (deletes stay as tombstones) and a device that is
 gone for good leaves its file behind, so every pull keeps downloading it. After a
@@ -378,8 +388,15 @@ the records that need it (`pushIds`) are written back: every write is stamped as
 the newest, so re-sending a record the cloud already holds would let this
 device's copy beat an edit another device makes in the meantime.
 
+Tabs of one browser share one localStorage. Each tab keeps its list in memory and
+rewrites all of it on a change, so a tab that never heard about another tab's
+write would erase it. `hooks/useStorageSync.js` follows the `storage` event: a
+tab adopts the other tab's list (without counting it as its own edit), and
+reloads when the other tab cleared the key (sign-out, data deletion) so it
+cannot write the old copy back.
+
 Local data is tied to the Google account that created it (`readDataOwner`).
-Sign-out removes the local tasks, labels and pending state and reloads, so the
+Sign-out asks first, then removes the local tasks, labels and pending state and reloads, so the
 next person to connect on this device never sees them or uploads them to their
 own Drive; data left by a different account is discarded at connect time rather
 than merged. Labels are not written to Drive until the first pull has merged
@@ -394,6 +411,22 @@ only opens its token popup from a click. So when the token lapses,
 `driveSync.js` reports "signed out" (a timer fires at expiry, and a 401 does the
 same); the header shows "Connect Drive", and one click reconnects and runs the
 sign-in merge above, which replays edits made in between from `pendingSync`.
+
+**Offline.** A request that cannot reach Google fails with `DriveSyncError`
+code `offline` (`driveSync.js`), and a lapsed token that cannot be renewed
+while `navigator.onLine` is false raises the same code instead of ending the
+session. `utils/syncStatus.js` turns that, the browser's online flag
+(`hooks/useOnlineStatus.js`) and the sign-in state into one header state; the
+header shows **Offline** with the count of changes waiting, and a toast says so
+once. When the browser comes back online `TasksApp` runs a normal pull. Any failed
+sync also retries by itself (15 s, doubling to 5 min) while the browser is online,
+because the focus pull is skipped while an error shows and used to wait for a click.
+
+**The pull never replaces the local list.** `utils/cloudPull.js` reads the cloud,
+and only then reads the local tasks and labels, so anything added while the read
+was running is part of the merge. Items created offline are uploaded; cloud
+items the device lacks are added; only a delete recorded as pending or listed
+by another device removes anything.
 
 ### 8.4 AI chat / coaching
 
@@ -464,6 +497,16 @@ The OAuth client ID is a **public identifier** (not a secret). With
 - **Security & privacy**
   - Cloud data lives in each user's own Drive `appDataFolder`, readable only by
     this OAuth client with that user's token — there is no operator-side store.
+  - The CSP is the same in `index.html` (the only one the Android app gets) and
+    the Vercel header, apart from `frame-ancestors`, which a meta tag cannot
+    carry; `csp.parity.test.js` keeps them in step. Scripts allow no inline or
+    eval, `img-src` is `'self' data:`, and `object-src 'none'`, `base-uri` and
+    `form-action` are locked down. The Android manifest sets
+    `allowBackup="false"` so the device backup never copies tasks, the session
+    or AI keys.
+  - `public/privacy.html` states what leaves the device (nothing, unless the user
+    enables Drive sync or AI coaching) and how to remove it; it is linked from the
+    main screen and excluded from the service worker's navigation fallback.
   - The access token (1 h, `drive.appdata` scope) is kept in `localStorage`
     (`kandone_drive_session_v1`) so a reload within the hour stays connected.
   - AI keys never leave the browser except as auth headers to the chosen provider
@@ -561,7 +604,7 @@ A 2026 full-app audit shipped as PRs **#8–#16** (sections A–I). Highlights:
 | D | Architecture | `taskHelpers.js`, root `AppErrorBoundary`, real unit tests |
 | E | Features | Overdue highlighting, undo toast, calendar dark-mode fix |
 | F | A11y / i18n | `html` lang/dir, locale parity, modal a11y, axe e2e |
-| G | Performance | Lazy Firebase, Anthropic, Calendar/modals; bundle analyze |
+| G | Performance | Lazy Google sign-in script, Calendar/modals; bundle analyze |
 | H | Security | CSP harden + Vercel header, wire `delimUserField`, Dependabot |
 | I | Testing / CI | Lint gate, `sanitize.test.js`, Playwright path cleanup |
 

@@ -77,6 +77,12 @@ export function readPending(mode, storage = browserStorage()) {
   }
 }
 
+/** How many records are waiting for a cloud write, for the header to show. */
+export function countPending(mode, storage = browserStorage()) {
+  const { edited, deleted } = readPending(mode, storage);
+  return edited.size + deleted.size;
+}
+
 function writePending(mode, pending, storage) {
   if (!storage) return;
   const edited = capped([...pending.edited]);

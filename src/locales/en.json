@@ -52,9 +52,12 @@
     "syncNow": "Sync Now",
     "syncNowRetry": "Retry sync",
     "syncErrorBadge": "Sync issue",
-    "syncErrorTooltip": "Last cloud sync failed — click \"Sync Now\" to retry. (This signs out.)",
+    "syncErrorTooltip": "Last cloud sync failed — use \"Retry sync\". (Clicking this button disconnects.)",
     "androidApp": "Android app",
-    "androidAppTooltip": "Download the Android app (APK). Open the file on your phone to install it."
+    "androidAppTooltip": "Download the Android app (APK). Open the file on your phone to install it.",
+    "pendingChanges": "Waiting to sync: {{count}}",
+    "offline": "Offline",
+    "offlineTooltip": "No connection to Google Drive. Your changes are saved on this device and will sync when you are back online."
   },
   "tabs": {
     "board": "Status Board",
@@ -356,7 +359,8 @@
       "repoLabel": "View repository",
       "emailLabel": "Send feedback by email",
       "issueLabel": "Report an issue"
-    }
+    },
+    "privacy": "Privacy"
   },
   "rejection": {
     "analysisTitle": "Rejection Analysis",
@@ -586,7 +590,9 @@
       "imported": "File loaded successfully!",
       "undo": "Undo",
       "labelDeleted": "Label deleted.",
-      "stepDeleted": "Step deleted."
+      "stepDeleted": "Step deleted.",
+      "offline": "You're offline — your changes are saved on this device.",
+      "backOnline": "Back online — your changes were synced."
     },
     "alert": {
       "deleteConfirm": "Are you sure you want to delete this task?",
@@ -594,7 +600,8 @@
       "importError": "Error importing file. Make sure this is a valid JSON file.",
       "unsyncedSignOut": "Some changes have not reached the cloud yet and will be lost. Sign out anyway?",
       "deleteSyncedDataConfirm": "Permanently delete all KanDOne data from your Google Drive and disconnect? Tasks on this device are removed too. Devices that are still connected will upload their copies again, so disconnect them first. This cannot be undone — download a backup first if you want to keep it.",
-      "deleteSyncedDataFailed": "Could not delete the synced data. Nothing was removed — please try again."
+      "deleteSyncedDataFailed": "Could not delete the synced data. Nothing was removed — please try again.",
+      "signOutConfirm": "Disconnect from Google Drive and remove this device's copy of your tasks? They stay in your Drive and come back when you reconnect."
     },
     "impact": {
       "high": "High",

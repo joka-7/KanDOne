@@ -52,9 +52,12 @@
     "syncNow": "Synchroniser",
     "syncNowRetry": "Réessayer la synchronisation",
     "syncErrorBadge": "Problème de sync",
-    "syncErrorTooltip": "La dernière synchronisation a échoué — cliquez sur « Synchroniser » pour réessayer. (Cela vous déconnecte.)",
+    "syncErrorTooltip": "La dernière synchronisation a échoué — utilisez « Réessayer ». (Cliquer sur ce bouton vous déconnecte.)",
     "androidApp": "Application Android",
-    "androidAppTooltip": "Télécharger l'application Android (APK). Ouvrez le fichier sur votre téléphone pour l'installer."
+    "androidAppTooltip": "Télécharger l'application Android (APK). Ouvrez le fichier sur votre téléphone pour l'installer.",
+    "pendingChanges": "En attente de synchronisation : {{count}}",
+    "offline": "Hors ligne",
+    "offlineTooltip": "Pas de connexion à Google Drive. Vos modifications sont enregistrées sur cet appareil et seront synchronisées au retour de la connexion."
   },
   "tabs": {
     "board": "Tableau",
@@ -349,7 +352,8 @@
       "repoLabel": "Voir le dépôt",
       "emailLabel": "Envoyer un avis par e-mail",
       "issueLabel": "Signaler un problème"
-    }
+    },
+    "privacy": "Confidentialité"
   },
   "rejection": {
     "analysisTitle": "Analyse du refus",
@@ -535,7 +539,9 @@
       "imported": "Fichier chargé avec succès !",
       "undo": "Annuler",
       "labelDeleted": "Étiquette supprimée.",
-      "stepDeleted": "Étape supprimée."
+      "stepDeleted": "Étape supprimée.",
+      "offline": "Vous êtes hors ligne — vos modifications sont enregistrées sur cet appareil.",
+      "backOnline": "De retour en ligne — vos modifications ont été synchronisées."
     },
     "alert": {
       "deleteConfirm": "Êtes-vous sûr de vouloir supprimer cette tâche ?",
@@ -543,7 +549,8 @@
       "importError": "Erreur lors de l'importation. Assurez-vous que c'est un fichier JSON valide.",
       "unsyncedSignOut": "Certaines modifications n'ont pas encore été synchronisées et seront perdues. Se déconnecter quand même ?",
       "deleteSyncedDataConfirm": "Supprimer définitivement toutes les données KanDOne de votre Google Drive et se déconnecter ? Les tâches de cet appareil sont aussi supprimées. Les appareils encore connectés renverront leurs copies : déconnectez-les d'abord. Cette action est irréversible — téléchargez d'abord une sauvegarde si vous voulez les conserver.",
-      "deleteSyncedDataFailed": "Impossible de supprimer les données synchronisées. Rien n'a été supprimé — veuillez réessayer."
+      "deleteSyncedDataFailed": "Impossible de supprimer les données synchronisées. Rien n'a été supprimé — veuillez réessayer.",
+      "signOutConfirm": "Se déconnecter de Google Drive et supprimer la copie de vos tâches sur cet appareil ? Elles restent dans votre Drive et reviennent à la reconnexion."
     },
     "duration": {
       "minute": "Minutes",

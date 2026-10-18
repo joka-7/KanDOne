@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="index" />
+    <title>Privacy — KanDOne</title>
+    <style>
+      body { font: 16px/1.6 system-ui, sans-serif; color: #1f2937; background: #f8fafc; margin: 0; }
+      main { max-width: 42rem; margin: 0 auto; padding: 2rem 1rem 4rem; }
+      h1 { font-size: 1.75rem; margin: 0 0 .25rem; }
+      h2 { font-size: 1.15rem; margin: 2rem 0 .5rem; }
+      a { color: #047857; }
+      .updated { color: #4b5563; font-size: .9rem; margin: 0 0 1.5rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p><a href="/">&larr; Back to KanDOne</a></p>
+      <h1>Privacy</h1>
+      <p class="updated">Last updated 17 October 2026</p>
+
+      <p>
+        KanDOne is a task board that runs in your browser or in the Android app.
+        It has no accounts of its own and no server or database that holds your
+        tasks, so the person who runs KanDOne cannot read them.
+      </p>
+
+      <h2>What stays on your device</h2>
+      <p>
+        Your tasks, steps, labels and settings are saved in this browser's (or the
+        app's) local storage. Nothing leaves the device unless you turn on one of
+        the two optional features below. Use <strong>Download</strong> in the menu
+        to keep a backup file.
+      </p>
+
+      <h2>Optional: sync with your Google Drive</h2>
+      <p>
+        If you choose <strong>Connect Drive</strong>, you sign in with Google and
+        KanDOne saves your tasks to a hidden app folder in your own Google Drive.
+        It asks only for access to that folder (the <code>drive.appdata</code>
+        permission) plus your name and email so it can show who is connected. It
+        cannot see, list or change any other file in your Drive, and the hidden
+        folder is not visible to anyone but you and this app. Your sign-in token
+        and email are kept on your device.
+      </p>
+      <p>
+        KanDOne's use of information received from Google APIs adheres to the
+        <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>,
+        including the Limited Use requirements. Data from your Drive is used only to
+        sync your tasks between your devices.
+      </p>
+
+      <h2>Optional: AI coaching</h2>
+      <p>
+        If you add an AI provider and your own API key, the text you send to the
+        coach (for example task names and what you type in the chat) goes straight
+        from your device to the AI provider you choose, under your account with
+        them. It does not pass through anything run by KanDOne, and that provider's
+        own privacy terms apply. Your API key is stored on your device only. Avoid
+        typing other people's personal details into the coach.
+      </p>
+
+      <h2>The website</h2>
+      <p>
+        This site is a set of static files on Vercel. Like any web host, Vercel may
+        keep standard request logs (such as your IP address). KanDOne itself does not
+        use analytics, advertising or tracking cookies.
+      </p>
+
+      <h2>Removing your data</h2>
+      <ul>
+        <li>
+          In the app menu, choose <strong>Delete synced data &amp; disconnect</strong>.
+          It deletes KanDOne's files from your Drive, revokes the app's access, and
+          removes this device's copy. Other devices that are still connected will
+          upload their copies again, so disconnect them first.
+        </li>
+        <li>
+          You can also remove KanDOne's access and its hidden data yourself in your
+          Google Account under <em>Security &rarr; Your connections to third-party
+          apps and services</em>.
+        </li>
+        <li>Clearing the site's data in your browser, or uninstalling the Android app, removes the copy on that device.</li>
+      </ul>
+
+      <h2>Contact</h2>
+      <p>
+        Questions about privacy: <a href="mailto:joka.dev.7@gmail.com">joka.dev.7@gmail.com</a>.
+        If this page changes, the date above changes with it.
+      </p>
+    </main>
+  </body>
+</html>

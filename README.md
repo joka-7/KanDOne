@@ -210,6 +210,7 @@ interview-template assets were removed in a later cleanup.
   (stray Tailwind `dark:` classes were removed to avoid white-on-white text).
 - CSP uses `script-src 'self'` (plus Google origins) — no `'unsafe-inline'` for
   scripts. The same policy is set in `index.html` and as a Vercel response header.
-- Board card drag uses HTML5 DnD (desktop). Touch drag and manual within-column ordering
-  are not implemented yet.
+- Board cards drag with dnd-kit: mouse by dragging, touch by a short press and then drag (the
+  touch sensor only; a pointer sensor would be cancelled by the page scrolling), and they can be
+  reordered within a column.
 - A render crash shows a recovery screen that can still export your local backup JSON.

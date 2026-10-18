@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Plus, Search, Download, Upload, Layout, List, BarChart2, Activity,
   Trash2, Edit2, ArrowLeft, ArrowRight, CheckCircle2, CheckCircle, Circle,
-  Clock, AlertCircle, Calendar, Cloud, CloudOff, RefreshCw,
+  Clock, AlertCircle, Calendar, Cloud, CloudOff, RefreshCw, WifiOff,
   ClipboardList, X, Languages, MoreVertical, Settings, Smartphone, Sparkles,
   Repeat, Bell, Zap, Tag, Globe,
 } from 'lucide-react';
@@ -21,6 +21,8 @@ import {
 import { getStorageKey, STATUSES_TASKS, filterItemsForMode } from './statuses';
 import { usePwaInstall } from './usePwaInstall';
 import { ANDROID_APK_URL } from './utils/androidApk';
+import { useStorageSync } from './hooks/useStorageSync';
+import { isFocusPullDue } from './utils/focusPull';
 import AppBrandMark from './components/AppBrandMark';
 import KanbanBoard from './components/KanbanBoard';
 import { STORAGE_KEYS, TASKS_LABELS_KEY, TASKS_EFFORT_TIERS_KEY } from './storageKeys.js';
@@ -41,10 +43,13 @@ import {
   showReminderNotification,
   snoozeTaskReminder, isReminderSnoozed, SNOOZE_MINUTES,
 } from './utils/reminders';
-import { resolveLabelsOnSignIn, resolveTasksOnSignIn } from './utils/labelSync';
+import { pullTasks, pullLabels } from './utils/cloudPull';
+import { deriveSyncStatus } from './utils/syncStatus';
+import { useOnlineStatus } from './hooks/useOnlineStatus';
+import { useBackClose, consumeProgrammaticPop, isOverlayState } from './hooks/useBackClose';
 import {
   fingerprintItems, diffFingerprints, readPending, recordLocalChanges,
-  readDataOwner, writeDataOwner, clearLocalSyncState,
+  readDataOwner, writeDataOwner, clearLocalSyncState, countPending,
 } from './utils/pendingSync';
 import {
   applyBoardDrag, ensureBoardOrders, nextBoardOrder, sanitizeBoardOrder,
@@ -75,6 +80,9 @@ const PriorityView = lazy(() => import('./components/PriorityView'));
 const TypeView = lazy(() => import('./components/TypeView'));
 
 const MODE = 'tasks';
+/** First wait before a failed sync retries itself; it doubles up to the cap. */
+const SYNC_RETRY_BASE_MS = 15_000;
+const SYNC_RETRY_MAX_MS = 5 * 60_000;
 
 const PRIORITY_COLORS = {
   high: 'bg-red-100 text-red-700 border-red-200',
@@ -152,6 +160,11 @@ export default function TasksApp() {
   // drives the header's error state and blocks the focus-triggered pull
   // below from clobbering local changes that haven't made it to Drive.
   const [syncError, setSyncError] = useState(false);
+  // The last Drive request could not reach Google at all (as opposed to Google
+  // refusing it). Together with the browser's own online flag this is what the
+  // header calls "Offline": the work is safe on this device and goes up later.
+  const [unreachable, setUnreachable] = useState(false);
+  const online = useOnlineStatus();
   // False until the first pull after sign-in has merged the cloud labels. The
   // label effect must not push before then: on a fresh device it would write
   // an empty library over the cloud copy before that copy had been read.
@@ -204,7 +217,12 @@ export default function TasksApp() {
     try {
       if (tasks.length > 0 || localStorage.getItem(getStorageKey(MODE))) {
         setIsSaved(false);
-        localStorage.setItem(getStorageKey(MODE), JSON.stringify(tasks));
+        // Skip an identical write: it would fire a `storage` event in every other
+        // tab, and two tabs handing the same list back and forth never settle.
+        const serialized = JSON.stringify(tasks);
+        if (localStorage.getItem(getStorageKey(MODE)) !== serialized) {
+          localStorage.setItem(getStorageKey(MODE), serialized);
+        }
         setLocalStorageError(false);
         const timer = setTimeout(() => setIsSaved(true), 800);
         return () => clearTimeout(timer);
@@ -235,6 +253,18 @@ export default function TasksApp() {
     recordLocalChanges(MODE, diffFingerprints(previous, next));
   }, [tasks]);
 
+  const markSyncError = useCallback((e) => {
+    const lostNetwork = e?.code === 'offline';
+    if (lostNetwork) console.warn('KanDOne: Google Drive is unreachable', e?.message);
+    else console.error(e);
+    setUnreachable(lostNetwork);
+    setSyncError(true);
+  }, []);
+  const clearSyncError = useCallback(() => {
+    setUnreachable(false);
+    setSyncError(false);
+  }, []);
+
   useEffect(() => {
     try {
       localStorage.setItem(TASKS_LABELS_KEY, JSON.stringify(labels));
@@ -244,11 +274,9 @@ export default function TasksApp() {
       setLocalStorageError(true);
     }
     if (user && cloudReady) {
-      saveTaskLabels(user.uid, labels)
-        .then(() => setSyncError(false))
-        .catch((e) => { console.error(e); setSyncError(true); });
+      saveTaskLabels(user.uid, labels).then(clearSyncError).catch(markSyncError);
     }
-  }, [labels, user, cloudReady]);
+  }, [labels, user, cloudReady, clearSyncError, markSyncError]);
 
   useEffect(() => {
     try {
@@ -265,45 +293,70 @@ export default function TasksApp() {
   const userRef = useRef(null);
   useEffect(() => { userRef.current = user; }, [user]);
 
+  const labelsRef = useRef(labels);
+  useEffect(() => { labelsRef.current = labels; }, [labels]);
+
   const tasksRef = useRef(tasks);
   useEffect(() => { tasksRef.current = tasks; }, [tasks]);
 
-  const markSyncError = useCallback((e) => {
-    console.error(e);
-    setSyncError(true);
+  // Another tab of this browser writes the same localStorage. Adopt its list
+  // instead of overwriting it with this tab's older copy on the next save.
+  const adoptTasksFromOtherTab = useCallback((incoming) => {
+    const next = ensureBoardOrders(filterItemsForMode(incoming, MODE));
+    if (JSON.stringify(next) === JSON.stringify(tasksRef.current)) return;
+    // The other tab already recorded these changes as pending (that key is
+    // shared) and uploads them itself, so they are not this tab's edits.
+    syncedSnapshotRef.current = fingerprintItems(next);
+    setTasks(next);
   }, []);
-  const clearSyncError = useCallback(() => setSyncError(false), []);
+  const adoptLabelsFromOtherTab = useCallback((incoming) => {
+    setLabels((current) => (JSON.stringify(current) === JSON.stringify(incoming) ? current : incoming));
+  }, []);
+  // Sign-out and data deletion in another tab clear these keys. Staying open
+  // would let this tab write its copy back and hand it to the next account.
+  const reloadAfterOtherTabClears = useCallback(() => window.location.reload(), []);
+  useStorageSync(getStorageKey(MODE), parseTaskStoragePayload, adoptTasksFromOtherTab, reloadAfterOtherTabClears);
+  useStorageSync(TASKS_LABELS_KEY, parseTaskLabelsStoragePayload, adoptLabelsFromOtherTab, reloadAfterOtherTabClears);
+
 
   // One merge path for sign-in, tab focus and "Sync now", so a fix to how a
   // pull reconciles with local state lands in all three at once.
-  const pullTasksFromCloud = useCallback(async (uid, localTasks) => {
-    const cloud = await loadAllItems(uid, MODE);
-    const { tasks: mergedTasks, pushIds, deleteFromCloud } = resolveTasksOnSignIn(
-      localTasks, filterItemsForMode(cloud?.items ?? [], MODE), readPending(MODE), cloud?.deletedIds,
-    );
-    const orderedTasks = ensureBoardOrders(mergedTasks);
-    // The pull is the new baseline: without reseating the snapshot the
-    // tracking effect would read every record the pull changed as a fresh
-    // local edit and pin it against all future pulls.
-    syncedSnapshotRef.current = fingerprintItems(orderedTasks);
-    setTasks(orderedTasks);
-    // Push only what the cloud lacks or has stale: local edits, offline
-    // creations, and records whose board order the normalization moved.
-    const reordered = diffFingerprints(fingerprintItems(mergedTasks), fingerprintItems(orderedTasks)).edited;
-    const toPush = new Set([...pushIds, ...reordered]);
-    await batchSaveItems(uid, MODE, orderedTasks.filter((t) => toPush.has(String(t.id))));
-    // Replay deletes made while unsynced, or the next pull resurrects them.
-    await Promise.all(deleteFromCloud.map((id) => deleteItem(uid, MODE, id)));
-    return cloud?.items.length ?? 0;
+  // Records waiting for a Drive write. Only meaningful on a device that has been
+  // connected: a never-connected one has everything "pending" and nothing to wait for.
+  // Re-read when sync state changes, not only when the tasks do: an upload landing clears ids without touching `tasks`.
+  const pendingCount = useMemo(
+    () => (readDataOwner() ? countPending(MODE) : 0),
+    [tasks, user, syncing, syncError], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  const lastPullAtRef = useRef(null);
+  const pullTasksFromCloud = useCallback(async (uid) => {
+    const count = await pullTasks({
+      mode: MODE,
+      load: () => loadAllItems(uid, MODE),
+      getLocal: () => tasksRef.current,
+      getPending: () => readPending(MODE),
+      apply: (ordered) => {
+        // The pull is the new baseline: without reseating the snapshot the
+        // tracking effect would read every record the pull changed as a fresh
+        // local edit and pin it against all future pulls.
+        syncedSnapshotRef.current = fingerprintItems(ordered);
+        tasksRef.current = ordered;
+        setTasks(ordered);
+      },
+      save: (changed) => batchSaveItems(uid, MODE, changed),
+      remove: (id) => deleteItem(uid, MODE, id),
+    });
+    lastPullAtRef.current = Date.now();
+    return count;
   }, []);
 
-  const pullLabelsFromCloud = useCallback(async (uid, localLabels) => {
-    const cloudLabels = await loadTaskLabels(uid);
-    const { labels: mergedLabels, pushToCloud } = resolveLabelsOnSignIn(localLabels, cloudLabels);
-    setLabels(mergedLabels);
-    if (pushToCloud) await saveTaskLabels(uid, mergedLabels);
-    return mergedLabels.length;
-  }, []);
+  const pullLabelsFromCloud = useCallback((uid) => pullLabels({
+    load: () => loadTaskLabels(uid),
+    getLocal: () => labelsRef.current,
+    apply: (merged) => { labelsRef.current = merged; setLabels(merged); },
+    save: (merged) => saveTaskLabels(uid, merged),
+  }), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -332,21 +385,24 @@ export default function TasksApp() {
       setSyncing(true);
       try {
         await saveUserProfile(driveUser.uid, { appMode: MODE });
-        let localTasks = tasksRef.current;
-        let localLabels = parseTaskLabelsStoragePayload(localStorage.getItem(TASKS_LABELS_KEY));
         // Data left behind by a different account must never be merged into
         // this one's cloud. Sign-out clears it; this covers sessions that
         // ended without one (expired token, cleared cookies, older builds).
         const owner = readDataOwner();
         if (owner && owner !== driveUser.uid) {
           clearLocalSyncState([MODE]);
-          localTasks = [];
-          localLabels = [];
+          setCloudReady(false);
+          syncedSnapshotRef.current = fingerprintItems([]);
+          tasksRef.current = [];
+          setTasks([]);
+          localStorage.removeItem(TASKS_LABELS_KEY);
+          labelsRef.current = [];
+          setLabels([]);
         }
         writeDataOwner(driveUser.uid);
         const [cloudTaskCount, labelCount] = await Promise.all([
-          pullTasksFromCloud(driveUser.uid, localTasks),
-          pullLabelsFromCloud(driveUser.uid, localLabels),
+          pullTasksFromCloud(driveUser.uid),
+          pullLabelsFromCloud(driveUser.uid),
         ]);
         setCloudReady(true);
         clearSyncError();
@@ -372,13 +428,17 @@ export default function TasksApp() {
       // that write may still only exist locally, and overwriting local state
       // with a stale cloud snapshot would silently discard it. The header's
       // sync-error indicator lets the user retry manually instead.
-      if (document.visibilityState === 'visible' && driveUser && !syncError) {
+      if (document.visibilityState === 'visible' && driveUser && !syncError
+        && isFocusPullDue(lastPullAtRef.current, Date.now())) {
+        // Claimed now, not when the pull finishes: a second focus while this one
+        // is still reading would otherwise start a second full read.
+        lastPullAtRef.current = Date.now();
         setSyncing(true);
         try {
           // Union-merge rather than overwrite: anything typed into this
           // tab since the last pull (e.g. while it was backgrounded) must
           // survive, even though its id isn't in the snapshot we just read.
-          await pullTasksFromCloud(driveUser.uid, tasksRef.current);
+          await pullTasksFromCloud(driveUser.uid);
           clearSyncError();
         } catch (e) { markSyncError(e); }
         setSyncing(false);
@@ -418,28 +478,84 @@ export default function TasksApp() {
     }
   }, [user, clearSyncError, markSyncError]);
 
-  const handleSyncNow = async () => {
-    if (!user || syncing) return;
+  const handleSyncNow = useCallback(async () => {
+    if (!user) return false;
     setSyncing(true);
     try {
-      await Promise.all([
-        pullTasksFromCloud(user.uid, tasksRef.current),
-        pullLabelsFromCloud(user.uid, parseTaskLabelsStoragePayload(localStorage.getItem(TASKS_LABELS_KEY))),
-      ]);
+      await Promise.all([pullTasksFromCloud(user.uid), pullLabelsFromCloud(user.uid)]);
       setCloudReady(true);
       clearSyncError();
-    } catch (e) { markSyncError(e); }
-    setSyncing(false);
-  };
+      return true;
+    } catch (e) {
+      markSyncError(e);
+      return false;
+    } finally {
+      setSyncing(false);
+    }
+  }, [user, pullTasksFromCloud, pullLabelsFromCloud, clearSyncError, markSyncError]);
+
+  const handleSyncNowRef = useRef(handleSyncNow);
+  useEffect(() => { handleSyncNowRef.current = handleSyncNow; }, [handleSyncNow]);
+
+  const offline = !online || unreachable;
+  const syncStatus = deriveSyncStatus({
+    configured: isCloudConfigured(), authResolved, user, sessionRestorable, syncing, syncError, offline,
+  });
+
+  // Say so once when the connection is lost, including at app start: the
+  // header used to sit on "Reconnecting…" and users kept working unaware
+  // that nothing was reaching Drive.
+  const offlineToldRef = useRef(false);
+  useEffect(() => {
+    if (syncStatus !== 'offline') {
+      offlineToldRef.current = false;
+      return;
+    }
+    if (offlineToldRef.current) return;
+    offlineToldRef.current = true;
+    showToast(tt('toast.offline', "You're offline — your changes are saved on this device."));
+  }, [syncStatus, showToast, tt]);
+
+  // A failed sync used to wait for a click: the focus pull skips while an error
+  // is showing, so one transient failure (a rate limit at start-up, Wi-Fi up
+  // but DNS not yet) left the app unsynced until the user pressed Sync. Retry
+  // quietly, backing off so a failure that will not clear does not hammer Drive.
+  const retryCountRef = useRef(0);
+  useEffect(() => {
+    if (!syncError) {
+      retryCountRef.current = 0;
+      return undefined;
+    }
+    if (!online || !user || syncing) return undefined;
+    const wait = Math.min(SYNC_RETRY_BASE_MS * 2 ** retryCountRef.current, SYNC_RETRY_MAX_MS);
+    const timer = setTimeout(() => {
+      retryCountRef.current += 1;
+      handleSyncNowRef.current();
+    }, wait);
+    return () => clearTimeout(timer);
+  }, [online, syncError, user, syncing]);
+
+  // Coming back online pulls and pushes at once. The merge keeps what was
+  // added meanwhile and uploads it; it never replaces the local list.
+  const wasOnlineRef = useRef(online);
+  useEffect(() => {
+    const returned = online && !wasOnlineRef.current;
+    wasOnlineRef.current = online;
+    if (!returned) return;
+    handleSyncNowRef.current().then((synced) => {
+      if (synced) showToast(tt('toast.backOnline', 'Back online — your changes were synced.'));
+    });
+  }, [online, showToast, tt]);
 
   // Sign-out leaves the device clean: the next person to sign in here must
   // neither see this account's tasks nor have them merged into their own.
   const handleSignOut = async () => {
-    const pending = readPending(MODE);
-    if ((pending.edited.size > 0 || pending.deleted.size > 0)
-      && !window.confirm(tt('alert.unsyncedSignOut', 'Some changes have not reached the cloud yet and will be lost. Sign out anyway?'))) {
-      return;
-    }
+    // Signing out removes this device's copy, so it always asks: the header's
+    // cloud button is one tap, and the copy in Drive only helps if it is current.
+    const message = countPending(MODE) > 0
+      ? tt('alert.unsyncedSignOut', 'Some changes have not reached the cloud yet and will be lost. Sign out anyway?')
+      : tt('alert.signOutConfirm', "Disconnect from Google Drive and remove this device's copy of your tasks? They stay in your Drive and come back when you reconnect.");
+    if (!window.confirm(message)) return;
     try {
       await signOut();
     } catch (e) {
@@ -505,16 +621,34 @@ export default function TasksApp() {
   }, []);
 
   useEffect(() => {
+    // The first entry has no state, so Back to it used to do nothing and the
+    // next Back left the app. Give it one.
+    if (!window.history.state) window.history.replaceState({ tab: 'board', selectedId: null }, '');
     const onPop = (e) => {
-      const s = e.state;
-      if (!s) return;
-      setActiveTab(s.tab || 'board');
-      setSelectedId(s.selectedId || null);
+      // Overlays remove their own entries; that is not a move between views.
+      if (consumeProgrammaticPop() || isOverlayState(e.state)) return;
+      const view = e.state ?? {};
+      setActiveTab(view.tab || 'board');
+      setSelectedId(view.selectedId || null);
       setIsEditing(false);
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
+
+  // Back closes the open form, dialog or menu before it leaves the view.
+  const closeEditing = useCallback(() => setIsEditing(false), []);
+  const closeTemplates = useCallback(() => setShowTemplates(false), []);
+  const closeAISettings = useCallback(() => setShowAISettings(false), []);
+  const closeChat = useCallback(() => setChatOpen(false), []);
+  const closeGoalsFinder = useCallback(() => setShowGoalsFinder(false), []);
+  const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
+  useBackClose(isEditing, closeEditing, 'editing');
+  useBackClose(showTemplates, closeTemplates, 'templates');
+  useBackClose(showAISettings, closeAISettings, 'ai-settings');
+  useBackClose(chatOpen, closeChat, 'chat');
+  useBackClose(showGoalsFinder, closeGoalsFinder, 'goals-finder');
+  useBackClose(mobileMenuOpen, closeMobileMenu, 'mobile-menu');
 
   const isSavingRef = useRef(false);
   const handleSave = async () => {
@@ -1716,7 +1850,7 @@ Rules:
                   return (
                     <button
                       key={task.id}
-                      onClick={() => { setSelectedId(task.id); setIsEditing(false); }}
+                      onClick={() => navigateTo('list', task.id)}
                       style={task.cardColor ? { backgroundColor: task.cardColor } : undefined}
                       className={`w-full text-left px-3 sm:px-4 py-3 min-h-[52px] border-b border-gray-50 transition-colors ${isRTL ? 'border-r-4' : 'border-l-4'} ${getBandStyle(priority.band).stripe} ${task.cardColor ? '' : 'hover:bg-emerald-50 active:bg-emerald-100'} ${isSelected ? 'ring-2 ring-inset ring-emerald-500' : ''} ${isSelected && !task.cardColor ? 'bg-emerald-50' : ''}`}
                     >
@@ -1997,6 +2131,22 @@ Rules:
                 <Cloud size={16} className="shrink-0 animate-pulse" />
                 <span className="hidden sm:inline shrink-0">{t('header.checkingSession', 'Checking…')}</span>
               </span>
+            ) : syncStatus === 'offline' ? (
+              // No network: say so plainly instead of "Reconnecting…" or a sync
+              // error. Clickable only where a retry can help (the browser
+              // thinks it is online but Google was unreachable).
+              <button
+                type="button"
+                onClick={handleSyncNow}
+                disabled={!user || !online || syncing}
+                title={t('header.offlineTooltip', 'No connection to Google Drive. Your changes are saved on this device and will sync when you are back online.')}
+                aria-label={t('header.offlineTooltip', 'No connection to Google Drive. Your changes are saved on this device and will sync when you are back online.')}
+                className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-bold bg-amber-500/20 border border-amber-400/40 text-amber-100 min-h-[44px] touch-manipulation disabled:cursor-default"
+              >
+                <WifiOff size={16} className="shrink-0" />
+                <span className="hidden sm:inline shrink-0">{t('header.offline', 'Offline')}</span>
+                {pendingCount > 0 && <span className="shrink-0 rounded-full bg-white/25 px-1.5 text-xs" title={t('header.pendingChanges', 'Waiting to sync: {{count}}', { count: pendingCount })}>{pendingCount}</span>}
+              </button>
             ) : user ? (
               <>
                 <button
@@ -2020,6 +2170,7 @@ Rules:
                         ? t('header.syncErrorBadge', 'Sync issue')
                         : user.displayName?.split(' ')[0] || t('header.driveOn')}
                   </span>
+                  {syncError && pendingCount > 0 && <span className="shrink-0 rounded-full bg-white/25 px-1.5 text-xs" title={t('header.pendingChanges', 'Waiting to sync: {{count}}', { count: pendingCount })}>{pendingCount}</span>}
                 </button>
                 <button
                   onClick={handleSyncNow}
@@ -2052,6 +2203,7 @@ Rules:
               >
                 <Cloud size={16} className="shrink-0 animate-pulse" />
                 <span className="hidden sm:inline shrink-0">{t('header.reconnecting', 'Reconnecting…')}</span>
+                {pendingCount > 0 && <span className="shrink-0 rounded-full bg-white/25 px-1.5 text-xs" title={t('header.pendingChanges', 'Waiting to sync: {{count}}', { count: pendingCount })}>{pendingCount}</span>}
               </button>
             ) : !isCloudConfigured() ? (
               // No Google OAuth client configured — the app still works fully on
@@ -2070,6 +2222,7 @@ Rules:
                 className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-bold bg-white/10 hover:bg-white/20 border border-white/20 text-green-100 transition-colors min-h-[44px] touch-manipulation"
               >
                 <CloudOff size={16} className="shrink-0" /> <span className="hidden sm:inline shrink-0 max-w-[5rem] truncate sm:max-w-none">{t('header.connectDrive')}</span>
+                {pendingCount > 0 && <span className="shrink-0 rounded-full bg-white/25 px-1.5 text-xs" title={t('header.pendingChanges', 'Waiting to sync: {{count}}', { count: pendingCount })}>{pendingCount}</span>}
               </button>
             )}
 
@@ -2252,6 +2405,7 @@ Rules:
               key={id}
               type="button"
               onClick={() => navigateTo(id)}
+              aria-current={activeTab === id ? 'page' : undefined}
               className={`px-2 sm:px-4 py-1.5 sm:py-2.5 rounded-t-lg font-medium flex items-center gap-0.5 sm:gap-2 transition-colors whitespace-nowrap flex-shrink-0 text-[10px] sm:text-sm min-h-[34px] sm:min-h-[44px] touch-manipulation ${activeTab === id ? 'bg-gray-50 text-emerald-800' : 'bg-white/10 text-green-100 hover:bg-white/20 active:bg-white/25'}`}
             >
               <span className="hidden sm:inline-flex shrink-0"><Icon size={15} /></span>
@@ -2435,6 +2589,9 @@ Rules:
 
       <div className="flex items-center justify-center gap-1.5 py-6">
         <span className="text-[11px] text-gray-600">{t('settings.credit', 'Built by joka-7')}</span>
+        <a href="/privacy.html" className="text-[11px] text-gray-600 underline hover:text-gray-800 px-1">
+          {t('settings.privacy', 'Privacy')}
+        </a>
         <a
           href="https://jk-dev-7.vercel.app"
           target="_blank"
