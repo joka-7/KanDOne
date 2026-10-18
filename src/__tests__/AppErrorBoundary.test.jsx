@@ -2,6 +2,9 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import AppErrorBoundary from '../components/AppErrorBoundary';
+import { saveJsonFile } from '../utils/saveFile';
+
+vi.mock('../utils/saveFile', () => ({ saveJsonFile: vi.fn() }));
 
 function Bomb() {
   throw new Error('boom');
@@ -56,5 +59,21 @@ describe('AppErrorBoundary', () => {
     expect(reloadSpy).toHaveBeenCalled();
 
     Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
+  });
+
+  it('explains on the page, without a blocking alert, when the backup cannot be saved', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    saveJsonFile.mockRejectedValueOnce(new Error('disk full'));
+
+    render(
+      <AppErrorBoundary>
+        <Bomb />
+      </AppErrorBoundary>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Export my data/i }));
+
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Could not export automatically/i);
+    expect(alertSpy).not.toHaveBeenCalled();
   });
 });
